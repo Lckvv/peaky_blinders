@@ -1,0 +1,68 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  username  String   @unique
+  password  String   // bcrypt hash
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  apiKeys     ApiKey[]
+  mapSessions MapSession[]
+}
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  key       String   @unique // uuid v4, sent from TM script
+  label     String?  // np. "Mój laptop", "Komputer stacjonarny"
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  active    Boolean  @default(true)
+  lastUsed  DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([key])
+}
+
+model Monster {
+  id        String   @id @default(cuid())
+  name      String   @unique // np. "Kic"
+  mapName   String   // np. "Caerbannog's Grotto - 1st Chamber"
+  createdAt DateTime @default(now())
+
+  mapSessions MapSession[]
+
+  @@index([name])
+}
+
+model MapSession {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  monsterId String
+  monster   Monster  @relation(fields: [monsterId], references: [id])
+
+  heroName  String   // nazwa postaci w grze
+  world     String   // serwer gry
+  mapName   String   // nazwa mapy
+
+  duration  Int      // czas w sekundach
+  reason    String   // 'map_change' | 'tab_close' | 'logout' | 'manual_flush'
+
+  startedAt DateTime // kiedy zaczął stać na mapie
+  endedAt   DateTime @default(now()) // kiedy wyszedł
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([monsterId])
+  @@index([userId, monsterId])
+}
