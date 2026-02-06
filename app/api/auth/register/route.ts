@@ -4,7 +4,7 @@ import { hashPassword, createToken, generateApiKey } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, username, password } = await request.json();
+    const { email, username, password, nick } = await request.json();
 
     // Validation
     if (!email || !username || !password) {
@@ -52,6 +52,7 @@ export async function POST(request: NextRequest) {
           email,
           username,
           password: await hashPassword(password),
+          nick: nick || null,
         },
       });
 

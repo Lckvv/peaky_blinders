@@ -103,8 +103,14 @@ curl -X POST https://YOUR-APP.up.railway.app/api/auth/register \
   -d '{
     "email": "gracz@example.com",
     "username": "MojaNazwa",
-    "password": "tajnehaslo123"
+    "password": "tajnehaslo123",
+    "nick": "MojaPostac"  // opcjonalne
   }'
+```
+
+**Uwaga:** Aby utworzyć użytkownika z rolą admin, musisz ręcznie zaktualizować bazę danych:
+```sql
+UPDATE "User" SET role = 'admin' WHERE username = 'MojaNazwa';
 ```
 
 Odpowiedź:
@@ -144,6 +150,8 @@ Timer wystartuje automatycznie gdy wejdziesz na trackowaną mapę!
 | **POST** | **`/api/timer/session`** | **X-API-Key** | **Zapisz sesję (Tampermonkey)** |
 | GET | `/api/timer/sessions` | API Key / Cookie | Moje sesje |
 | GET | `/api/timer/leaderboard?monster=Kic` | — (publiczny) | Ranking |
+| GET | `/api/leaderboard/phases` | — (publiczny) | Rankingi z fazami |
+| POST | `/api/admin/end-phase` | Cookie (admin) | Zakończ fazę dla potwora |
 
 ### Przykład zapisu sesji (to robi skrypt automatycznie):
 ```bash
@@ -169,10 +177,12 @@ curl https://YOUR-APP.up.railway.app/api/timer/leaderboard?monster=Kic
 
 ## 🗃️ Struktura bazy danych
 
-- **User** — konta użytkowników
+- **User** — konta użytkowników (z polami: nick, role: "user" | "admin")
 - **ApiKey** — klucze API (max 5 na usera), prefiks `mgt_`
 - **Monster** — potwory z nazwą i mapą
-- **MapSession** — pojedyncze sesje (czas, postać, mapa, powód wyjścia)
+- **MapSession** — pojedyncze sesje (czas, postać, mapa, powód wyjścia, phaseId)
+- **Phase** — fazy/okresy dla potworów (Kic, Kic1, Kic2, etc.)
+- **PhaseResult** — wyniki użytkowników w poszczególnych fazach
 
 ---
 
@@ -184,6 +194,30 @@ curl https://YOUR-APP.up.railway.app/api/timer/leaderboard?monster=Kic
 - Rate limit: max sesja 12h (anti-abuse)
 - CORS headers dla requestów z margonem.com
 - API keys możesz dezaktywować w każdej chwili
+
+---
+
+## 🏆 System faz i rankingów
+
+Aplikacja obsługuje system faz dla każdego potwora:
+- **Faza aktywna** (0) — wszystkie sesje bez przypisanej fazy
+- **Fazy zakończone** (1, 2, 3...) — gdy admin zakończy fazę, wszystkie aktywne sesje są sumowane i przypisywane do nowej fazy
+- **Nazwy faz:** Kic (aktywna), Kic1, Kic2, Kic3, etc.
+
+### Jak zakończyć fazę (admin):
+1. Zaloguj się jako admin
+2. Przejdź do `/leaderboard`
+3. Kliknij przycisk "Zakończ fazę" przy danym potworze
+4. System automatycznie:
+   - Utworzy nową fazę (np. Kic1)
+   - Zsumuje wszystkie aktywne sesje dla każdego użytkownika
+   - Przypisze sesje do nowej fazy
+   - Utworzy ranking dla tej fazy
+
+### Rankingi:
+- `/leaderboard` — strona z rankingami wszystkich potworów i faz
+- Każdy potwór ma zakładki z fazami (Kic, Kic1, Kic2, etc.)
+- Rankingi pokazują: pozycję, użytkownika, nick, czas, liczbę sesji
 
 ---
 

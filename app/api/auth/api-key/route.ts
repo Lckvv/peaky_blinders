@@ -23,7 +23,16 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
     });
 
-    return NextResponse.json({ keys });
+    return NextResponse.json({ 
+      keys,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        nick: user.nick,
+        role: user.role,
+      }
+    });
   } catch (error) {
     console.error('[ApiKey GET] Error:', error);
     return NextResponse.json(

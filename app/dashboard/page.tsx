@@ -1,0 +1,265 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+
+export default function Dashboard() {
+  const [user, setUser] = useState<any>(null);
+  const [apiKeys, setApiKeys] = useState<any[]>([]);
+  const [sessions, setSessions] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [isLogin, setIsLogin] = useState(true);
+  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
+  const [nick, setNick] = useState('');
+  const [password, setPassword] = useState('');
+  const [newApiKey, setNewApiKey] = useState('');
+
+  useEffect(() => { checkAuth(); }, []);
+
+  async function checkAuth() {
+    try {
+      const res = await fetch('/api/auth/api-key');
+      if (res.ok) {
+        const data = await res.json();
+        setApiKeys(data.keys || []);
+        setUser(data.user || true);
+        loadSessions();
+      }
+    } catch (e) {}
+    setLoading(false);
+  }
+
+  async function loadSessions() {
+    try {
+      const res = await fetch('/api/timer/sessions?limit=10');
+      if (res.ok) setSessions(await res.json());
+    } catch (e) {}
+  }
+
+  async function handleAuth(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    setNewApiKey('');
+
+    const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
+    const body = isLogin
+      ? { login: email || username, password }
+      : { email, username, password, nick: nick || undefined };
+
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+
+      if (!res.ok) { setError(data.error || 'Something went wrong'); return; }
+      if (!isLogin && data.apiKey) setNewApiKey(data.apiKey);
+
+      setUser(data.user || true);
+      checkAuth();
+    } catch (e) {
+      setError('Network error');
+    }
+  }
+
+  async function handleInstall() {
+    try {
+      const res = await fetch('/api/script/install-token');
+      if (!res.ok) { alert('Zaloguj się najpierw'); return; }
+      const data = await res.json();
+      window.location.href = `/api/script/install.user.js?token=${data.token}`;
+    } catch (e) {
+      alert('Error: ' + e);
+    }
+  }
+
+  async function generateNewKey() {
+    try {
+      const res = await fetch('/api/auth/api-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label: 'Key ' + (apiKeys.length + 1) }),
+      });
+      const data = await res.json();
+      if (res.ok) { setNewApiKey(data.key); checkAuth(); }
+      else alert(data.error);
+    } catch (e) { alert('Error'); }
+  }
+
+  if (loading) return <div style={s.container}><p style={{ color: '#888' }}>Loading...</p></div>;
+
+  // ==================== NOT LOGGED IN ====================
+  if (!user) {
+    return (
+      <div style={s.container}>
+        <h1 style={s.title}>⏱ Margonem Map Timer</h1>
+        <p style={s.sub}>Zaloguj się lub zarejestruj aby zacząć</p>
+
+        <div style={s.card}>
+          <div style={s.tabs}>
+            <button style={{ ...s.tab, ...(isLogin ? s.tabOn : {}) }} onClick={() => setIsLogin(true)}>
+              Logowanie
+            </button>
+            <button style={{ ...s.tab, ...(!isLogin ? s.tabOn : {}) }} onClick={() => setIsLogin(false)}>
+              Rejestracja
+            </button>
+          </div>
+
+          <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column' as const, gap: 10 }}>
+            {!isLogin && (
+              <input type="email" placeholder="Email" value={email}
+                onChange={(e) => setEmail(e.target.value)} style={s.input} required />
+            )}
+            <input type="text" placeholder={isLogin ? 'Email lub username' : 'Username'}
+              value={isLogin ? email : username}
+              onChange={(e) => isLogin ? setEmail(e.target.value) : setUsername(e.target.value)}
+              style={s.input} required />
+            {!isLogin && (
+              <input type="text" placeholder="Nick (opcjonalny)"
+                value={nick}
+                onChange={(e) => setNick(e.target.value)}
+                style={s.input} />
+            )}
+            <input type="password" placeholder="Hasło" value={password}
+              onChange={(e) => setPassword(e.target.value)} style={s.input} required />
+            {error && <p style={{ color: '#e74c3c', margin: 0, fontSize: 13 }}>{error}</p>}
+            <button type="submit" style={s.btnGreen}>
+              {isLogin ? 'Zaloguj się' : 'Zarejestruj się'}
+            </button>
+          </form>
+
+          {newApiKey && <KeyReveal apiKey={newApiKey} />}
+        </div>
+      </div>
+    );
+  }
+
+  // ==================== DASHBOARD ====================
+  return (
+    <div style={s.container}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+        <h1 style={s.title}>⏱ Margonem Map Timer</h1>
+        <a href="/leaderboard" style={s.linkBtn}>
+          🏆 Rankingi
+        </a>
+      </div>
+
+      {/* INSTALL */}
+      <div style={s.card}>
+        <h2 style={s.h2}>🐒 Skrypt Tampermonkey</h2>
+        <p style={{ color: '#aaa', margin: '0 0 16px', fontSize: 13 }}>
+          Kliknij — Tampermonkey otworzy okno instalacji. Skrypt ma już wbudowany
+          Twój API key i adres serwera.
+        </p>
+        <button onClick={handleInstall} style={s.btnInstall}>
+          ⚡ Zainstaluj skrypt jednym klikiem
+        </button>
+        <p style={{ color: '#555', margin: '8px 0 0', fontSize: 11 }}>
+          Wymaga rozszerzenia Tampermonkey w przeglądarce
+        </p>
+      </div>
+
+      {/* API KEYS */}
+      <div style={s.card}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <h2 style={s.h2}>🔑 API Keys</h2>
+          <button onClick={generateNewKey} style={s.btnSmall}>+ Nowy klucz</button>
+        </div>
+        {newApiKey && <KeyReveal apiKey={newApiKey} />}
+        {apiKeys.length === 0 ? (
+          <p style={{ color: '#888', fontSize: 13 }}>Brak kluczy — wygeneruj nowy powyżej.</p>
+        ) : (
+          apiKeys.map((k) => (
+            <div key={k.id} style={s.row}>
+              <div>
+                <code style={{ color: '#3498db', fontSize: 12 }}>{k.key.substring(0, 16)}...</code>
+                <span style={{ marginLeft: 8, color: '#666', fontSize: 11 }}>{k.label}</span>
+              </div>
+              <div style={{ fontSize: 11, color: '#555' }}>
+                {k.active ? '🟢' : '🔴'}
+                {k.lastUsed ? ` ${new Date(k.lastUsed).toLocaleDateString()}` : ' unused'}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* SUMMARY */}
+      {sessions?.summary?.length > 0 && (
+        <div style={s.card}>
+          <h2 style={s.h2}>📊 Podsumowanie</h2>
+          {sessions.summary.map((x: any) => (
+            <div key={x.monster} style={{ ...s.row, padding: '12px 0' }}>
+              <div>
+                <strong style={{ color: '#e2b714' }}>{x.monster}</strong>
+                <span style={{ color: '#555', fontSize: 11, marginLeft: 8 }}>{x.map}</span>
+              </div>
+              <div style={{ textAlign: 'right' as const }}>
+                <div style={{ color: '#2ecc71', fontFamily: 'monospace', fontSize: 18 }}>{x.totalTimeFormatted}</div>
+                <div style={{ color: '#666', fontSize: 11 }}>{x.totalSessions} sesji</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* RECENT SESSIONS */}
+      {sessions?.sessions?.length > 0 && (
+        <div style={s.card}>
+          <h2 style={s.h2}>🕐 Ostatnie sesje</h2>
+          {sessions.sessions.map((x: any) => (
+            <div key={x.id} style={{ ...s.row, fontSize: 13 }}>
+              <div>
+                <span style={{ color: '#e2b714' }}>{x.monster}</span>
+                <span style={{ color: '#555', fontSize: 11, marginLeft: 8 }}>{x.hero} · {x.world}</span>
+              </div>
+              <div style={{ textAlign: 'right' as const }}>
+                <span style={{ color: '#2ecc71', fontFamily: 'monospace' }}>{x.durationFormatted}</span>
+                <div style={{ color: '#444', fontSize: 10 }}>
+                  {new Date(x.endedAt).toLocaleString()} · {x.reason}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function KeyReveal({ apiKey }: { apiKey: string }) {
+  return (
+    <div style={{ background: '#0a1628', border: '1px solid #2ecc71', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+      <p style={{ margin: '0 0 6px', fontWeight: 'bold', color: '#2ecc71', fontSize: 12 }}>
+        🔑 Twój API Key (kliknij aby skopiować):
+      </p>
+      <code
+        style={{ display: 'block', background: '#000', padding: '8px 12px', borderRadius: 6, fontSize: 13, fontFamily: 'monospace', color: '#2ecc71', cursor: 'pointer', wordBreak: 'break-all' as const }}
+        onClick={() => { navigator.clipboard.writeText(apiKey); alert('Skopiowano!'); }}
+      >
+        {apiKey}
+      </code>
+    </div>
+  );
+}
+
+const s: Record<string, React.CSSProperties> = {
+  container: { maxWidth: 600, margin: '0 auto', padding: '32px 16px', fontFamily: 'system-ui, sans-serif' },
+  title: { fontSize: 28, margin: '0 0 4px', color: '#fff' },
+  sub: { color: '#888', margin: '0 0 24px', fontSize: 14 },
+  card: { background: '#1a1a2e', borderRadius: 12, padding: 20, marginBottom: 16 },
+  h2: { fontSize: 16, margin: '0 0 12px', color: '#eee' },
+  tabs: { display: 'flex', marginBottom: 16, borderRadius: 8, overflow: 'hidden', border: '1px solid #333' },
+  tab: { flex: 1, padding: 10, background: '#0f0f23', color: '#888', border: 'none', cursor: 'pointer', fontSize: 13 },
+  tabOn: { background: '#16213e', color: '#fff' },
+  input: { padding: '10px 12px', background: '#0f3460', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 14, outline: 'none' },
+  btnGreen: { padding: 12, background: '#27ae60', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 'bold', marginTop: 4 },
+  btnInstall: { padding: '14px 20px', background: 'linear-gradient(135deg, #6c3483, #2980b9)', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: 15, fontWeight: 'bold', width: '100%' },
+  btnSmall: { padding: '6px 12px', background: '#3498db', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 11 },
+  row: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #ffffff08' },
+  linkBtn: { padding: '8px 16px', background: '#6c3483', color: '#fff', textDecoration: 'none', borderRadius: 8, fontSize: 13, fontWeight: 'bold' },
+};
+

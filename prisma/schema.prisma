@@ -11,12 +11,15 @@ model User {
   id        String   @id @default(cuid())
   email     String   @unique
   username  String   @unique
+  nick      String?  // nazwa w grze (opcjonalna)
   password  String   // bcrypt hash
+  role      String   @default("user") // "user" | "admin"
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   apiKeys     ApiKey[]
   mapSessions MapSession[]
+  phaseResults PhaseResult[]
 }
 
 model ApiKey {
@@ -39,6 +42,7 @@ model Monster {
   createdAt DateTime @default(now())
 
   mapSessions MapSession[]
+  phases     Phase[]
 
   @@index([name])
 }
@@ -49,6 +53,8 @@ model MapSession {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   monsterId String
   monster   Monster  @relation(fields: [monsterId], references: [id])
+  phaseId   String?  // do którego okresu należy (null = aktywny okres)
+  phase     Phase?   @relation(fields: [phaseId], references: [id])
 
   heroName  String   // nazwa postaci w grze
   world     String   // serwer gry
@@ -65,4 +71,39 @@ model MapSession {
   @@index([userId])
   @@index([monsterId])
   @@index([userId, monsterId])
+  @@index([phaseId])
+}
+
+model Phase {
+  id        String   @id @default(cuid())
+  monsterId String
+  monster   Monster  @relation(fields: [monsterId], references: [id])
+  phaseNumber Int    // 1, 2, 3... (0 = aktywny okres)
+  name      String   // "Kic", "Kic1", "Kic2", etc.
+  endedAt   DateTime @default(now()) // kiedy admin zakończył fazę
+  endedBy   String   // userId admina który zakończył
+  createdAt DateTime @default(now())
+
+  mapSessions MapSession[]
+  phaseResults PhaseResult[]
+
+  @@unique([monsterId, phaseNumber])
+  @@index([monsterId])
+}
+
+model PhaseResult {
+  id        String   @id @default(cuid())
+  phaseId   String
+  phase     Phase    @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  totalTime Int      // suma czasu w sekundach dla tego użytkownika w tej fazie
+  totalSessions Int  // liczba sesji
+  
+  createdAt DateTime @default(now())
+
+  @@unique([phaseId, userId])
+  @@index([phaseId])
+  @@index([userId])
 }

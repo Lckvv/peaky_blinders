@@ -34,8 +34,6 @@ export default function Home() {
           <div><span style={{ color: '#27ae60' }}>POST</span> /api/timer/session — zapisz sesję (TM)</div>
           <div><span style={{ color: '#3498db' }}>GET</span>&nbsp; /api/timer/sessions — moje sesje</div>
           <div><span style={{ color: '#3498db' }}>GET</span>&nbsp; /api/timer/leaderboard?monster=Kic — ranking</div>
-          <div><span style={{ color: '#3498db' }}>GET</span>&nbsp; /api/leaderboard/phases — rankingi z fazami</div>
-          <div><span style={{ color: '#e67e22' }}>POST</span> /api/admin/end-phase — zakończ fazę (admin)</div>
         </div>
       </section>
 
