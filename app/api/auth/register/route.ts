@@ -91,9 +91,14 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (error) {
-    console.error('[Register] Error:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    const stack = error instanceof Error ? error.stack : undefined;
+    console.error('[Register] Error:', message, stack);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      {
+        error: 'Internal server error',
+        ...(process.env.NODE_ENV === 'development' && { detail: message }),
+      },
       { status: 500 }
     );
   }
