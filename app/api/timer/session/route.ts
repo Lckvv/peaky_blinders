@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authFromApiKey } from '@/lib/auth';
+import { getMonsterNameFromMap } from '@/lib/mapToMonster';
 
 // POST — record a map session (called by Tampermonkey script)
 export async function POST(request: NextRequest) {
   try {
-    // Auth via API key
     const user = await authFromApiKey(request);
     if (!user) {
       return NextResponse.json(
@@ -16,8 +16,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
-    // Validate required fields
-    const { time, monster, map, hero, world, reason, timestamp } = body;
+    const { time, monster: bodyMonster, map: mapName, hero, world, reason, timestamp } = body;
 
     if (!time || typeof time !== 'number' || time < 1) {
       return NextResponse.json(
@@ -26,9 +25,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!monster || !map) {
+    if (!mapName || typeof mapName !== 'string') {
       return NextResponse.json(
-        { error: 'Missing "monster" or "map" field' },
+        { error: 'Missing "map" field (map name from game)' },
         { status: 400 }
       );
     }
@@ -36,6 +35,17 @@ export async function POST(request: NextRequest) {
     if (!hero) {
       return NextResponse.json(
         { error: 'Missing "hero" field (character name)' },
+        { status: 400 }
+      );
+    }
+
+    // Przypisanie do tytana: z mapowania mapa → tytan, albo z payloadu "monster"
+    const monster = getMonsterNameFromMap(mapName) ?? bodyMonster ?? null;
+    if (!monster) {
+      return NextResponse.json(
+        {
+          error: `Map "${mapName}" is not assigned to any phase. Add it in mapToMonster or send "monster" in payload.`,
+        },
         { status: 400 }
       );
     }
@@ -48,7 +58,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find or create monster
+    // Find or create monster (name z mapowania lub payloadu)
     let monsterRecord = await prisma.monster.findUnique({
       where: { name: monster },
     });
@@ -57,7 +67,7 @@ export async function POST(request: NextRequest) {
       monsterRecord = await prisma.monster.create({
         data: {
           name: monster,
-          mapName: map,
+          mapName: mapName,
         },
       });
     }
@@ -79,7 +89,7 @@ export async function POST(request: NextRequest) {
         phaseId: activePhase?.id ?? null,
         heroName: hero,
         world: world || 'Unknown',
-        mapName: map,
+        mapName: mapName,
         duration: time,
         reason: reason || 'unknown',
         startedAt,
