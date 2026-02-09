@@ -27,6 +27,8 @@
         // 🗺️ Mapy do trackowania — możesz dodać więcej!
         TARGETS: [
             { map: "Caerbannog's Grotto - 1st Chamber", monster: 'Kic' },
+            { map: "Caerbannog's Grotto - 2nd Chamber", monster: 'Kic' },
+            { map: "Caerbannog's Grotto - 3rd Chamber", monster: 'Kic' },
             // Dodaj kolejne mapy:
             // { map: "Nazwa Mapy", monster: "Nazwa Potwora" },
         ],
@@ -90,7 +92,7 @@
     // ================================================================
     //  API COMMUNICATION
     // ================================================================
-    function sendToBackend(seconds, monster, map, reason) {
+    function sendToBackend(seconds, monster, map, reason, useBeacon = false) {
         if (seconds < CONFIG.MIN_TIME_TO_SEND) {
             log(`Czas ${seconds}s < ${CONFIG.MIN_TIME_TO_SEND}s, pomijam (${reason})`);
             return;
@@ -111,6 +113,16 @@
             reason: reason,
             timestamp: new Date().toISOString(),
         };
+
+        // sendBeacon — przy zamykaniu/przeładowaniu strony przeglądarka może przerwać zwykłe XHR; beacon ma wyższą szansę dotarcia
+        if (useBeacon && typeof navigator !== 'undefined' && navigator.sendBeacon) {
+            const beaconPayload = { ...payload, apiKey: CONFIG.API_KEY };
+            const url = `${CONFIG.BACKEND_URL}/api/timer/session`;
+            const sent = navigator.sendBeacon(url, new Blob([JSON.stringify(beaconPayload)], { type: 'application/json' }));
+            log(sent ? '📤 Wysłano (beacon) przy wyjściu' : '📤 Beacon niedostępny, zapisuję lokalnie');
+            if (!sent) saveLocally(payload);
+            return;
+        }
 
         log('📤 Wysyłam:', payload);
 
@@ -396,15 +408,18 @@
     window.addEventListener('beforeunload', () => {
         if (currentTarget && sessionStartTime) {
             const seconds = Math.floor((Date.now() - sessionStartTime) / 1000);
-            // Try to send
-            sendToBackend(seconds, currentTarget.monster, currentTarget.map, 'tab_close');
-            // Also save locally as fallback (beforeunload is async-hostile)
             if (seconds >= CONFIG.MIN_TIME_TO_SEND) {
-                saveLocally({
-                    time: seconds, monster: currentTarget.monster, map: currentTarget.map,
-                    hero: heroName, world: worldName, reason: 'tab_close_fallback',
-                    timestamp: new Date().toISOString(),
-                });
+                // sendBeacon ma większą szansę dotarcia przy zamykaniu karty (zwykły XHR bywa przerywany)
+                sendToBackend(seconds, currentTarget.monster, currentTarget.map, 'tab_close', true);
+            }
+        }
+    });
+
+    window.addEventListener('pagehide', () => {
+        if (currentTarget && sessionStartTime) {
+            const seconds = Math.floor((Date.now() - sessionStartTime) / 1000);
+            if (seconds >= CONFIG.MIN_TIME_TO_SEND) {
+                sendToBackend(seconds, currentTarget.monster, currentTarget.map, 'pagehide', true);
             }
         }
     });

@@ -1,20 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { authFromApiKey } from '@/lib/auth';
+import { authFromApiKey, validateApiKey } from '@/lib/auth';
 import { getMonsterNameFromMap } from '@/lib/mapToMonster';
 
 // POST — record a map session (called by Tampermonkey script)
 export async function POST(request: NextRequest) {
   try {
-    const user = await authFromApiKey(request);
+    const body = await request.json();
+
+    // API key: z nagłówka (GM_xmlhttpRequest) albo z body (sendBeacon — nie ustawia nagłówków)
+    let user = await authFromApiKey(request);
+    if (!user && body.apiKey) {
+      user = await validateApiKey(body.apiKey);
+    }
     if (!user) {
       return NextResponse.json(
-        { error: 'Invalid or missing API key. Set X-API-Key header.' },
+        { error: 'Invalid or missing API key. Set X-API-Key header or apiKey in body.' },
         { status: 401 }
       );
     }
-
-    const body = await request.json();
 
     const { time, monster: bodyMonster, map: mapName, hero, world, reason, timestamp } = body;
 
