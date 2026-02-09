@@ -62,7 +62,15 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('[Start Phase] Error:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[Start Phase] Error:', message, error);
+    // Częsta przyczyna: baza bez aktualnej schemy (brak migracji / db push na Railway)
+    if (typeof message === 'string' && (message.includes('Unknown column') || message.includes('null value') || message.includes('column') || message.includes('isActive') || message.includes('startedAt'))) {
+      return NextResponse.json(
+        { error: 'Błąd bazy – prawdopodobnie brak aktualnej schemy. Na Railway uruchom raz: prisma db push (lub dodaj do startu).' },
+        { status: 500 }
+      );
+    }
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
