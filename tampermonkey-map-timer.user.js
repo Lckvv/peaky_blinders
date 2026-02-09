@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Margonem Map Timer
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      2.1
 // @description  Tracks time spent on target maps and syncs with backend. Supports API key auth for multi-user leaderboards.
 // @author       Lucek
 // @match        https://*.margonem.com/*
@@ -24,13 +24,9 @@
         // 🌐 Adres backendu — zmień na swój po deployu na Railway
         BACKEND_URL: GM_getValue('backend_url', 'https://your-app.up.railway.app'),
 
-        // 🗺️ Mapy do trackowania — możesz dodać więcej!
+        // 🗺️ Mapy do trackowania (nazwa dokładnie jak w grze)
         TARGETS: [
-            { map: "Caerbannog's Grotto - 1st Chamber", monster: 'Kic' },
             { map: "Caerbannog's Grotto - 2nd Chamber", monster: 'Kic' },
-            { map: "Caerbannog's Grotto - 3rd Chamber", monster: 'Kic' },
-            // Dodaj kolejne mapy:
-            // { map: "Nazwa Mapy", monster: "Nazwa Potwora" },
         ],
 
         CHECK_INTERVAL: 1000,
@@ -49,6 +45,12 @@
     let uiElement = null;
     let settingsOpen = false;
 
+    function refreshConfigFromStorage() {
+        CONFIG.API_KEY = GM_getValue('api_key', '');
+        const url = GM_getValue('backend_url', '');
+        if (url) CONFIG.BACKEND_URL = url.replace(/\/$/, '');
+    }
+
     // ================================================================
     //  UTILS
     // ================================================================
@@ -58,13 +60,15 @@
 
     function getEngine() {
         try {
-            if (typeof Engine !== 'undefined' && Engine?.map?.d?.name) return Engine;
+            const E = typeof Engine !== 'undefined' ? Engine : (typeof window !== 'undefined' && (window.Engine || window.engine));
+            if (E?.map?.d?.name) return E;
         } catch (e) { /* ignore */ }
         return null;
     }
 
     function getCurrentMapName() {
-        return getEngine()?.map?.d?.name || null;
+        const name = getEngine()?.map?.d?.name || null;
+        return name != null ? String(name).trim() : null;
     }
 
     function getHeroInfo() {
@@ -77,7 +81,15 @@
     }
 
     function findTarget(mapName) {
-        return CONFIG.TARGETS.find(t => t.map === mapName) || null;
+        if (!mapName) return null;
+        const normalized = mapName.trim();
+        // Dokładne dopasowanie
+        let target = CONFIG.TARGETS.find(t => t.map === normalized) || null;
+        // Fallback: zawiera fragment (np. "2nd Chamber") — gra może zwracać inną pisownię
+        if (!target && normalized.includes('2nd Chamber')) {
+            target = CONFIG.TARGETS.find(t => t.map.includes('2nd Chamber')) || null;
+        }
+        return target;
     }
 
     function formatTime(totalSeconds) {
@@ -93,6 +105,7 @@
     //  API COMMUNICATION
     // ================================================================
     function sendToBackend(seconds, monster, map, reason, useBeacon = false) {
+        refreshConfigFromStorage();
         if (seconds < CONFIG.MIN_TIME_TO_SEND) {
             log(`Czas ${seconds}s < ${CONFIG.MIN_TIME_TO_SEND}s, pomijam (${reason})`);
             return;
@@ -234,9 +247,17 @@
         accumulatedSeconds = 0;
     }
 
+    let lastLoggedMapName = null;
     function tick() {
+        refreshConfigFromStorage();
         const mapName = getCurrentMapName();
         const target = mapName ? findTarget(mapName) : null;
+
+        if (mapName && !target && mapName !== lastLoggedMapName) {
+            log('⚠️ Wykryta mapa nie jest w TARGETS:', JSON.stringify(mapName), '— dodaj ją do listy w skrypcie');
+            lastLoggedMapName = mapName;
+        }
+        if (!mapName) lastLoggedMapName = null;
 
         if (target) {
             if (!currentTarget) {
@@ -428,9 +449,11 @@
     //  INIT
     // ================================================================
     function init() {
-        log('🚀 Inicjalizacja v2.0...');
-        log(`   Targets: ${CONFIG.TARGETS.map(t => t.monster).join(', ')}`);
-        log(`   API Key: ${CONFIG.API_KEY ? '✅ ustawiony' : '❌ brak'}`);
+        refreshConfigFromStorage();
+        log('🚀 Map Timer — inicjalizacja');
+        log(`   Mapy: ${CONFIG.TARGETS.map(t => t.map).join(' | ')}`);
+        log(`   BACKEND_URL: ${CONFIG.BACKEND_URL || '(pusty — ustaw w ⚙️)'}`);
+        log(`   API Key: ${CONFIG.API_KEY ? '✅ ustawiony' : '❌ BRAK — kliknij ⏱ w rogu i wklej klucz, potem Zapisz'}`);
 
         createSettingsButton();
 
