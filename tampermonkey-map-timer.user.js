@@ -9,6 +9,8 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @connect      *
+// @connect      *.railway.app
+// @connect      *.up.railway.app
 // ==/UserScript==
 
 (function () {
@@ -137,10 +139,11 @@
             return;
         }
 
-        log('📤 Wysyłam:', payload);
+        const url = `${CONFIG.BACKEND_URL.replace(/\/$/, '')}/api/timer/session`;
+        log('📤 Wysyłam POST:', url, payload);
 
         GM_xmlhttpRequest({
-            url: `${CONFIG.BACKEND_URL}/api/timer/session`,
+            url: url,
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -148,6 +151,8 @@
             },
             data: JSON.stringify(payload),
             onload: (res) => {
+                const body = (res.responseText || '').slice(0, 300);
+                log('📥 Odpowiedź:', res.status, body);
                 if (res.status >= 200 && res.status < 300) {
                     try {
                         const data = JSON.parse(res.responseText);
@@ -157,16 +162,19 @@
                         log('✅ Zapisano (nie można sparsować odpowiedzi)');
                     }
                 } else if (res.status === 401) {
-                    log('❌ Nieprawidłowy API key! Sprawdź ustawienia.');
+                    log('❌ 401 — Nieprawidłowy API key! Sprawdź ustawienia (⏱).');
                     showToast('❌ Nieprawidłowy API key!', 'error');
                     saveLocally(payload);
                 } else {
                     log('❌ Błąd serwera:', res.status, res.responseText);
+                    showToast('❌ Błąd ' + res.status, 'error');
                     saveLocally(payload);
                 }
             },
             onerror: (err) => {
-                log('❌ Błąd sieci:', err);
+                console.warn('[MapTimer] ❌ Błąd sieci / XHR:', err);
+                log('❌ Błąd sieci — sprawdź BACKEND_URL i połączenie. Zapisuję lokalnie.');
+                showToast('❌ Błąd sieci', 'error');
                 saveLocally(payload);
             },
             ontimeout: () => {

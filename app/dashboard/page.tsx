@@ -6,6 +6,15 @@ export default function Dashboard() {
   const [user, setUser] = useState<any>(null);
   const [apiKeys, setApiKeys] = useState<any[]>([]);
   const [sessions, setSessions] = useState<any>(null);
+  const [myStats, setMyStats] = useState<{ byTitan: Array<{
+    monsterName: string;
+    activePhaseTime: number;
+    activePhaseTimeFormatted: string;
+    totalTime: number;
+    totalTimeFormatted: string;
+    totalSessions: number;
+    phases: Array<{ phaseName: string; totalTime: number; totalTimeFormatted: string }>;
+  }> } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isLogin, setIsLogin] = useState(true);
@@ -32,8 +41,12 @@ export default function Dashboard() {
 
   async function loadSessions() {
     try {
-      const res = await fetch('/api/timer/sessions?limit=10');
-      if (res.ok) setSessions(await res.json());
+      const [sessRes, statsRes] = await Promise.all([
+        fetch('/api/timer/sessions?limit=10'),
+        fetch('/api/timer/my-stats'),
+      ]);
+      if (sessRes.ok) setSessions(await sessRes.json());
+      if (statsRes.ok) setMyStats(await statsRes.json());
     } catch (e) {}
   }
 
@@ -162,6 +175,50 @@ export default function Dashboard() {
         </p>
       </div>
 
+      {/* MOJE CZASY — per tytan */}
+      <div style={s.card}>
+        <h2 style={s.h2}>⏱ Moje czasy (per tytan)</h2>
+        <p style={{ color: '#8892b0', fontSize: 12, margin: '0 0 12px' }}>
+          Czas w aktywnej fazie, łącznie ze wszystkich sesji oraz z podziałem na fazy.
+        </p>
+        {myStats && myStats.byTitan.length > 0 ? (
+          <div style={s.statsTableWrap}>
+            <table style={s.statsTable}>
+              <thead>
+                <tr>
+                  <th style={s.statsTh}>Tytan</th>
+                  <th style={s.statsTh}>W aktywnej fazie</th>
+                  <th style={s.statsTh}>Łącznie (wszystkie sesje)</th>
+                  <th style={s.statsTh}>Sesje</th>
+                  <th style={s.statsTh}>Fazy</th>
+                </tr>
+              </thead>
+              <tbody>
+                {myStats.byTitan.map((t) => (
+                  <tr key={t.monsterName} style={s.statsTr}>
+                    <td style={s.statsTd}><strong style={{ color: '#e2b714' }}>{t.monsterName}</strong></td>
+                    <td style={s.statsTd}>{t.activePhaseTimeFormatted}</td>
+                    <td style={{ ...s.statsTd, color: '#2ecc71', fontFamily: 'monospace' }}>{t.totalTimeFormatted}</td>
+                    <td style={s.statsTd}>{t.totalSessions}</td>
+                    <td style={s.statsTd}>
+                      {t.phases.length === 0 ? '—' : (
+                        <div style={{ fontSize: 11 }}>
+                          {t.phases.map((p) => (
+                            <div key={p.phaseName}>{p.phaseName}: {p.totalTimeFormatted}</div>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p style={{ color: '#666', fontSize: 13 }}>Brak zapisanych czasów. Użyj skryptu na mapie, aby sesje trafiły tutaj.</p>
+        )}
+      </div>
+
       {/* API KEYS */}
       <div style={s.card}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -261,5 +318,10 @@ const s: Record<string, React.CSSProperties> = {
   btnSmall: { padding: '6px 12px', background: '#3498db', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 11 },
   row: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #ffffff08' },
   linkBtn: { padding: '8px 16px', background: '#6c3483', color: '#fff', textDecoration: 'none', borderRadius: 8, fontSize: 13, fontWeight: 'bold' },
+  statsTableWrap: { overflowX: 'auto' as const },
+  statsTable: { width: '100%', borderCollapse: 'collapse' as const, fontSize: 13 },
+  statsTh: { textAlign: 'left' as const, padding: '10px 12px', background: '#0f0f23', color: '#8892b0', fontWeight: 600, fontSize: 11 },
+  statsTr: { borderBottom: '1px solid #2a2a4a' },
+  statsTd: { padding: '10px 12px', color: '#ccc' },
 };
 
