@@ -62,6 +62,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Przypisz do aktywnej fazy, jeśli jest uruchomiona
+    const activePhase = await prisma.phase.findFirst({
+      where: { monsterId: monsterRecord.id, isActive: true },
+    });
+
     // Calculate session start time
     const endedAt = timestamp ? new Date(timestamp) : new Date();
     const startedAt = new Date(endedAt.getTime() - time * 1000);
@@ -71,6 +76,7 @@ export async function POST(request: NextRequest) {
       data: {
         userId: user.id,
         monsterId: monsterRecord.id,
+        phaseId: activePhase?.id ?? null,
         heroName: hero,
         world: world || 'Unknown',
         mapName: map,

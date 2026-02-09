@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
-import Navbar from './components/Navbar';
+import { AuthProvider } from './components/AuthContext';
+import AuthGuard from './components/AuthGuard';
 
 export const metadata: Metadata = {
-  title: 'Margonem Map Timer',
-  description: 'Track your time spent hunting monsters on Margonem maps',
+  title: 'Peaky Blinders',
+  description: 'Margonem Map Timer — śledzenie czasu na mapach',
 };
 
 export default function RootLayout({
@@ -14,11 +15,12 @@ export default function RootLayout({
   return (
     <html lang="pl">
       <body style={{ margin: 0, fontFamily: 'system-ui, sans-serif', background: '#0f0f23', color: '#eee' }}>
-        <div style={{ display: 'flex', minHeight: '100vh' }}>
-          <Navbar />
-          <main style={{ flex: 1, overflow: 'auto' }}>
-            {children}
-          </main>
+        <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+          <AuthProvider>
+            <AuthGuard>
+              {children}
+            </AuthGuard>
+          </AuthProvider>
         </div>
       </body>
     </html>

@@ -35,27 +35,29 @@ export async function GET(request: NextRequest) {
 
     // Formatuj dane
     const result = await Promise.all(monsters.map(async (monster) => {
-      // Faza 0 (aktywna) - sesje bez fazy
+      // Aktywna faza: albo Phase z isActive=true, albo sesje z phaseId=null (legacy)
+      const activePhaseRecord = await prisma.phase.findFirst({
+        where: { monsterId: monster.id, isActive: true },
+      });
+
+      const activeWhere = activePhaseRecord
+        ? { monsterId: monster.id, phaseId: activePhaseRecord.id }
+        : { monsterId: monster.id, phaseId: null as string | null };
+
       const activeStats = await prisma.mapSession.groupBy({
         by: ['userId'],
-        where: {
-          monsterId: monster.id,
-          phaseId: null,
-        },
+        where: activeWhere,
         _sum: { duration: true },
         _count: true,
       });
 
-      // Pobierz informacje o użytkownikach dla aktywnej fazy
       const activeUserIds = activeStats.map(s => s.userId);
       const activeUsers = activeUserIds.length > 0 ? await prisma.user.findMany({
         where: { id: { in: activeUserIds } },
         select: { id: true, username: true, nick: true },
       }) : [];
-
       const activeUserMap = Object.fromEntries(activeUsers.map(u => [u.id, u]));
 
-      // Sortuj aktywną fazę
       const activeLeaderboard = activeStats
         .map((stat) => ({
           userId: stat.userId,
@@ -74,7 +76,9 @@ export async function GET(request: NextRequest) {
           totalSessions: item.totalSessions,
         }));
 
-      const phases = monster.phases.map((phase) => ({
+      // Tylko zakończone fazy (isActive=false)
+      const endedPhases = monster.phases.filter((p) => !p.isActive);
+      const phases = endedPhases.map((phase) => ({
         id: phase.id,
         name: phase.name,
         phaseNumber: phase.phaseNumber,
@@ -90,15 +94,16 @@ export async function GET(request: NextRequest) {
         })),
       }));
 
+      const activePhaseName = activePhaseRecord?.name ?? monster.name;
       return {
         monster: {
           id: monster.id,
           name: monster.name,
           mapName: monster.mapName,
         },
-        activePhase: activeLeaderboard.length > 0 ? {
-          name: monster.name,
-          phaseNumber: 0,
+        activePhase: activeLeaderboard.length > 0 || activePhaseRecord ? {
+          name: activePhaseName,
+          phaseNumber: activePhaseRecord?.phaseNumber ?? 0,
           leaderboard: activeLeaderboard,
         } : null,
         phases,

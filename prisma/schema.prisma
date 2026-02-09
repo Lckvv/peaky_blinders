@@ -75,20 +75,23 @@ model MapSession {
 }
 
 model Phase {
-  id        String   @id @default(cuid())
-  monsterId String
-  monster   Monster  @relation(fields: [monsterId], references: [id])
-  phaseNumber Int    // 1, 2, 3... (0 = aktywny okres)
-  name      String   // "Kic", "Kic1", "Kic2", etc.
-  endedAt   DateTime @default(now()) // kiedy admin zakończył fazę
-  endedBy   String   // userId admina który zakończył
-  createdAt DateTime @default(now())
+  id           String    @id @default(cuid())
+  monsterId    String
+  monster      Monster   @relation(fields: [monsterId], references: [id])
+  phaseNumber  Int       // 1, 2, 3...
+  name         String    // "Kic", "Kic1", "Orla", etc.
+  isActive     Boolean   @default(false) // true = trwa, zbierane są sesje
+  startedAt    DateTime  @default(now()) // kiedy admin uruchomił fazę
+  endedAt      DateTime? // kiedy admin zakończył (null = aktywna)
+  endedBy      String?   // userId admina który zakończył
+  createdAt    DateTime  @default(now())
 
-  mapSessions MapSession[]
+  mapSessions  MapSession[]
   phaseResults PhaseResult[]
 
   @@unique([monsterId, phaseNumber])
   @@index([monsterId])
+  @@index([monsterId, isActive])
 }
 
 model PhaseResult {
