@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
     const totalSessions = totalResult._count;
 
     console.log(
-      `[Timer] ${user.username} (${hero}) → ${monster} on "${map}" — ${time}s (total: ${totalTime}s, sessions: ${totalSessions})`
+      `[Timer] ${user.username} (${hero}) → ${monster} on "${mapName}" — ${time}s (total: ${totalTime}s, sessions: ${totalSessions})`
     );
 
     return NextResponse.json({
