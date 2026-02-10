@@ -23,10 +23,10 @@
         // 🔑 Twój API key — dostaniesz go po rejestracji na stronie
         API_KEY: GM_getValue('api_key', ''),
 
-        // 🌐 Adres backendu — zmień na swój po deployu na Railway
-        BACKEND_URL: GM_getValue('backend_url', 'https://your-app.up.railway.app'),
+        // 🌐 Adres backendu (Railway) — możesz zmienić w ustawieniach ⏱
+        BACKEND_URL: GM_getValue('backend_url', 'https://peakyblinders-production-61db.up.railway.app'),
 
-        // 🗺️ Mapy do trackowania (nazwa dokładnie jak w grze)
+        // 🗺️ Jedyna mapa, na której nalicza się czas (faza Kic). Inne fazy = inne mapy później.
         TARGETS: [
             { map: "Caerbannog's Grotto - 2nd Chamber", monster: 'Kic' },
         ],
@@ -106,7 +106,7 @@
     // ================================================================
     //  API COMMUNICATION
     // ================================================================
-    function sendToBackend(seconds, monster, map, reason, useBeacon = false) {
+    function sendToBackend(seconds, monster, map, reason, useUnloadSend = false, retryCount = 0) {
         refreshConfigFromStorage();
         if (seconds < CONFIG.MIN_TIME_TO_SEND) {
             log(`Czas ${seconds}s < ${CONFIG.MIN_TIME_TO_SEND}s, pomijam (${reason})`);
@@ -130,57 +130,72 @@
         };
 
         // sendBeacon — przy zamykaniu/przeładowaniu strony przeglądarka może przerwać zwykłe XHR; beacon ma wyższą szansę dotarcia
-        if (useBeacon && typeof navigator !== 'undefined' && navigator.sendBeacon) {
-            const beaconPayload = { ...payload, apiKey: CONFIG.API_KEY };
-            const url = `${CONFIG.BACKEND_URL}/api/timer/session`;
-            const sent = navigator.sendBeacon(url, new Blob([JSON.stringify(beaconPayload)], { type: 'application/json' }));
-            log(sent ? '📤 Wysłano (beacon) przy wyjściu' : '📤 Beacon niedostępny, zapisuję lokalnie');
-            if (!sent) saveLocally(payload);
+        const url = CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/session';
+
+        function onSuccess(data) {
+            try {
+                var d = typeof data === 'string' ? JSON.parse(data) : data;
+                log('✅ Zapisano! Total:', d.totalTimeFormatted, '(', d.totalSessions, 'sesji)');
+                showToast('✅ Zapisano ' + formatTime(seconds) + ' — łącznie: ' + d.totalTimeFormatted);
+            } catch (e) { log('✅ Zapisano'); }
+        }
+        function onFail(msg) {
+            log('❌', msg);
+            saveLocally(payload);
+            var n = (JSON.parse(localStorage.getItem('maptimer_pending') || '[]')).length;
+            showToast('💾 Zapisano lokalnie (' + n + '). Później: ⏱ → Wyślij zaległe.', 'error');
+        }
+
+        if (useUnloadSend && typeof fetch !== 'undefined') {
+            var unloadPayload = Object.assign({}, payload, { apiKey: CONFIG.API_KEY });
+            log('📤 POST przy przeładowaniu/zamknięciu:', url);
+            fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(unloadPayload),
+                keepalive: true,
+            }).then(function (r) {
+                if (r.ok) r.text().then(onSuccess);
+                else r.text().then(function (t) { log('❌', r.status, t); saveLocally(payload); });
+            }).catch(function (e) { log('❌ fetch (unload):', e); saveLocally(payload); });
             return;
         }
 
-        const url = `${CONFIG.BACKEND_URL.replace(/\/$/, '')}/api/timer/session`;
-        log('📤 Wysyłam POST:', url, payload);
+        log(retryCount > 0 ? '📤 Ponowna próba #' + retryCount : '📤 Wysyłam POST (sprawdź zakładkę Network):', url);
 
-        GM_xmlhttpRequest({
-            url: url,
+        var controller = null;
+        try { controller = new window.AbortController(); } catch (e) { controller = { signal: {}, abort: function () {} }; }
+        var timeoutId = setTimeout(function () { if (controller.abort) controller.abort(); }, 60000);
+
+        fetch(url, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-API-Key': CONFIG.API_KEY,
-            },
-            data: JSON.stringify(payload),
-            onload: (res) => {
-                const body = (res.responseText || '').slice(0, 300);
-                log('📥 Odpowiedź:', res.status, body);
-                if (res.status >= 200 && res.status < 300) {
-                    try {
-                        const data = JSON.parse(res.responseText);
-                        log(`✅ Zapisano! Total: ${data.totalTimeFormatted} (${data.totalSessions} sesji)`);
-                        showToast(`✅ Zapisano ${formatTime(seconds)} — łącznie: ${data.totalTimeFormatted}`);
-                    } catch (e) {
-                        log('✅ Zapisano (nie można sparsować odpowiedzi)');
-                    }
-                } else if (res.status === 401) {
-                    log('❌ 401 — Nieprawidłowy API key! Sprawdź ustawienia (⏱).');
+            headers: { 'Content-Type': 'application/json', 'X-API-Key': CONFIG.API_KEY },
+            body: JSON.stringify(payload),
+            signal: controller.signal,
+        }).then(function (res) {
+            clearTimeout(timeoutId);
+            return res.text().then(function (text) {
+                log('📥 Odpowiedź:', res.status, (text || '').slice(0, 200));
+                if (res.ok) onSuccess(text);
+                else if (res.status === 401) {
                     showToast('❌ Nieprawidłowy API key!', 'error');
                     saveLocally(payload);
                 } else {
-                    log('❌ Błąd serwera:', res.status, res.responseText);
                     showToast('❌ Błąd ' + res.status, 'error');
                     saveLocally(payload);
                 }
-            },
-            onerror: (err) => {
-                console.warn('[MapTimer] ❌ Błąd sieci / XHR:', err);
-                log('❌ Błąd sieci — sprawdź BACKEND_URL i połączenie. Zapisuję lokalnie.');
-                showToast('❌ Błąd sieci', 'error');
-                saveLocally(payload);
-            },
-            ontimeout: () => {
-                log('❌ Timeout');
-                saveLocally(payload);
-            },
+            });
+        }).catch(function (err) {
+            clearTimeout(timeoutId);
+            var isTimeout = (err && err.name === 'AbortError') || (err && String(err.message || '').indexOf('fetch') !== -1);
+            if (isTimeout && retryCount < 2) {
+                var delay = retryCount === 0 ? 12000 : 20000;
+                log('⏳ Timeout — ponowna próba za', delay / 1000, 's');
+                showToast('⏳ Ponawiam za ' + (delay / 1000) + ' s...');
+                setTimeout(function () { sendToBackend(seconds, monster, map, reason, false, retryCount + 1); }, delay);
+                return;
+            }
+            onFail('Błąd sieci / timeout.');
         });
     }
 

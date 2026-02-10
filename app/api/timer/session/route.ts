@@ -85,17 +85,17 @@ export async function POST(request: NextRequest) {
     const endedAt = timestamp ? new Date(timestamp) : new Date();
     const startedAt = new Date(endedAt.getTime() - time * 1000);
 
-    // Save session
+    // Save session (world/reason ze skryptu mogą być number — baza wymaga string)
     const session = await prisma.mapSession.create({
       data: {
         userId: user.id,
         monsterId: monsterRecord.id,
         phaseId: activePhase?.id ?? null,
-        heroName: hero,
-        world: world || 'Unknown',
+        heroName: String(hero ?? 'Unknown'),
+        world: String(world ?? 'Unknown'),
         mapName: mapName,
         duration: time,
-        reason: reason || 'unknown',
+        reason: String(reason ?? 'unknown'),
         startedAt,
         endedAt,
       },
@@ -127,9 +127,10 @@ export async function POST(request: NextRequest) {
       totalTimeFormatted: formatTime(totalTime),
     });
   } catch (error) {
-    console.error('[Timer Session] Error:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[Timer Session] Error:', message, error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', detail: process.env.NODE_ENV === 'development' ? message : undefined },
       { status: 500 }
     );
   }
