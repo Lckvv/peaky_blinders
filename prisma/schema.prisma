@@ -8,14 +8,16 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  username  String   @unique
-  nick      String?  // nazwa w grze (opcjonalna)
-  password  String   // bcrypt hash
-  role      String   @default("user") // "user" | "admin"
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(cuid())
+  email      String   @unique
+  username   String   @unique
+  nick       String?  // nazwa w grze (opcjonalna)
+  password   String   // bcrypt hash
+  role       String   @default("user") // "user" | "admin"
+  profileUrl String?  // zewnętrzny link do profilu (z gry, przekazywany w POST)
+  avatarUrl  String?  // stroj/avatar (opcjonalnie z gry)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   apiKeys     ApiKey[]
   mapSessions MapSession[]

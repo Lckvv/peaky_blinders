@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { time, monster: bodyMonster, map: mapName, hero, world, reason, timestamp } = body;
+    const { time, monster: bodyMonster, map: mapName, hero, world, reason, timestamp, profileUrl, avatarUrl } = body;
 
     if (!time || typeof time !== 'number' || time < 1) {
       return NextResponse.json(
@@ -52,6 +52,19 @@ export async function POST(request: NextRequest) {
         },
         { status: 400 }
       );
+    }
+
+    if (profileUrl != null && typeof profileUrl === 'string' && profileUrl.trim()) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { profileUrl: profileUrl.trim().slice(0, 500) },
+      });
+    }
+    if (avatarUrl != null && typeof avatarUrl === 'string' && avatarUrl.trim()) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { avatarUrl: avatarUrl.trim().slice(0, 500) },
+      });
     }
 
     // Anti-abuse: max session 12 hours, reject suspiciously long

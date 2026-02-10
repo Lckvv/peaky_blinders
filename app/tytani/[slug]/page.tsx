@@ -17,18 +17,69 @@ const SLUG_TO_NAME: Record<string, string> = {
   tanroth: 'Tanroth',
 };
 
+type PhaseOption = { id: string; name: string; label: string; isActive: boolean };
+type Entry = {
+  rank: number;
+  userId: string;
+  username: string;
+  nick: string | null;
+  profileUrl: string | null;
+  avatarUrl: string | null;
+  heroName: string;
+  totalTime: number;
+  totalTimeFormatted: string;
+  totalSessions: number;
+};
+
 const s: Record<string, React.CSSProperties> = {
-  container: { maxWidth: 900, margin: '0 auto', padding: '32px 16px', fontFamily: 'system-ui, sans-serif' },
-  title: { fontSize: 28, margin: '0 0 24px', color: '#fff' },
-  card: { background: '#1a1a2e', borderRadius: 12, padding: 20, marginBottom: 16 },
-  h2: { fontSize: 18, margin: '0 0 4px', color: '#eee' },
-  tabs: { display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' as const },
-  tab: { padding: '8px 16px', background: '#0f0f23', color: '#888', border: '1px solid #333', borderRadius: 6, cursor: 'pointer', fontSize: 13 },
-  tabOn: { background: '#16213e', color: '#fff', borderColor: '#3498db' },
+  wrap: { maxWidth: 1000, margin: '0 auto', padding: '24px 20px', fontFamily: 'system-ui, sans-serif' },
+  title: { textAlign: 'center' as const, fontSize: 32, fontWeight: 700, color: '#fff', margin: '0 0 24px' },
+  layout: { display: 'flex', gap: 24, alignItems: 'flex-start' },
+  main: { flex: 1, minWidth: 0 },
+  sidebar: { width: 260, flexShrink: 0 },
+  dropdownLabel: { fontSize: 12, color: '#8892b0', marginBottom: 8, fontWeight: 600 },
+  dropdown: {
+    width: '100%',
+    padding: '10px 12px',
+    background: '#1a1a2e',
+    border: '1px solid #2a2a4a',
+    borderRadius: 8,
+    color: '#eee',
+    fontSize: 14,
+    cursor: 'pointer',
+  },
+  podiumWrap: { display: 'flex', justifyContent: 'center', alignItems: 'flex-end', gap: 16, marginBottom: 24, minHeight: 200 },
+  podiumBox: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    padding: '16px 20px',
+    background: 'linear-gradient(180deg, #16213e 0%, #1a1a2e 100%)',
+    borderRadius: 12,
+    border: '1px solid #2a2a4a',
+    minWidth: 140,
+  },
+  podiumFirst: { order: 2, transform: 'scale(1.08)', borderColor: '#e2b714', background: 'linear-gradient(180deg, #1e2a3a 0%, #16213e 100%)' },
+  podiumSecond: { order: 1 },
+  podiumThird: { order: 3 },
+  podiumAvatar: {
+    width: 64,
+    height: 64,
+    borderRadius: '50%',
+    background: '#0f0f23',
+    border: '2px solid #2a2a4a',
+    marginBottom: 8,
+    objectFit: 'cover' as const,
+  },
+  podiumNick: { fontSize: 15, fontWeight: 700, color: '#e2b714', marginBottom: 4 },
+  podiumTime: { fontSize: 13, color: '#2ecc71', fontFamily: 'monospace' },
+  podiumRank: { fontSize: 11, color: '#888', marginBottom: 4 },
+  card: { background: '#16213e', borderRadius: 12, padding: 20, marginBottom: 16, border: '1px solid #2a2a4a' },
   table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: 13 },
-  th: { textAlign: 'left' as const, padding: '8px 12px', background: '#0f0f23', color: '#aaa', fontSize: 11, fontWeight: 'bold' },
-  td: { padding: '10px 12px', borderBottom: '1px solid #ffffff08', color: '#ccc' },
-  btnEndPhase: { padding: '8px 16px', background: '#e67e22', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 'bold' },
+  th: { textAlign: 'left' as const, padding: '10px 12px', background: '#0f0f23', color: '#8892b0', fontWeight: 600, fontSize: 11 },
+  td: { padding: '10px 12px', borderBottom: '1px solid #2a2a4a', color: '#ccc' },
+  link: { color: '#3498db', textDecoration: 'none' },
+  linkHover: { textDecoration: 'underline' },
   placeholder: { color: '#888', fontSize: 15, padding: '40px 20px', textAlign: 'center' as const },
 };
 
@@ -37,104 +88,74 @@ export default function TytanPage() {
   const slug = typeof params.slug === 'string' ? params.slug : '';
   const monsterName = SLUG_TO_NAME[slug.toLowerCase()];
 
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<{
+    monster: { name: string };
+    phases: PhaseOption[];
+    leaderboard: Entry[];
+  } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedPhase, setSelectedPhase] = useState<string | null>(null);
-  const [user, setUser] = useState<any>(null);
-
-  const isKic = slug.toLowerCase() === 'kic';
+  const [selectedPhaseId, setSelectedPhaseId] = useState<string>('');
 
   useEffect(() => {
     if (!monsterName) {
       setLoading(false);
       return;
     }
-    checkAuth();
-    if (isKic) {
-      loadLeaderboard(monsterName);
-    } else {
-      setLoading(false);
-    }
-  }, [slug, monsterName, isKic]);
+    loadRanking(monsterName, null);
+  }, [monsterName]);
 
-  async function checkAuth() {
-    try {
-      const res = await fetch('/api/auth/api-key');
-      if (res.ok) {
-        const data = await res.json();
-        setUser(data.user);
-      }
-    } catch (e) {}
-  }
-
-  async function loadLeaderboard(monster: string) {
+  async function loadRanking(monster: string, phaseId: string | null) {
     setLoading(true);
     try {
-      const res = await fetch(`/api/leaderboard/phases?monster=${encodeURIComponent(monster)}`);
+      const url = phaseId
+        ? `/api/leaderboard/ranking?monster=${encodeURIComponent(monster)}&phaseId=${encodeURIComponent(phaseId)}`
+        : `/api/leaderboard/ranking?monster=${encodeURIComponent(monster)}`;
+      const res = await fetch(url);
       if (res.ok) {
         const result = await res.json();
         setData(result);
+        setSelectedPhaseId(phaseId ?? '');
+      } else {
+        setData(null);
       }
     } catch (e) {
-      console.error('Error loading leaderboard:', e);
+      setData(null);
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleEndPhase(name: string) {
-    if (!confirm(`Czy na pewno chcesz zakończyć fazę dla ${name}?`)) return;
-    try {
-      const res = await fetch('/api/admin/end-phase', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ monsterName: name }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        alert(err.error || 'Błąd');
-        return;
-      }
-      alert('Faza zakończona pomyślnie!');
-      loadLeaderboard(name);
-    } catch (e) {
-      alert('Błąd: ' + e);
+  function onPhaseChange(phaseId: string) {
+    setSelectedPhaseId(phaseId);
+    if (!monsterName) return;
+    if (phaseId === '') {
+      loadRanking(monsterName, null);
+    } else {
+      loadRanking(monsterName, phaseId);
     }
   }
 
   if (!monsterName) {
     return (
-      <div style={s.container}>
+      <div style={s.wrap}>
         <h1 style={s.title}>Nieznany tytan</h1>
-        <p style={s.placeholder}>Nie znaleziono strony dla tego tytana.</p>
+        <p style={s.placeholder}>Nie znaleziono strony.</p>
       </div>
     );
   }
 
-  if (!isKic) {
+  if (loading && !data) {
     return (
-      <div style={s.container}>
-        <h1 style={s.title}>{monsterName}</h1>
-        <div style={s.card}>
-          <p style={s.placeholder}>Strona w przygotowaniu. Wkrótce pojawią się tu rankingi i informacje.</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div style={s.container}>
+      <div style={s.wrap}>
         <p style={{ color: '#888' }}>Ładowanie...</p>
       </div>
     );
   }
 
-  const monsterData = data?.monster ? data : null;
-  if (!monsterData) {
+  if (!data) {
     return (
-      <div style={s.container}>
-        <h1 style={s.title}>Kic</h1>
+      <div style={s.wrap}>
+        <h1 style={s.title}>Ranking {monsterName}</h1>
         <div style={s.card}>
           <p style={s.placeholder}>Brak danych rankingu.</p>
         </div>
@@ -142,89 +163,122 @@ export default function TytanPage() {
     );
   }
 
-  const { monster, activePhase, phases } = monsterData;
-  const allPhases = activePhase ? [activePhase, ...phases] : phases;
+  const { monster, phases, leaderboard } = data;
+  const top3 = leaderboard.slice(0, 3);
+  const second = top3[1];
+  const first = top3[0];
+  const third = top3[2];
 
   return (
-    <div style={s.container}>
-      <h1 style={s.title}>{monster.name}</h1>
+    <div style={s.wrap}>
+      <h1 style={s.title}>Ranking {monster.name}</h1>
 
-      <div style={s.card}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <div>
-            <h2 style={s.h2}>{monster.name}</h2>
-            <p style={{ color: '#888', fontSize: 12, margin: 0 }}>{monster.mapName}</p>
-          </div>
-          {user?.role === 'admin' && (
-            <button onClick={() => handleEndPhase(monster.name)} style={s.btnEndPhase}>
-              Zakończ fazę
-            </button>
+      <div style={s.layout}>
+        <div style={s.main}>
+          {leaderboard.length > 0 && (
+            <>
+              <div style={s.podiumWrap}>
+                {second && (
+                  <div style={{ ...s.podiumBox, ...s.podiumSecond }}>
+                    <span style={s.podiumRank}>2</span>
+                    {second.avatarUrl ? (
+                      <img src={second.avatarUrl} alt="" style={s.podiumAvatar} />
+                    ) : (
+                      <div style={s.podiumAvatar} />
+                    )}
+                    <span style={s.podiumNick}>{second.nick || second.username}</span>
+                    <span style={s.podiumTime}>{second.totalTimeFormatted}</span>
+                  </div>
+                )}
+                {first && (
+                  <div style={{ ...s.podiumBox, ...s.podiumFirst }}>
+                    <span style={s.podiumRank}>1</span>
+                    {first.avatarUrl ? (
+                      <img src={first.avatarUrl} alt="" style={s.podiumAvatar} />
+                    ) : (
+                      <div style={s.podiumAvatar} />
+                    )}
+                    <span style={s.podiumNick}>{first.nick || first.username}</span>
+                    <span style={s.podiumTime}>{first.totalTimeFormatted}</span>
+                  </div>
+                )}
+                {third && (
+                  <div style={{ ...s.podiumBox, ...s.podiumThird }}>
+                    <span style={s.podiumRank}>3</span>
+                    {third.avatarUrl ? (
+                      <img src={third.avatarUrl} alt="" style={s.podiumAvatar} />
+                    ) : (
+                      <div style={s.podiumAvatar} />
+                    )}
+                    <span style={s.podiumNick}>{third.nick || third.username}</span>
+                    <span style={s.podiumTime}>{third.totalTimeFormatted}</span>
+                  </div>
+                )}
+              </div>
+
+              <div style={s.card}>
+                <table style={s.table}>
+                  <thead>
+                    <tr>
+                      <th style={s.th}>Pozycja</th>
+                      <th style={s.th}>Nick</th>
+                      <th style={s.th}>Postać</th>
+                      <th style={s.th}>Czas</th>
+                      <th style={s.th}>Sesje</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {leaderboard.map((e) => (
+                      <tr key={e.userId}>
+                        <td style={s.td}>{e.rank}</td>
+                        <td style={s.td}>
+                          {e.profileUrl ? (
+                            <a
+                              href={e.profileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={s.link}
+                            >
+                              {e.nick || e.username}
+                            </a>
+                          ) : (
+                            <span>{e.nick || e.username}</span>
+                          )}
+                        </td>
+                        <td style={s.td}>{e.heroName}</td>
+                        <td style={{ ...s.td, fontFamily: 'monospace', color: '#2ecc71' }}>
+                          {e.totalTimeFormatted}
+                        </td>
+                        <td style={s.td}>{e.totalSessions}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+          {leaderboard.length === 0 && (
+            <div style={s.card}>
+              <p style={s.placeholder}>Brak uczestników w tym rankingu.</p>
+            </div>
           )}
         </div>
 
-        {allPhases.length === 0 ? (
-          <p style={{ color: '#888', fontSize: 13 }}>Brak faz</p>
-        ) : (
-          <>
-            <div style={s.tabs}>
-              {allPhases.map((phase: any, idx: number) => (
-                <button
-                  key={phase.name}
-                  style={{
-                    ...s.tab,
-                    ...(selectedPhase === null && idx === 0 ? s.tabOn : {}),
-                    ...(selectedPhase === phase.name ? s.tabOn : {}),
-                  }}
-                  onClick={() => setSelectedPhase(selectedPhase === phase.name ? null : phase.name)}
-                >
-                  {phase.name}
-                </button>
-              ))}
-            </div>
-
-            {allPhases.map((phase: any) => {
-              const isActive = selectedPhase === null && phase === allPhases[0];
-              const isSelected = selectedPhase === phase.name;
-              if (!isActive && !isSelected) return null;
-
-              return (
-                <div key={phase.name} style={{ marginTop: 16 }}>
-                  <h3 style={{ fontSize: 14, color: '#e2b714', marginBottom: 12 }}>
-                    {phase.name} {phase.phaseNumber === 0 && '(Aktywna)'}
-                  </h3>
-                  {phase.leaderboard && phase.leaderboard.length > 0 ? (
-                    <table style={s.table}>
-                      <thead>
-                        <tr>
-                          <th style={s.th}>#</th>
-                          <th style={s.th}>Gracz</th>
-                          <th style={s.th}>Nick</th>
-                          <th style={s.th}>Czas</th>
-                          <th style={s.th}>Sesje</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {phase.leaderboard.map((entry: any) => (
-                          <tr key={entry.userId}>
-                            <td style={s.td}>{entry.rank}</td>
-                            <td style={s.td}>{entry.username}</td>
-                            <td style={s.td}>{entry.nick || '-'}</td>
-                            <td style={{ ...s.td, fontFamily: 'monospace', color: '#2ecc71' }}>
-                              {entry.totalTimeFormatted}
-                            </td>
-                            <td style={s.td}>{entry.totalSessions}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  ) : (
-                    <p style={{ color: '#888', fontSize: 13 }}>Brak danych</p>
-                  )}
-                </div>
-              );
-            })}
-          </>
-        )}
+        <aside style={s.sidebar}>
+          <div style={s.dropdownLabel}>Faza</div>
+          <select
+            style={s.dropdown}
+            value={selectedPhaseId}
+            onChange={(e) => onPhaseChange(e.target.value)}
+          >
+            <option value="">Łącznie (wszystkie fazy)</option>
+            {phases.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </aside>
       </div>
     </div>
   );
