@@ -12,12 +12,13 @@ function formatTime(totalSeconds: number): string {
   return `${s}s`;
 }
 
-function formatPhaseLabel(phase: { name: string; startedAt: Date; endedAt: Date | null; isActive: boolean }): string {
-  if (phase.isActive) return `${phase.name} (aktywna)`;
+function formatPhaseLabel(phase: { name: string; phaseNumber: number; startedAt: Date; endedAt: Date | null; isActive: boolean }): string {
+  const prefix = `${phase.name} #${phase.phaseNumber}`;
+  if (phase.isActive) return `${prefix} (aktywna)`;
   const date = phase.endedAt || phase.startedAt;
   const d = new Date(date);
   const str = d.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  return `${phase.name} - ${str}`;
+  return `${prefix} - ${str}`;
 }
 
 // GET /api/leaderboard/ranking?monster=Kic&phaseId=optional
@@ -54,6 +55,7 @@ export async function GET(request: NextRequest) {
       name: p.name,
       label: formatPhaseLabel({
         name: p.name,
+        phaseNumber: p.phaseNumber,
         startedAt: p.startedAt,
         endedAt: p.endedAt,
         isActive: p.isActive,

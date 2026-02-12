@@ -1,9 +1,14 @@
 'use client';
 
 const styles: React.CSSProperties = {
+    position: 'sticky',
+    top: 0,
+    zIndex: 100,
+    width: '100%',
     background: 'linear-gradient(90deg, #1a1a2e 0%, #16213e 50%, #1a1a2e 100%)',
     textAlign: 'center',
-    height: '80px'
+    height: '80px',
+    boxShadow: '0 2px 12px rgba(0,0,0,0.3)',
 };
 
 export default function Header() {

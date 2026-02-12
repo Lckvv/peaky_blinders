@@ -33,13 +33,22 @@ type Entry = {
 
 const s: Record<string, React.CSSProperties> = {
   wrap: { maxWidth: 1000, margin: '0 auto', padding: '24px 20px', fontFamily: 'system-ui, sans-serif' },
-  title: { textAlign: 'center' as const, fontSize: 32, fontWeight: 700, color: '#fff', margin: '0 0 24px' },
-  layout: { display: 'flex', gap: 24, alignItems: 'flex-start' },
-  main: { flex: 1, minWidth: 0 },
-  sidebar: { width: 260, flexShrink: 0 },
-  dropdownLabel: { fontSize: 12, color: '#8892b0', marginBottom: 8, fontWeight: 600 },
+  headerRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 16,
+    marginBottom: 24,
+    flexWrap: 'wrap' as const,
+  },
+  headerRowLeft: { flex: '0 0 auto', minWidth: 220 },
+  headerRowCenter: { flex: '1 1 auto', display: 'flex', justifyContent: 'center', minWidth: 0 },
+  headerRowRight: { flex: '0 0 220px', minWidth: 0 },
+  title: { textAlign: 'center' as const, fontSize: 32, fontWeight: 700, color: '#fff', margin: 0 },
+  dropdownLabel: { fontSize: 12, color: '#8892b0', marginBottom: 6, fontWeight: 600 },
   dropdown: {
     width: '100%',
+    minWidth: 200,
     padding: '10px 12px',
     background: '#1a1a2e',
     border: '1px solid #2a2a4a',
@@ -48,32 +57,79 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 14,
     cursor: 'pointer',
   },
-  podiumWrap: { display: 'flex', justifyContent: 'center', alignItems: 'flex-end', gap: 16, marginBottom: 24, minHeight: 200 },
+  layout: { display: 'block' },
+  main: { width: '100%' },
+  /* Podium: trzy stopnie — 2. miejsce lewo (średni), 1. środek (najwyższy), 3. prawo (najniższy) */
+  podiumOuter: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    marginBottom: 28,
+  },
+  podiumWrap: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    gap: 0,
+    minHeight: 240,
+  },
+  podiumFloor: {
+    width: '100%',
+    maxWidth: 460,
+    height: 14,
+    background: 'linear-gradient(180deg, #0f1629 0%, #1a2744 50%, #16213e 100%)',
+    border: '1px solid #2a2a4a',
+    borderTop: 'none',
+    borderRadius: '0 0 10px 10px',
+    marginTop: -1,
+    boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+  },
   podiumBox: {
     display: 'flex',
     flexDirection: 'column' as const,
     alignItems: 'center',
-    padding: '16px 20px',
-    background: 'linear-gradient(180deg, #16213e 0%, #1a1a2e 100%)',
-    borderRadius: 12,
+    justifyContent: 'flex-end',
+    padding: '16px 20px 20px',
+    background: 'linear-gradient(180deg, #1e2a4a 0%, #16213e 40%, #0f1629 100%)',
+    borderRadius: '12px 12px 0 0',
     border: '1px solid #2a2a4a',
+    borderBottom: 'none',
     minWidth: 140,
+    boxShadow: 'inset 0 2px 8px rgba(255,255,255,0.06), 0 -2px 12px rgba(0,0,0,0.3)',
   },
-  podiumFirst: { order: 2, transform: 'scale(1.08)', borderColor: '#e2b714', background: 'linear-gradient(180deg, #1e2a3a 0%, #16213e 100%)' },
-  podiumSecond: { order: 1 },
-  podiumThird: { order: 3 },
+  podiumFirst: {
+    order: 2,
+    height: 200,
+    minHeight: 200,
+    transform: 'scale(1.05)',
+    borderColor: '#c9a227',
+    background: 'linear-gradient(180deg, #2a3f5f 0%, #1a2744 35%, #0f1629 100%)',
+    boxShadow: '0 0 20px rgba(201, 162, 39, 0.25), inset 0 2px 8px rgba(255,255,255,0.08)',
+  },
+  podiumSecond: {
+    order: 1,
+    height: 150,
+    minHeight: 150,
+    borderColor: '#6b7280',
+  },
+  podiumThird: {
+    order: 3,
+    height: 110,
+    minHeight: 110,
+    borderColor: '#92400e',
+  },
   podiumAvatar: {
     width: 64,
     height: 64,
     borderRadius: '50%',
     background: '#0f0f23',
-    border: '2px solid #2a2a4a',
+    border: '3px solid #2a2a4a',
     marginBottom: 8,
     objectFit: 'cover' as const,
   },
   podiumNick: { fontSize: 15, fontWeight: 700, color: '#e2b714', marginBottom: 4 },
   podiumTime: { fontSize: 13, color: '#2ecc71', fontFamily: 'monospace' },
-  podiumRank: { fontSize: 11, color: '#888', marginBottom: 4 },
+  podiumRank: { fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 6 },
   card: { background: '#16213e', borderRadius: 12, padding: 20, marginBottom: 16, border: '1px solid #2a2a4a' },
   table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: 13 },
   th: { textAlign: 'left' as const, padding: '10px 12px', background: '#0f0f23', color: '#8892b0', fontWeight: 600, fontSize: 11 },
@@ -171,14 +227,35 @@ export default function TytanPage() {
 
   return (
     <div style={s.wrap}>
-      <h1 style={s.title}>Ranking {monster.name}</h1>
+      <div style={s.headerRow}>
+        <div style={s.headerRowLeft}>
+          <div style={s.dropdownLabel}>Faza</div>
+          <select
+            style={s.dropdown}
+            value={selectedPhaseId}
+            onChange={(e) => onPhaseChange(e.target.value)}
+          >
+            <option value="">Łącznie (wszystkie fazy)</option>
+            {phases.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div style={s.headerRowCenter}>
+          <h1 style={s.title}>Ranking {monster.name}</h1>
+        </div>
+        <div style={s.headerRowRight} />
+      </div>
 
       <div style={s.layout}>
         <div style={s.main}>
           {leaderboard.length > 0 && (
             <>
-              <div style={s.podiumWrap}>
-                {second && (
+              <div style={s.podiumOuter}>
+                <div style={s.podiumWrap}>
+                  {second && (
                   <div style={{ ...s.podiumBox, ...s.podiumSecond }}>
                     <span style={s.podiumRank}>2</span>
                     {second.avatarUrl ? (
@@ -214,6 +291,8 @@ export default function TytanPage() {
                     <span style={s.podiumTime}>{third.totalTimeFormatted}</span>
                   </div>
                 )}
+                </div>
+                <div style={s.podiumFloor} />
               </div>
 
               <div style={s.card}>
@@ -263,22 +342,6 @@ export default function TytanPage() {
             </div>
           )}
         </div>
-
-        <aside style={s.sidebar}>
-          <div style={s.dropdownLabel}>Faza</div>
-          <select
-            style={s.dropdown}
-            value={selectedPhaseId}
-            onChange={(e) => onPhaseChange(e.target.value)}
-          >
-            <option value="">Łącznie (wszystkie fazy)</option>
-            {phases.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
-            ))}
-          </select>
-        </aside>
       </div>
     </div>
   );
