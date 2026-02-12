@@ -46,6 +46,7 @@
     let worldName = null;
     let uiElement = null;
     let settingsOpen = false;
+    let sessionFinalized = false;
 
     function refreshConfigFromStorage() {
         CONFIG.API_KEY = GM_getValue('api_key', '');
@@ -84,14 +85,10 @@
 
     function findTarget(mapName) {
         if (!mapName) return null;
-        const normalized = mapName.trim();
-        // Dokładne dopasowanie
-        let target = CONFIG.TARGETS.find(t => t.map === normalized) || null;
-        // Fallback: zawiera fragment (np. "2nd Chamber") — gra może zwracać inną pisownię
-        if (!target && normalized.includes('2nd Chamber')) {
-            target = CONFIG.TARGETS.find(t => t.map.includes('2nd Chamber')) || null;
-        }
-        return target;
+        const normalized = String(mapName).trim().toLowerCase();
+        // Dokładne dopasowanie (case-insensitive). Bez dopasowania po fragmencie,
+        // bo to odpala timer na innych mapach z tą samą końcówką.
+        return CONFIG.TARGETS.find(t => String(t.map).trim().toLowerCase() === normalized) || null;
     }
 
     function formatTime(totalSeconds) {
@@ -115,7 +112,7 @@
 
         if (!CONFIG.API_KEY) {
             log('⚠️ Brak API key! Otwórz ustawienia (kliknij ikonę ⚙️) i wklej swój klucz.');
-            saveLocally({ time: seconds, monster, map, hero: heroName, world: worldName, reason, timestamp: new Date().toISOString() });
+            showToast('⚠️ Brak API key — nie zapisuję sesji.', 'error');
             return;
         }
 
@@ -155,9 +152,17 @@
                 body: JSON.stringify(unloadPayload),
                 keepalive: true,
             }).then(function (r) {
-                if (r.ok) r.text().then(onSuccess);
-                else r.text().then(function (t) { log('❌', r.status, t); saveLocally(payload); });
-            }).catch(function (e) { log('❌ fetch (unload):', e); saveLocally(payload); });
+                if (r.ok) return r.text().then(onSuccess);
+                return r.text().then(function (t) {
+                    log('❌', r.status, t);
+                    // Kolejkuj tylko na błędy tymczasowe (sieć/5xx/timeout/limit),
+                    // nie na permanentne (np. brak aktywnej fazy).
+                    if (r.status >= 500 || r.status === 408 || r.status === 429) saveLocally(payload);
+                });
+            }).catch(function (e) {
+                log('❌ fetch (unload):', e);
+                saveLocally(payload);
+            });
             return;
         }
 
@@ -179,10 +184,15 @@
                 if (res.ok) onSuccess(text);
                 else if (res.status === 401) {
                     showToast('❌ Nieprawidłowy API key!', 'error');
-                    saveLocally(payload);
+                    // Nie kolejkuj permanentnych błędów klucza.
+                } else if (res.status === 409) {
+                    // Np. brak aktywnej fazy — nie kolejkuj.
+                    showToast('ℹ️ Faza nieaktywna — pomijam zapis.', 'error');
                 } else {
                     showToast('❌ Błąd ' + res.status, 'error');
-                    saveLocally(payload);
+                    if (res.status >= 500 || res.status === 408 || res.status === 429) {
+                        saveLocally(payload);
+                    }
                 }
             });
         }).catch(function (err) {
@@ -231,7 +241,8 @@
                     data: JSON.stringify(payload),
                     onload: (res) => {
                         if (res.status < 200 || res.status >= 300) {
-                            saveLocally(payload); // re-queue on failure
+                            // Re-queue tylko na błędy tymczasowe.
+                            if (res.status >= 500 || res.status === 408 || res.status === 429) saveLocally(payload);
                         }
                     },
                     onerror: () => saveLocally(payload),
@@ -247,6 +258,7 @@
         currentTarget = target;
         sessionStartTime = Date.now();
         accumulatedSeconds = 0;
+        sessionFinalized = false;
 
         const info = getHeroInfo();
         heroName = info?.name;
@@ -255,15 +267,14 @@
         log(`✅ Na mapie: "${target.map}" — tracking ${target.monster} jako ${heroName}`);
     }
 
-    function onLeftTargetMap(reason) {
-        if (!currentTarget) return;
+    function finalizeSession(reason, useUnloadSend = false) {
+        if (!currentTarget || !sessionStartTime) return;
+        if (sessionFinalized) return;
+        sessionFinalized = true;
 
-        if (sessionStartTime) {
-            accumulatedSeconds = Math.floor((Date.now() - sessionStartTime) / 1000);
-        }
-
-        log(`❌ Opuścił mapę po ${accumulatedSeconds}s (${reason})`);
-        sendToBackend(accumulatedSeconds, currentTarget.monster, currentTarget.map, reason);
+        accumulatedSeconds = Math.floor((Date.now() - sessionStartTime) / 1000);
+        log(`⏹ Finalize po ${accumulatedSeconds}s (${reason})`);
+        sendToBackend(accumulatedSeconds, currentTarget.monster, currentTarget.map, reason, useUnloadSend);
 
         currentTarget = null;
         sessionStartTime = null;
@@ -292,7 +303,7 @@
             updateTimerUI();
         } else {
             if (currentTarget) {
-                onLeftTargetMap('map_change');
+                finalizeSession('map_change');
             }
             hideTimerUI();
         }
@@ -449,23 +460,9 @@
     // ================================================================
     //  EVENT LISTENERS
     // ================================================================
-    window.addEventListener('beforeunload', () => {
-        if (currentTarget && sessionStartTime) {
-            const seconds = Math.floor((Date.now() - sessionStartTime) / 1000);
-            if (seconds >= CONFIG.MIN_TIME_TO_SEND) {
-                // sendBeacon ma większą szansę dotarcia przy zamykaniu karty (zwykły XHR bywa przerywany)
-                sendToBackend(seconds, currentTarget.monster, currentTarget.map, 'tab_close', true);
-            }
-        }
-    });
-
     window.addEventListener('pagehide', () => {
-        if (currentTarget && sessionStartTime) {
-            const seconds = Math.floor((Date.now() - sessionStartTime) / 1000);
-            if (seconds >= CONFIG.MIN_TIME_TO_SEND) {
-                sendToBackend(seconds, currentTarget.monster, currentTarget.map, 'pagehide', true);
-            }
-        }
+        // pagehide odpala się przy przeładowaniu/nawigacji/zamknięciu — finalizujemy tylko raz.
+        finalizeSession('pagehide', true);
     });
 
     // ================================================================
@@ -504,7 +501,7 @@
     // Debug API
     window.MapTimer = {
         getState: () => ({ currentTarget, accumulatedSeconds, heroName, worldName, apiKey: CONFIG.API_KEY ? '***set***' : 'not set' }),
-        forceFlush: () => onLeftTargetMap('manual_flush'),
+        forceFlush: () => finalizeSession('manual_flush'),
         flushPending,
         addTarget: (map, monster) => { CONFIG.TARGETS.push({ map, monster }); log(`Added target: ${monster} on ${map}`); },
     };

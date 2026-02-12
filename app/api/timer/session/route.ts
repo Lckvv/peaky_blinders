@@ -93,6 +93,13 @@ export async function POST(request: NextRequest) {
     const activePhase = await prisma.phase.findFirst({
       where: { monsterId: monsterRecord.id, isActive: true },
     });
+    if (!activePhase) {
+      // Nie zapisujemy sesji, jeśli faza nie jest aktywna (żeby nie nabić czasu poza eventem).
+      return NextResponse.json(
+        { error: 'No active phase for this monster. Session ignored.' },
+        { status: 409 }
+      );
+    }
 
     // Calculate session start time
     const endedAt = timestamp ? new Date(timestamp) : new Date();
@@ -103,7 +110,7 @@ export async function POST(request: NextRequest) {
       data: {
         userId: user.id,
         monsterId: monsterRecord.id,
-        phaseId: activePhase?.id ?? null,
+        phaseId: activePhase.id,
         heroName: String(hero ?? 'Unknown'),
         world: String(world ?? 'Unknown'),
         mapName: mapName,
