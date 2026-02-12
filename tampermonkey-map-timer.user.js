@@ -16,6 +16,9 @@
 (function () {
     'use strict';
 
+    // Uruchamiaj tylko w oknie głównym — w iframe skrypt by się dublował i wysyłał tę samą sesję 2× (pagehide w obu kontekstach).
+    if (window !== window.top) return;
+
     // ================================================================
     //  CONFIG — zmień BACKEND_URL i API_KEY po rejestracji na stronie
     // ================================================================

@@ -105,6 +105,44 @@ export async function POST(request: NextRequest) {
     const endedAt = timestamp ? new Date(timestamp) : new Date();
     const startedAt = new Date(endedAt.getTime() - time * 1000);
 
+    // Deduplikacja: ten sam użytkownik może wysłać sesję 2× (np. skrypt w iframe + top). Ignoruj duplikat.
+    const duplicateWindowMs = 15000; // 15 s
+    const existingDuplicate = await prisma.mapSession.findFirst({
+      where: {
+        userId: user.id,
+        monsterId: monsterRecord.id,
+        phaseId: activePhase.id,
+        heroName: String(hero ?? 'Unknown'),
+        duration: time,
+        reason: String(reason ?? 'unknown'),
+        endedAt: {
+          gte: new Date(endedAt.getTime() - duplicateWindowMs),
+          lte: new Date(endedAt.getTime() + duplicateWindowMs),
+        },
+      },
+    });
+    if (existingDuplicate) {
+      const totalResult = await prisma.mapSession.aggregate({
+        where: {
+          userId: user.id,
+          monsterId: monsterRecord.id,
+        },
+        _sum: { duration: true },
+        _count: true,
+      });
+      const totalTime = totalResult._sum.duration || 0;
+      const totalSessions = totalResult._count;
+      return NextResponse.json({
+        success: true,
+        sessionId: existingDuplicate.id,
+        sessionTime: time,
+        totalTime,
+        totalSessions,
+        totalTimeFormatted: formatTime(totalTime),
+        duplicate: true,
+      });
+    }
+
     // Save session (world/reason ze skryptu mogą być number — baza wymaga string)
     const session = await prisma.mapSession.create({
       data: {
