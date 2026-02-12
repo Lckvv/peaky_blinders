@@ -47,6 +47,7 @@
     let accumulatedSeconds = 0;
     let heroName = null;
     let worldName = null;
+    let heroOutfitUrl = null;  // URL obrazka stroju z Garmory CDN (do rankingu)
     let uiElement = null;
     let settingsOpen = false;
     let sessionFinalized = false;
@@ -77,12 +78,27 @@
         return name != null ? String(name).trim() : null;
     }
 
+    const GARMORY_OUTFIT_BASE = 'https://micc.garmory-cdn.cloud/obrazki/postacie';
+
+    /** Zwraca pełny URL obrazka stroju postaci (outfit) z CDN Garmory lub null. */
+    function getHeroOutfitUrl() {
+        const engine = getEngine();
+        if (!engine?.hero) return null;
+        const hero = engine.hero;
+        const d = hero.d || {};
+        const icon = d.icon ?? hero.icon ?? d.outfit ?? hero.outfit;
+        if (!icon || typeof icon !== 'string') return null;
+        const path = icon.startsWith('/') ? icon : '/' + icon;
+        return GARMORY_OUTFIT_BASE.replace(/\/$/, '') + path;
+    }
+
     function getHeroInfo() {
         const engine = getEngine();
         if (!engine?.hero) return null;
         return {
             name: engine.hero.d?.nick || engine.hero.nick || engine.hero.name || 'Unknown',
             world: engine.map?.d?.mainid || engine.hero.d?.world || engine.hero.world || 'Unknown',
+            outfitUrl: getHeroOutfitUrl(),
         };
     }
 
@@ -128,6 +144,7 @@
             reason: reason,
             timestamp: new Date().toISOString(),
         };
+        if (heroOutfitUrl) payload.avatarUrl = heroOutfitUrl;
 
         // sendBeacon — przy zamykaniu/przeładowaniu strony przeglądarka może przerwać zwykłe XHR; beacon ma wyższą szansę dotarcia
         const url = CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/session';
@@ -266,8 +283,9 @@
         const info = getHeroInfo();
         heroName = info?.name;
         worldName = info?.world;
+        heroOutfitUrl = info?.outfitUrl ?? null;
 
-        log(`✅ Na mapie: "${target.map}" — tracking ${target.monster} jako ${heroName}`);
+        log(`✅ Na mapie: "${target.map}" — tracking ${target.monster} jako ${heroName}${heroOutfitUrl ? ' (outfit: ' + heroOutfitUrl + ')' : ''}`);
     }
 
     function finalizeSession(reason, useUnloadSend = false) {
