@@ -21,13 +21,11 @@ const TYTANI = [
 
 const navStyles: Record<string, React.CSSProperties> = {
   sidebar: {
-    position: 'sticky',
+    position: 'fixed',
+    left: 0,
     top: 80,
-    alignSelf: 'flex-start',
     width: 260,
-    minWidth: 260,
     height: 'calc(100vh - 80px)',
-    maxHeight: 'calc(100vh - 80px)',
     background: 'linear-gradient(180deg, #16213e 0%, #1a1a2e 100%)',
     borderRight: '1px solid #2a2a4a',
     padding: '24px 0',
@@ -36,6 +34,7 @@ const navStyles: Record<string, React.CSSProperties> = {
     gap: 2,
     boxShadow: '4px 0 24px rgba(0,0,0,0.2)',
     overflowY: 'auto',
+    zIndex: 90,
   },
   navSection: {
     padding: '0 12px',
