@@ -25,7 +25,8 @@ export const RESERVATION_PRIORITIES = [
 /**
  * Zakładki (itemy) per tytan. Tylko Kic ma zdefiniowane; reszta pusta (do uzupełnienia później).
  * Dla Kic: pliki w app/api/titans-images/kic/[filename]/titans_images/kic/
- * gifFile / pngFile — faktyczne nazwy plików w folderze (jeśli brak, używane są key.gif / key.png).
+ * gifFile — plik wyświetlany na miejscu (32×32); pngFile — plik w oknie hover.
+ * Dopasuj nazwy do plików w folderze (mogą się różnić od key).
  */
 export type ReservationItem = {
   key: string;
@@ -36,13 +37,13 @@ export type ReservationItem = {
 
 export const RESERVATION_ITEMS_BY_TITAN: Record<string, ReservationItem[]> = {
   kic: [
-    { key: 'bambosze', label: 'Bambosze' },
+    { key: 'bambosze', label: 'Bambosze', gifFile: 'bambosze.gif', pngFile: 'bambosze.png' },
     { key: 'buty', label: 'Buty', gifFile: 'kbunny_buty2.gif', pngFile: 'bambosze_scr.png' },
-    { key: 'pier_woj', label: 'Pier Woj' },
-    { key: 'pier_fiz', label: 'Pier Fiz' },
-    { key: 'pier_mag', label: 'Pier Mag' },
-    { key: 'kokosy', label: 'Kokosy' },
-    { key: 'uszy', label: 'Uszy' },
+    { key: 'pier_woj', label: 'Pier Woj', gifFile: 'pier_woj.gif', pngFile: 'pier_woj.png' },
+    { key: 'pier_fiz', label: 'Pier Fiz', gifFile: 'pier_fiz.gif', pngFile: 'pier_fiz.png' },
+    { key: 'pier_mag', label: 'Pier Mag', gifFile: 'pierscien884.gif', pngFile: 'pier_mag.png' },
+    { key: 'kokosy', label: 'Kokosy', gifFile: 'kokosy.gif', pngFile: 'kokosy.png' },
+    { key: 'uszy', label: 'Uszy', gifFile: 'uszy.gif', pngFile: 'uszy.png' },
   ],
   orla: [],
   renegat: [],
