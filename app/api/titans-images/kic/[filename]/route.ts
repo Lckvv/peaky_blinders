@@ -19,9 +19,14 @@ export async function GET(
   if (!ALLOWED_EXT.includes(ext)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
-  const filePath = path.join(KIC_DIR, filename);
+  let filePath = path.join(KIC_DIR, filename);
   if (!existsSync(filePath)) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    // Fallback: pliki mogą mieć spację zamiast podkreślenia (np. "pier mag.gif")
+    const base = path.basename(filename, ext);
+    const altName = base.replace(/_/g, ' ') + ext;
+    const altPath = path.join(KIC_DIR, altName);
+    if (existsSync(altPath)) filePath = altPath;
+    else return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
   try {
     const buffer = readFileSync(filePath);

@@ -104,10 +104,10 @@ const s: Record<string, React.CSSProperties> = {
     pointerEvents: 'none',
   },
   hoverPngImg: { width: 64, height: 64, objectFit: 'contain', display: 'block' },
-  tableWrap: { marginTop: 0 },
+  tableWrap: { marginTop: 0, minWidth: 0 },
   tableHeader: {
     display: 'grid',
-    gridTemplateColumns: '1fr 140px 100px',
+    gridTemplateColumns: '1fr 140px 1fr',
     gap: 12,
     padding: '12px 16px',
     background: '#0f0f23',
@@ -121,7 +121,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   row: {
     display: 'grid',
-    gridTemplateColumns: '1fr 140px 100px',
+    gridTemplateColumns: '1fr 140px 1fr',
     gap: 12,
     alignItems: 'center',
     padding: '12px 16px',
@@ -131,6 +131,13 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 14,
     color: '#ccc',
     borderLeft: '4px solid transparent',
+  },
+  rowActions: {
+    display: 'flex',
+    gap: 8,
+    flexWrap: 'wrap',
+    minWidth: 0,
+    justifyContent: 'flex-end',
   },
   addForm: {
     display: 'grid',
@@ -194,9 +201,6 @@ function ItemImage({
       src={gifPath}
       alt={alt}
       style={{ ...s.itemImg, width: size, height: size }}
-      onError={(e) => {
-        (e.target as HTMLImageElement).style.display = 'none';
-      }}
     />
   );
 }
@@ -222,25 +226,10 @@ function SelectedItemPreview({
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
       >
-        <img
-          src={gifPath}
-          alt={label}
-          style={s.selectedGif}
-          onError={(e) => {
-            (e.target as HTMLImageElement).style.display = 'none';
-          }}
-        />
+        <img src={gifPath} alt={label} style={s.selectedGif} />
         {pngPath && hover && (
           <span style={s.hoverPngPopup}>
-            <img
-              src={pngPath}
-              alt=""
-              role="presentation"
-              style={s.hoverPngImg}
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = 'none';
-              }}
-            />
+            <img src={pngPath} alt="" role="presentation" style={s.hoverPngImg} />
           </span>
         )}
       </span>
@@ -458,7 +447,7 @@ export default function AdminRezerwacjePage() {
                                 </option>
                               ))}
                             </select>
-                            <div style={{ display: 'flex', gap: 8 }}>
+                            <div style={s.rowActions}>
                               <button
                                 type="button"
                                 style={{ ...s.btn, ...s.btnPrimary, ...s.btnSmall }}
@@ -479,7 +468,7 @@ export default function AdminRezerwacjePage() {
                           <>
                             <span>{r.nick}</span>
                             <span title={priorityLabel(r.priority)}>{priorityLabel(r.priority)}</span>
-                            <div style={{ display: 'flex', gap: 8 }}>
+                            <div style={s.rowActions}>
                               <button
                                 type="button"
                                 style={{ ...s.btn, ...s.btnSecondary, ...s.btnSmall }}
