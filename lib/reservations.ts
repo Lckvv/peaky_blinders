@@ -23,10 +23,8 @@ export const RESERVATION_PRIORITIES = [
 ] as const;
 
 /**
- * Zakładki (itemy) per tytan. Tylko Kic ma zdefiniowane; reszta pusta (do uzupełnienia później).
- * Dla Kic: pliki w app/api/titans-images/kic/[filename]/titans_images/kic/
- * gifFile — plik wyświetlany na miejscu (32×32); pngFile — plik w oknie hover.
- * Dopasuj nazwy do plików w folderze (mogą się różnić od key).
+ * Zakładki (itemy) per tytan. Dla Kic: pliki w app/api/titans-images/kic/{itemKey}/ (podfolder na item).
+ * gifFile — wyświetlany na miejscu (32×32); pngFile — w oknie hover. Nazwy = pliki w folderze.
  */
 export type ReservationItem = {
   key: string;
@@ -39,11 +37,11 @@ export const RESERVATION_ITEMS_BY_TITAN: Record<string, ReservationItem[]> = {
   kic: [
     { key: 'bambosze', label: 'Bambosze', gifFile: 'bambosze.gif', pngFile: 'bambosze.png' },
     { key: 'buty', label: 'Buty', gifFile: 'kbunny_buty2.gif', pngFile: 'bambosze_scr.png' },
-    { key: 'pier_woj', label: 'Pier Woj', gifFile: 'pier_woj.gif', pngFile: 'pier_woj.png' },
-    { key: 'pier_fiz', label: 'Pier Fiz', gifFile: 'pier_fiz.gif', pngFile: 'pier_fiz.png' },
+    { key: 'pier_woj', label: 'Pier Woj', gifFile: 'pierscien885.gif', pngFile: 'pier_woj.png' },
+    { key: 'pier_fiz', label: 'Pier Fiz', gifFile: 'pierscien883.gif', pngFile: 'pier_fiz.png' },
     { key: 'pier_mag', label: 'Pier Mag', gifFile: 'pierscien884.gif', pngFile: 'pier_mag.png' },
-    { key: 'kokosy', label: 'Kokosy', gifFile: 'kokosy.gif', pngFile: 'kokosy.png' },
-    { key: 'uszy', label: 'Uszy', gifFile: 'uszy.gif', pngFile: 'uszy.png' },
+    { key: 'kokosy', label: 'Kokosy', gifFile: 'krolik_craft_03.gif', pngFile: 'kokosy.png' },
+    { key: 'uszy', label: 'Uszy', gifFile: 'krolik_craft_02.gif', pngFile: 'uszy.png' },
   ],
   orla: [],
   renegat: [],
@@ -61,7 +59,7 @@ export function getReservationItems(titanSlug: string) {
   return RESERVATION_ITEMS_BY_TITAN[titanSlug] ?? [];
 }
 
-/** Ścieżka do obrazka itemu (GIF lub PNG). Używa gifFile/pngFile z itemu, albo key.gif / key.png. */
+/** Ścieżka do obrazka: /api/titans-images/kic/{itemKey}/{filename} — pliki w podfolderach kic/pier_mag/, kic/buty/ itd. */
 export function getItemImagePath(
   titanSlug: string,
   item: ReservationItem,
@@ -69,5 +67,5 @@ export function getItemImagePath(
 ): string {
   if (titanSlug !== 'kic') return '';
   const filename = ext === 'gif' ? (item.gifFile ?? `${item.key}.gif`) : (item.pngFile ?? `${item.key}.png`);
-  return `/api/titans-images/kic/${encodeURIComponent(filename)}`;
+  return `/api/titans-images/kic/${encodeURIComponent(item.key)}/${encodeURIComponent(filename)}`;
 }
