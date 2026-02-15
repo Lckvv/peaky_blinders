@@ -73,7 +73,7 @@ function generateScript(apiKey: string, backendUrl: string, username: string): s
     '        API_KEY: GM_getValue("api_key", "' + apiKey + '"),',
     '        BACKEND_URL: GM_getValue("backend_url", "' + backendUrl + '"),',
     '        TARGETS: [',
-    "            { map: \"Caerbannog's Grotto - 1st Chamber\", monster: \"Kic\" },",
+    "            { map: \"Caerbannog's Grotto - 2nd Chamber\", monster: \"Kic\" },",
     '        ],',
     '        CHECK_INTERVAL: 1000,',
     '        MIN_TIME_TO_SEND: 5,',

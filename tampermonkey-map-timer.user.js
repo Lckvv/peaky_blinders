@@ -80,12 +80,23 @@
 
     const GARMORY_OUTFIT_BASE = 'https://micc.garmory-cdn.cloud/obrazki/postacie';
 
-    /** Zwraca pełny URL obrazka stroju postaci (outfit) z CDN Garmory lub null. */
+    /** Zwraca pełny URL obrazka stroju (outfit) z CDN Garmory. Źródła: hero.icon, hero.outfit, hero.outfitData (src/url/image). */
     function getHeroOutfitUrl() {
         const engine = getEngine();
         if (!engine?.hero) return null;
         const hero = engine.hero;
         const d = hero.d || {};
+
+        // outfitData może zawierać bezpośredni URL (src, url, image)
+        const od = hero.outfitData;
+        if (od && typeof od === 'object') {
+            const direct = od.src ?? od.url ?? od.image;
+            if (direct && typeof direct === 'string' && (direct.startsWith('http') || direct.startsWith('//'))) {
+                return direct.startsWith('//') ? 'https:' + direct : direct;
+            }
+        }
+
+        // Ścieżka ikony: engine.hero.icon / outfit (format: /ścieżka lub ścieżka)
         const icon = d.icon ?? hero.icon ?? d.outfit ?? hero.outfit;
         if (!icon || typeof icon !== 'string') return null;
         const path = icon.startsWith('/') ? icon : '/' + icon;
