@@ -8,9 +8,18 @@ export const MAP_NAME_TO_MONSTER: Record<string, string> = {
   "Caerbannog's Grotto - 1st Chamber": 'Kic',
   "Caerbannog's Grotto - 2nd Chamber": 'Kic',
   "Caerbannog's Grotto - 3rd Chamber": 'Kic',
-  // Dodaj kolejne mapy gdy będziesz mieć listę, np.:
-  // "Mapa Orla ...": 'Orla',
-  // "Mapa Renegat ...": 'Renegat',
+  // Orla
+  'Shimmering Cavern': 'Orla',
+  // Renegat
+  "Bandits' Hideout - Vault": 'Renegat',
+  // Arcy (Arcymag)
+  'Politraka Volcano - Infernal Abyss': 'Arcy',
+  // Przyzywacz
+  'Chamber of Bloody Rites': 'Przyzywacz',
+  // Barbatos
+  'Hall of Ruined Temple': 'Barbatos',
+  // Tanroth
+  'Ice Throne Room': 'Tanroth',
 };
 
 /**

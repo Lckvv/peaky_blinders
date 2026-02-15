@@ -29,9 +29,15 @@
         // 🌐 Adres backendu (Railway) — możesz zmienić w ustawieniach ⏱
         BACKEND_URL: GM_getValue('backend_url', 'https://peakyblinders-production-61db.up.railway.app'),
 
-        // 🗺️ Jedyna mapa, na której nalicza się czas (faza Kic). Inne fazy = inne mapy później.
+        // 🗺️ Mapy tytanów (nazwa mapy z gry → tytan). Timer nalicza czas gdy jesteś na którejś z nich.
         TARGETS: [
             { map: "Caerbannog's Grotto - 2nd Chamber", monster: 'Kic' },
+            { map: 'Shimmering Cavern', monster: 'Orla' },
+            { map: "Bandits' Hideout - Vault", monster: 'Renegat' },
+            { map: 'Politraka Volcano - Infernal Abyss', monster: 'Arcy' },
+            { map: 'Chamber of Bloody Rites', monster: 'Przyzywacz' },
+            { map: 'Hall of Ruined Temple', monster: 'Barbatos' },
+            { map: 'Ice Throne Room', monster: 'Tanroth' },
         ],
 
         CHECK_INTERVAL: 1000,
