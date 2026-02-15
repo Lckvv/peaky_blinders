@@ -98,17 +98,19 @@ export async function GET(request: NextRequest) {
       }
 
       let heroByUser: Record<string, string> = {};
+      let outfitByUser: Record<string, string | null> = {};
 
       if (phase.isActive) {
         const sessions = await prisma.mapSession.findMany({
           where: { phaseId: phase.id },
-          select: { userId: true, heroName: true, duration: true },
+          select: { userId: true, heroName: true, heroOutfitUrl: true, duration: true },
           orderBy: { endedAt: 'desc' },
         });
         const seen = new Set<string>();
         for (const s of sessions) {
           if (!seen.has(s.userId)) {
             heroByUser[s.userId] = s.heroName;
+            outfitByUser[s.userId] = s.heroOutfitUrl ?? null;
             seen.add(s.userId);
           }
         }
@@ -134,7 +136,7 @@ export async function GET(request: NextRequest) {
           username: item.user.username,
           nick: item.user.nick,
           profileUrl: item.user.profileUrl,
-          avatarUrl: item.user.avatarUrl,
+          avatarUrl: outfitByUser[item.userId] ?? item.user.avatarUrl ?? null,
           heroName: heroByUser[item.userId] ?? '-',
           totalTime: item.totalTime,
           totalTimeFormatted: formatTime(item.totalTime),
@@ -143,13 +145,14 @@ export async function GET(request: NextRequest) {
       } else {
         const sessions = await prisma.mapSession.findMany({
           where: { phaseId: phase.id },
-          select: { userId: true, heroName: true },
+          select: { userId: true, heroName: true, heroOutfitUrl: true },
           orderBy: { endedAt: 'desc' },
         });
         const seen = new Set<string>();
         for (const s of sessions) {
           if (!seen.has(s.userId)) {
             heroByUser[s.userId] = s.heroName;
+            outfitByUser[s.userId] = s.heroOutfitUrl ?? null;
             seen.add(s.userId);
           }
         }
@@ -159,7 +162,7 @@ export async function GET(request: NextRequest) {
           username: r.user.username,
           nick: r.user.nick,
           profileUrl: r.user.profileUrl,
-          avatarUrl: r.user.avatarUrl,
+          avatarUrl: outfitByUser[r.userId] ?? r.user.avatarUrl ?? null,
           heroName: heroByUser[r.userId] ?? '-',
           totalTime: r.totalTime,
           totalTimeFormatted: formatTime(r.totalTime),
@@ -221,14 +224,16 @@ export async function GET(request: NextRequest) {
       const userIds = sorted.map((s) => s.userId);
       const heroSessions = await prisma.mapSession.findMany({
         where: { monsterId: monster.id, userId: { in: userIds } },
-        select: { userId: true, heroName: true },
+        select: { userId: true, heroName: true, heroOutfitUrl: true },
         orderBy: { endedAt: 'desc' },
       });
       const heroByUser: Record<string, string> = {};
+      const outfitByUser: Record<string, string | null> = {};
       const seen = new Set<string>();
       for (const s of heroSessions) {
         if (!seen.has(s.userId)) {
           heroByUser[s.userId] = s.heroName;
+          outfitByUser[s.userId] = s.heroOutfitUrl ?? null;
           seen.add(s.userId);
         }
       }
@@ -239,7 +244,7 @@ export async function GET(request: NextRequest) {
         username: item.user.username,
         nick: item.user.nick,
         profileUrl: item.user.profileUrl,
-        avatarUrl: item.user.avatarUrl,
+        avatarUrl: outfitByUser[item.userId] ?? item.user.avatarUrl ?? null,
         heroName: heroByUser[item.userId] ?? '-',
         totalTime: item.totalTime,
         totalTimeFormatted: formatTime(item.totalTime),

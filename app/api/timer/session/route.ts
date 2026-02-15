@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { time, monster: bodyMonster, map: mapName, hero, world, reason, timestamp, profileUrl, avatarUrl } = body;
+    const { time, monster: bodyMonster, map: mapName, hero, world, reason, timestamp, profileUrl, avatarUrl, outfitUrl } = body;
 
     if (!time || typeof time !== 'number' || time < 1) {
       return NextResponse.json(
@@ -60,10 +60,13 @@ export async function POST(request: NextRequest) {
         data: { profileUrl: profileUrl.trim().slice(0, 500) },
       });
     }
-    if (avatarUrl != null && typeof avatarUrl === 'string' && avatarUrl.trim()) {
+    const outfitUrlValue = (avatarUrl ?? outfitUrl) != null && typeof (avatarUrl ?? outfitUrl) === 'string'
+      ? String(avatarUrl ?? outfitUrl).trim().slice(0, 500)
+      : null;
+    if (outfitUrlValue) {
       await prisma.user.update({
         where: { id: user.id },
-        data: { avatarUrl: avatarUrl.trim().slice(0, 500) },
+        data: { avatarUrl: outfitUrlValue },
       });
     }
 
@@ -144,12 +147,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Save session (world/reason ze skryptu mogą być number — baza wymaga string)
+    // heroOutfitUrl = outfit tej konkretnej postaci z tej sesji (Nick ma wiele postaci, każda swój strój)
     const session = await prisma.mapSession.create({
       data: {
         userId: user.id,
         monsterId: monsterRecord.id,
         phaseId: activePhase.id,
         heroName: String(hero ?? 'Unknown'),
+        heroOutfitUrl: outfitUrlValue || null,
         world: String(world ?? 'Unknown'),
         mapName: mapName,
         duration: time,

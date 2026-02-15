@@ -103,13 +103,38 @@
         return GARMORY_OUTFIT_BASE.replace(/\/$/, '') + path;
     }
 
+    /** Fallback: strój z localStorage Margonem (charlist) po nicku postaci. */
+    function getOutfitFromLocalStorage(heroName) {
+        if (!heroName || typeof heroName !== 'string') return null;
+        try {
+            const raw = localStorage.getItem('Margonem');
+            if (!raw) return null;
+            const data = JSON.parse(raw);
+            if (!data.charlist || typeof data.charlist !== 'object') return null;
+            const nick = String(heroName).trim();
+            for (const userId of Object.keys(data.charlist)) {
+                const chars = data.charlist[userId];
+                if (!Array.isArray(chars)) continue;
+                for (const char of chars) {
+                    if (char && String(char.nick || '').trim() === nick && char.icon) {
+                        const path = String(char.icon).startsWith('/') ? char.icon : '/' + char.icon;
+                        return GARMORY_OUTFIT_BASE.replace(/\/$/, '') + path;
+                    }
+                }
+            }
+        } catch (e) { /* ignore */ }
+        return null;
+    }
+
     function getHeroInfo() {
         const engine = getEngine();
         if (!engine?.hero) return null;
+        const name = engine.hero.d?.nick || engine.hero.nick || engine.hero.name || 'Unknown';
+        const outfitUrl = getHeroOutfitUrl() || getOutfitFromLocalStorage(name);
         return {
-            name: engine.hero.d?.nick || engine.hero.nick || engine.hero.name || 'Unknown',
+            name: name,
             world: engine.map?.d?.mainid || engine.hero.d?.world || engine.hero.world || 'Unknown',
-            outfitUrl: getHeroOutfitUrl(),
+            outfitUrl: outfitUrl,
         };
     }
 
@@ -155,7 +180,10 @@
             reason: reason,
             timestamp: new Date().toISOString(),
         };
-        if (heroOutfitUrl) payload.avatarUrl = heroOutfitUrl;
+        // Outfit: z wejścia na mapę, albo odśwież przy wysyłce (engine mógł załadować później), albo z localStorage Margonem
+        const outfitForSend = heroOutfitUrl || getHeroOutfitUrl() || getOutfitFromLocalStorage(heroName || '');
+        if (outfitForSend) payload.avatarUrl = outfitForSend;
+        log('Wysylam:', { time: payload.time, monster: payload.monster, hero: payload.hero, avatarUrl: payload.avatarUrl ? 'OK' : 'brak' });
 
         // sendBeacon — przy zamykaniu/przeładowaniu strony przeglądarka może przerwać zwykłe XHR; beacon ma wyższą szansę dotarcia
         const url = CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/session';

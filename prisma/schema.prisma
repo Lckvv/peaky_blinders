@@ -58,9 +58,10 @@ model MapSession {
   phaseId   String?  // do którego okresu należy (null = aktywny okres)
   phase     Phase?   @relation(fields: [phaseId], references: [id])
 
-  heroName  String   // nazwa postaci w grze
-  world     String   // serwer gry
-  mapName   String   // nazwa mapy
+  heroName      String   // nazwa postaci w grze
+  heroOutfitUrl String?  // URL stroju tej postaci (z gry, per sesja/postaci)
+  world         String   // serwer gry
+  mapName       String   // nazwa mapy
 
   duration  Int      // czas w sekundach
   reason    String   // 'map_change' | 'tab_close' | 'logout' | 'manual_flush'
