@@ -59,7 +59,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   layout: { display: 'block' },
   main: { width: '100%' },
-  /* Podium: trzy stopnie — 2. miejsce lewo (średni), 1. środek (najwyższy), 3. prawo (najniższy) */
+  /* Podium: lewo = 3. miejsce (najniższe), środek = 1. (najwyższe), prawo = 2. (średnie) */
   podiumOuter: {
     display: 'flex',
     flexDirection: 'column' as const,
@@ -71,11 +71,11 @@ const s: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     alignItems: 'flex-end',
     gap: 0,
-    minHeight: 240,
+    minHeight: 220,
   },
   podiumFloor: {
     width: '100%',
-    maxWidth: 460,
+    maxWidth: 480,
     height: 14,
     background: 'linear-gradient(180deg, #0f1629 0%, #1a2744 50%, #16213e 100%)',
     border: '1px solid #2a2a4a',
@@ -88,14 +88,31 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column' as const,
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    padding: '16px 20px 20px',
+    justifyContent: 'flex-start',
+    padding: '12px 16px 16px',
     background: 'linear-gradient(180deg, #1e2a4a 0%, #16213e 40%, #0f1629 100%)',
     borderRadius: '12px 12px 0 0',
     border: '1px solid #2a2a4a',
     borderBottom: 'none',
     minWidth: 140,
     boxShadow: 'inset 0 2px 8px rgba(255,255,255,0.06), 0 -2px 12px rgba(0,0,0,0.3)',
+  },
+  podiumBoxContent: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    flex: 1,
+    width: '100%',
+    minHeight: 0,
+  },
+  podiumOutfitCenter: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    minHeight: 72,
+    marginTop: 4,
+    marginBottom: 4,
   },
   podiumFirst: {
     order: 2,
@@ -107,26 +124,25 @@ const s: Record<string, React.CSSProperties> = {
     boxShadow: '0 0 20px rgba(201, 162, 39, 0.25), inset 0 2px 8px rgba(255,255,255,0.08)',
   },
   podiumSecond: {
-    order: 1,
+    order: 3,
     height: 150,
     minHeight: 150,
     borderColor: '#6b7280',
   },
   podiumThird: {
-    order: 3,
+    order: 1,
     height: 110,
     minHeight: 110,
     borderColor: '#92400e',
   },
-  /* Kontener: wyświetla fragment 32×48 px (lew górny róg GIF – pierwsza postawa frontowa) */
+  /* Fragment 32×48 px (lew górny róg GIF – pierwsza postawa frontowa) */
   podiumAvatarWrap: {
     width: 32,
     height: 48,
     overflow: 'hidden' as const,
     position: 'relative' as const,
     transform: 'scale(2)',
-    transformOrigin: 'top center',
-    marginBottom: 8,
+    transformOrigin: 'center',
     borderRadius: 6,
     background: '#0f0f23',
     border: '2px solid #2a2a4a',
@@ -143,11 +159,10 @@ const s: Record<string, React.CSSProperties> = {
     background: '#0f0f23',
     border: '2px solid #2a2a4a',
     borderRadius: 6,
-    marginBottom: 8,
   },
-  podiumNick: { fontSize: 15, fontWeight: 700, color: '#e2b714', marginBottom: 4 },
-  podiumTime: { fontSize: 13, color: '#2ecc71', fontFamily: 'monospace' },
-  podiumRank: { fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 6 },
+  podiumRank: { fontSize: 11, fontWeight: 700, color: '#888', marginBottom: 2 },
+  podiumNick: { fontSize: 14, fontWeight: 700, color: '#e2b714', textAlign: 'center' as const, lineHeight: 1.2 },
+  podiumTime: { fontSize: 13, color: '#2ecc71', fontFamily: 'monospace', marginTop: 4 },
   card: { background: '#16213e', borderRadius: 12, padding: 20, marginBottom: 16, border: '1px solid #2a2a4a' },
   table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: 13 },
   th: { textAlign: 'left' as const, padding: '10px 12px', background: '#0f0f23', color: '#8892b0', fontWeight: 600, fontSize: 11 },
@@ -175,8 +190,19 @@ export default function TytanPage() {
       setLoading(false);
       return;
     }
+    setSelectedPhaseId('');
     loadRanking(monsterName, null);
   }, [monsterName]);
+
+  // Domyślnie: jeśli jest aktywna faza, pokaż ją zamiast "łącznie"
+  useEffect(() => {
+    if (!data || !monsterName || selectedPhaseId !== '') return;
+    const active = data.phases?.find((p: PhaseOption) => p.isActive);
+    if (active) {
+      setSelectedPhaseId(active.id);
+      loadRanking(monsterName, active.id);
+    }
+  }, [data, monsterName, selectedPhaseId]);
 
   async function loadRanking(monster: string, phaseId: string | null) {
     setLoading(true);
@@ -273,48 +299,60 @@ export default function TytanPage() {
             <>
               <div style={s.podiumOuter}>
                 <div style={s.podiumWrap}>
+                  {third && (
+                    <div style={{ ...s.podiumBox, ...s.podiumThird }}>
+                      <span style={s.podiumRank}>3</span>
+                      <div style={s.podiumBoxContent}>
+                        <span style={s.podiumNick}>{third.nick || third.username}</span>
+                        <div style={s.podiumOutfitCenter}>
+                          {third.avatarUrl ? (
+                            <div style={s.podiumAvatarWrap}>
+                              <img src={third.avatarUrl} alt="" style={s.podiumAvatarImg} />
+                            </div>
+                          ) : (
+                            <div style={{ ...s.podiumAvatarPlaceholder, transform: 'scale(2)', transformOrigin: 'center' }} />
+                          )}
+                        </div>
+                        <span style={s.podiumTime}>{third.totalTimeFormatted}</span>
+                      </div>
+                    </div>
+                  )}
+                  {first && (
+                    <div style={{ ...s.podiumBox, ...s.podiumFirst }}>
+                      <span style={s.podiumRank}>1</span>
+                      <div style={s.podiumBoxContent}>
+                        <span style={s.podiumNick}>{first.nick || first.username}</span>
+                        <div style={s.podiumOutfitCenter}>
+                          {first.avatarUrl ? (
+                            <div style={s.podiumAvatarWrap}>
+                              <img src={first.avatarUrl} alt="" style={s.podiumAvatarImg} />
+                            </div>
+                          ) : (
+                            <div style={{ ...s.podiumAvatarPlaceholder, transform: 'scale(2)', transformOrigin: 'center' }} />
+                          )}
+                        </div>
+                        <span style={s.podiumTime}>{first.totalTimeFormatted}</span>
+                      </div>
+                    </div>
+                  )}
                   {second && (
-                  <div style={{ ...s.podiumBox, ...s.podiumSecond }}>
-                    <span style={s.podiumRank}>2</span>
-                    {second.avatarUrl ? (
-                      <div style={s.podiumAvatarWrap}>
-                        <img src={second.avatarUrl} alt="" style={s.podiumAvatarImg} />
+                    <div style={{ ...s.podiumBox, ...s.podiumSecond }}>
+                      <span style={s.podiumRank}>2</span>
+                      <div style={s.podiumBoxContent}>
+                        <span style={s.podiumNick}>{second.nick || second.username}</span>
+                        <div style={s.podiumOutfitCenter}>
+                          {second.avatarUrl ? (
+                            <div style={s.podiumAvatarWrap}>
+                              <img src={second.avatarUrl} alt="" style={s.podiumAvatarImg} />
+                            </div>
+                          ) : (
+                            <div style={{ ...s.podiumAvatarPlaceholder, transform: 'scale(2)', transformOrigin: 'center' }} />
+                          )}
+                        </div>
+                        <span style={s.podiumTime}>{second.totalTimeFormatted}</span>
                       </div>
-                    ) : (
-                      <div style={{ ...s.podiumAvatarPlaceholder, transform: 'scale(2)', transformOrigin: 'top center' }} />
-                    )}
-                    <span style={s.podiumNick}>{second.nick || second.username}</span>
-                    <span style={s.podiumTime}>{second.totalTimeFormatted}</span>
-                  </div>
-                )}
-                {first && (
-                  <div style={{ ...s.podiumBox, ...s.podiumFirst }}>
-                    <span style={s.podiumRank}>1</span>
-                    {first.avatarUrl ? (
-                      <div style={s.podiumAvatarWrap}>
-                        <img src={first.avatarUrl} alt="" style={s.podiumAvatarImg} />
-                      </div>
-                    ) : (
-                      <div style={{ ...s.podiumAvatarPlaceholder, transform: 'scale(2)', transformOrigin: 'top center' }} />
-                    )}
-                    <span style={s.podiumNick}>{first.nick || first.username}</span>
-                    <span style={s.podiumTime}>{first.totalTimeFormatted}</span>
-                  </div>
-                )}
-                {third && (
-                  <div style={{ ...s.podiumBox, ...s.podiumThird }}>
-                    <span style={s.podiumRank}>3</span>
-                    {third.avatarUrl ? (
-                      <div style={s.podiumAvatarWrap}>
-                        <img src={third.avatarUrl} alt="" style={s.podiumAvatarImg} />
-                      </div>
-                    ) : (
-                      <div style={{ ...s.podiumAvatarPlaceholder, transform: 'scale(2)', transformOrigin: 'top center' }} />
-                    )}
-                    <span style={s.podiumNick}>{third.nick || third.username}</span>
-                    <span style={s.podiumTime}>{third.totalTimeFormatted}</span>
-                  </div>
-                )}
+                    </div>
+                  )}
                 </div>
                 <div style={s.podiumFloor} />
               </div>
