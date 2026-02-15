@@ -103,28 +103,47 @@
         return GARMORY_OUTFIT_BASE.replace(/\/$/, '') + path;
     }
 
-    /** Fallback: strój z localStorage Margonem po nicku postaci. Obsługuje data.charlist lub data = { "userId": [chars] }. */
-    function getOutfitFromLocalStorage(heroName) {
-        if (!heroName || typeof heroName !== 'string') return null;
-        try {
-            const raw = localStorage.getItem('Margonem');
-            if (!raw) return null;
-            const data = JSON.parse(raw);
-            // charlist może być w data.charlist albo cały data to obiekt userId -> tablica postaci
-            const charlist = data && typeof data.charlist === 'object' ? data.charlist : (data && typeof data === 'object' ? data : null);
-            if (!charlist) return null;
-            const nick = String(heroName).trim().toLowerCase();
-            for (const userId of Object.keys(charlist)) {
-                const chars = charlist[userId];
-                if (!Array.isArray(chars)) continue;
-                for (const char of chars) {
-                    if (char && char.icon && String(char.nick || '').trim().toLowerCase() === nick) {
-                        const path = String(char.icon).startsWith('/') ? char.icon : '/' + char.icon;
-                        return GARMORY_OUTFIT_BASE.replace(/\/$/, '') + path;
-                    }
+    /** Szuka w obiekcie tablic postaci (charlist) i zwraca URL stroju dla nicku. */
+    function findOutfitInCharlist(charlist, heroName) {
+        if (!charlist || typeof charlist !== 'object' || !heroName) return null;
+        const nick = String(heroName).trim().toLowerCase();
+        for (const userId of Object.keys(charlist)) {
+            const chars = charlist[userId];
+            if (!Array.isArray(chars)) continue;
+            for (const char of chars) {
+                if (char && char.icon && String(char.nick || '').trim().toLowerCase() === nick) {
+                    const path = String(char.icon).startsWith('/') ? char.icon : '/' + char.icon;
+                    return GARMORY_OUTFIT_BASE.replace(/\/$/, '') + path;
                 }
             }
-        } catch (e) { /* ignore */ }
+        }
+        return null;
+    }
+
+    /** Fallback: strój z localStorage Margonem po nicku postaci. Próbuje kluczy: Margonem, margonem oraz skanuje wszystkie klucze. */
+    function getOutfitFromLocalStorage(heroName) {
+        if (!heroName || typeof heroName !== 'string') return null;
+        const nick = String(heroName).trim().toLowerCase();
+        try {
+            const keysToTry = ['Margonem', 'margonem', 'MARGONEM'];
+            for (const key of keysToTry) {
+                const raw = localStorage.getItem(key);
+                if (!raw) continue;
+                const data = JSON.parse(raw);
+                const charlist = data && typeof data.charlist === 'object' ? data.charlist : (data && typeof data === 'object' ? data : null);
+                const url = findOutfitInCharlist(charlist, heroName);
+                if (url) {
+                    if (CONFIG.DEBUG) log('Outfit z localStorage (klucz "' + key + '"):', url);
+                    return url;
+                }
+            }
+        } catch (e) {
+            if (CONFIG.DEBUG) log('getOutfitFromLocalStorage error:', e);
+        }
+        if (CONFIG.DEBUG) {
+            const raw = localStorage.getItem('Margonem');
+            log('Outfit: brak dla "' + heroName + '". localStorage["Margonem"]:', raw ? (raw.length + ' znaków, start: ' + raw.slice(0, 80)) : 'brak klucza');
+        }
         return null;
     }
 
@@ -184,7 +203,10 @@
         };
         // Outfit: z wejścia na mapę, albo odśwież przy wysyłce (engine mógł załadować później), albo z localStorage Margonem
         const outfitForSend = heroOutfitUrl || getHeroOutfitUrl() || getOutfitFromLocalStorage(heroName || '');
-        if (outfitForSend) payload.avatarUrl = outfitForSend;
+        if (outfitForSend) {
+            payload.avatarUrl = outfitForSend;
+            log('Wysylam: dodano avatarUrl (stroj) do payloadu');
+        }
         log('Wysylam:', { time: payload.time, monster: payload.monster, hero: payload.hero, avatarUrl: payload.avatarUrl ? 'OK' : 'brak' });
 
         // sendBeacon — przy zamykaniu/przeładowaniu strony przeglądarka może przerwać zwykłe XHR; beacon ma wyższą szansę dotarcia
