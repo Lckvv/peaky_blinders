@@ -111,10 +111,10 @@ const navStyles: Record<string, React.CSSProperties> = {
     textDecoration: 'none',
     fontSize: 14,
     borderRadius: 8,
-    marginTop: 'auto',
     marginLeft: 12,
     marginRight: 12,
     marginBottom: 8,
+    marginTop: 8,
     border: '1px solid rgba(230, 126, 34, 0.3)',
     transition: 'background 0.15s, color 0.15s',
   },
@@ -193,17 +193,19 @@ export default function Navbar() {
         </div>
       </div>
 
-      {user?.role === 'admin' && (
-        <Link
-          href="/admin"
-          style={{
-            ...navStyles.adminLink,
-            ...(isAdmin ? navStyles.adminLinkActive : {}),
-          }}
-        >
-          ⚙ Admin — Fazy
-        </Link>
-      )}
+      <div style={navStyles.navSection}>
+        {user?.role === 'admin' && (
+          <Link
+            href="/admin"
+            style={{
+              ...navStyles.adminLink,
+              ...(isAdmin ? navStyles.adminLinkActive : {}),
+            }}
+          >
+            ⚙ Admin — Fazy
+          </Link>
+        )}
+      </div>
     </nav>
   );
 }

@@ -100,19 +100,43 @@ export default function Home() {
         Śledź czas spędzony na mapach w Margonem. Rywalizuj z innymi!
       </p>
 
-      <a href="/dashboard" style={{
-        display: 'block', textAlign: 'center', padding: '14px 20px',
-        background: 'linear-gradient(135deg, #6c3483, #2980b9)', color: '#fff',
-        borderRadius: 10, fontSize: 16, fontWeight: 'bold', textDecoration: 'none', marginBottom: 32,
-      }}>
-        ⚡ Zaloguj się i zainstaluj skrypt
-      </a>
+      {user ? (
+        <a
+          href="#"
+          onClick={async (e) => {
+            e.preventDefault();
+            try {
+              const res = await fetch('/api/script/install-token');
+              if (!res.ok) { alert('Zaloguj się najpierw'); return; }
+              const data = await res.json();
+              window.location.href = `/api/script/install.user.js?token=${data.token}`;
+            } catch (err) { alert('Błąd: ' + (err instanceof Error ? err.message : err)); }
+          }}
+          style={{
+            display: 'block', textAlign: 'center', padding: '14px 20px',
+            background: 'linear-gradient(135deg, #6c3483, #2980b9)', color: '#fff',
+            borderRadius: 10, fontSize: 16, fontWeight: 'bold', textDecoration: 'none', marginBottom: 32, cursor: 'pointer',
+          }}
+        >
+          ⚡ Zainstaluj skrypt
+        </a>
+      ) : (
+        <a
+          href="#login"
+          style={{
+            display: 'block', textAlign: 'center', padding: '14px 20px',
+            background: 'linear-gradient(135deg, #6c3483, #2980b9)', color: '#fff',
+            borderRadius: 10, fontSize: 16, fontWeight: 'bold', textDecoration: 'none', marginBottom: 32,
+          }}
+        >
+          ⚡ Zaloguj się i zainstaluj skrypt
+        </a>
+      )}
 
       <section style={{ background: '#1a1a2e', borderRadius: 12, padding: 24, marginBottom: 24 }}>
         <h2 style={{ fontSize: 20, marginTop: 0 }}>Jak zacząć?</h2>
         <ol style={{ lineHeight: 2, color: '#ccc' }}>
           <li>Zainstaluj <a href="https://www.tampermonkey.net/" style={{ color: '#3498db' }}>Tampermonkey</a> w przeglądarce</li>
-          <li>Przejdź do <a href="/dashboard" style={{ color: '#3498db' }}>dashboardu</a> i zarejestruj się</li>
           <li>Kliknij <strong>„Zainstaluj skrypt"</strong> — Tampermonkey otworzy okno instalacji</li>
           <li>Wejdź na mapę w grze — timer startuje automatycznie!</li>
         </ol>
@@ -143,15 +167,7 @@ export default function Home() {
                                 <td style={s.statsTd}>{t.activePhaseTimeFormatted}</td>
                                 <td style={{ ...s.statsTd, color: '#2ecc71', fontFamily: 'monospace' }}>{t.totalTimeFormatted}</td>
                                 <td style={s.statsTd}>{t.totalSessions}</td>
-                                <td style={s.statsTd}>
-                                    {t.phases.length === 0 ? '—' : (
-                                        <div style={{ fontSize: 11 }}>
-                                            {t.phases.map((p) => (
-                                                <div key={p.phaseName}>{p.phaseName}: {p.totalTimeFormatted}</div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </td>
+                                <td style={s.statsTd}>{t.phases.length === 0 ? '—' : t.phases.length}</td>
                             </tr>
                         ))}
                         </tbody>

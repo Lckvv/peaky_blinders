@@ -134,6 +134,15 @@ const s: Record<string, React.CSSProperties> = {
   table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: 13 },
   th: { textAlign: 'left' as const, padding: '10px 12px', background: '#0f0f23', color: '#8892b0', fontWeight: 600, fontSize: 11 },
   td: { padding: '10px 12px', borderBottom: '1px solid #2a2a4a', color: '#ccc' },
+  tableAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: '50%',
+    background: '#0f0f23',
+    border: '2px solid #2a2a4a',
+    objectFit: 'cover' as const,
+    verticalAlign: 'middle',
+  },
   link: { color: '#3498db', textDecoration: 'none' },
   linkHover: { textDecoration: 'underline' },
   placeholder: { color: '#888', fontSize: 15, padding: '40px 20px', textAlign: 'center' as const },
@@ -300,6 +309,7 @@ export default function TytanPage() {
                   <thead>
                     <tr>
                       <th style={s.th}>Pozycja</th>
+                      <th style={s.th}>Strój</th>
                       <th style={s.th}>Nick</th>
                       <th style={s.th}>Postać</th>
                       <th style={s.th}>Czas</th>
@@ -310,6 +320,13 @@ export default function TytanPage() {
                     {leaderboard.map((e) => (
                       <tr key={e.userId}>
                         <td style={s.td}>{e.rank}</td>
+                        <td style={s.td}>
+                          {e.avatarUrl ? (
+                            <img src={e.avatarUrl} alt="" style={s.tableAvatar} title="Strój z gry" />
+                          ) : (
+                            <span style={{ color: '#555', fontSize: 11 }}>—</span>
+                          )}
+                        </td>
                         <td style={s.td}>
                           {e.profileUrl ? (
                             <a
