@@ -72,14 +72,8 @@ railway run npx prisma db push
 3. W zakładce **"Deploy"** znajdź przycisk **"Run Command"** lub użyj **"Shell"**
 4. Wpisz: `npx prisma db push`
 
-**Opcja C - Automatycznie przy każdym deployu:**
-W `package.json` skrypt `build` już zawiera `prisma generate`, ale możesz dodać `db push`:
-
-```json
-"build": "prisma generate && npx prisma db push && next build"
-```
-
-⚠️ **Uwaga:** `db push` przy każdym buildzie może być wolne. Lepsze jest uruchomienie ręczne raz.
+**Opcja C - Automatycznie przy każdym deployu (obecnie włączone):**
+W `package.json` skrypt `build` uruchamia `prisma db push`, więc każdy deploy na Railway aktualizuje schemat bazy. **Jeśli dodałeś nowe pole (np. `heroOutfitUrl`) i baza na Railway jeszcze go nie ma**, uruchom raz ręcznie (Opcja A), a kolejne deploye będą już aktualizować schemat w buildzie.
 
 ### Krok 5: Sprawdź deploy
 1. Railway automatycznie zbuduje i wdroży aplikację
