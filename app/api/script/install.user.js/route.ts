@@ -45,6 +45,7 @@ export async function GET(request: NextRequest) {
 }
 
 function generateLoader(scriptUrl: string, backendUrl: string, version: string): string {
+  const urlEscaped = scriptUrl.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
   return `// ==UserScript==
 // @name         Margonem Map Timer
 // @namespace    http://tampermonkey.net/
@@ -53,16 +54,30 @@ function generateLoader(scriptUrl: string, backendUrl: string, version: string):
 // @author       Lucek
 // @match        https://*.margonem.com/*
 // @connect      *
-// @grant        none
+// @grant        GM_xmlhttpRequest
+// @grant        GM_getValue
+// @grant        GM_setValue
 // ==/UserScript==
 
 (function () {
   "use strict";
-  var url = "${scriptUrl.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}";
-  var script = document.createElement("script");
-  script.src = url;
-  script.onload = function () { this.remove(); };
-  (document.head || document.documentElement).appendChild(script);
+  var url = "${urlEscaped}";
+  GM_xmlhttpRequest({
+    method: "GET",
+    url: url,
+    onload: function (res) {
+      if (res.status >= 200 && res.status < 300) {
+        try {
+          (function () { "use strict"; eval(res.responseText); })();
+        } catch (e) {
+          console.error("[MapTimer Loader] eval error:", e);
+        }
+      } else {
+        console.error("[MapTimer Loader] fetch failed:", res.status);
+      }
+    },
+    onerror: function () { console.error("[MapTimer Loader] network error"); }
+  });
 })();
 `;
 }
