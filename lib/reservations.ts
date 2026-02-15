@@ -24,12 +24,20 @@ export const RESERVATION_PRIORITIES = [
 
 /**
  * Zakładki (itemy) per tytan. Tylko Kic ma zdefiniowane; reszta pusta (do uzupełnienia później).
- * Dla Kic: pliki w lib/titans_images/kic/ — {itemKey}.gif (domyślnie), {itemKey}.png (hover).
- * Serwowane przez API /api/titans-images/kic/[filename].
+ * Dla Kic: pliki w app/api/titans-images/kic/[filename]/titans_images/kic/
+ * gifFile / pngFile — faktyczne nazwy plików w folderze (jeśli brak, używane są key.gif / key.png).
  */
-export const RESERVATION_ITEMS_BY_TITAN: Record<string, { key: string; label: string }[]> = {
+export type ReservationItem = {
+  key: string;
+  label: string;
+  gifFile?: string;
+  pngFile?: string;
+};
+
+export const RESERVATION_ITEMS_BY_TITAN: Record<string, ReservationItem[]> = {
   kic: [
     { key: 'bambosze', label: 'Bambosze' },
+    { key: 'buty', label: 'Buty', gifFile: 'kbunny_buty2.gif', pngFile: 'bambosze_scr.png' },
     { key: 'pier_woj', label: 'Pier Woj' },
     { key: 'pier_fiz', label: 'Pier Fiz' },
     { key: 'pier_mag', label: 'Pier Mag' },
@@ -52,8 +60,13 @@ export function getReservationItems(titanSlug: string) {
   return RESERVATION_ITEMS_BY_TITAN[titanSlug] ?? [];
 }
 
-/** Ścieżka do obrazka itemu (GIF lub PNG) — pliki z lib/titans_images/kic, serwowane przez API. */
-export function getItemImagePath(titanSlug: string, itemKey: string, ext: 'gif' | 'png'): string {
+/** Ścieżka do obrazka itemu (GIF lub PNG). Używa gifFile/pngFile z itemu, albo key.gif / key.png. */
+export function getItemImagePath(
+  titanSlug: string,
+  item: ReservationItem,
+  ext: 'gif' | 'png'
+): string {
   if (titanSlug !== 'kic') return '';
-  return `/api/titans-images/kic/${itemKey}.${ext}`;
+  const filename = ext === 'gif' ? (item.gifFile ?? `${item.key}.gif`) : (item.pngFile ?? `${item.key}.png`);
+  return `/api/titans-images/kic/${encodeURIComponent(filename)}`;
 }

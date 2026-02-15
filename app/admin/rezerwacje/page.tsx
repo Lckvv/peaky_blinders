@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import type { ReservationItem } from '@/lib/reservations';
 import {
   RESERVATION_TITANS,
   RESERVATION_PRIORITIES,
@@ -186,16 +187,14 @@ const s: Record<string, React.CSSProperties> = {
 /** Obrazek 32x32 GIF wybranego itemu (między podzakładkami a tabelą); przy hover — okienko z PNG. */
 function SelectedItemPreview({
   titanSlug,
-  itemKey,
-  label,
+  item,
 }: {
   titanSlug: string;
-  itemKey: string;
-  label: string;
+  item: ReservationItem;
 }) {
   const [hover, setHover] = useState(false);
-  const gifPath = getItemImagePath(titanSlug, itemKey, 'gif');
-  const pngPath = getItemImagePath(titanSlug, itemKey, 'png');
+  const gifPath = getItemImagePath(titanSlug, item, 'gif');
+  const pngPath = getItemImagePath(titanSlug, item, 'png');
   if (!gifPath) return null;
   return (
     <div style={s.selectedPreview}>
@@ -204,7 +203,7 @@ function SelectedItemPreview({
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
       >
-        <img src={gifPath} alt={label} style={s.selectedGif} />
+        <img src={gifPath} alt={item.label} style={s.selectedGif} />
         {pngPath && hover && (
           <span style={s.hoverPngPopup}>
             <img src={pngPath} alt="" role="presentation" style={s.hoverPngImg} />
@@ -379,13 +378,11 @@ export default function AdminRezerwacjePage() {
               ))}
             </div>
 
-            {openItem && (
+            {openItem && (() => {
+              const selectedItem = items.find((i) => i.key === openItem);
+              return selectedItem ? (
               <>
-                <SelectedItemPreview
-                  titanSlug={activeTitan}
-                  itemKey={openItem}
-                  label={items.find((i) => i.key === openItem)?.label ?? openItem}
-                />
+                <SelectedItemPreview titanSlug={activeTitan} item={selectedItem} />
                 <div style={s.tableWrap}>
                 <div style={s.tableHeader}>
                   <span>Nick</span>
@@ -492,7 +489,8 @@ export default function AdminRezerwacjePage() {
                 )}
                 </div>
               </>
-            )}
+              ) : null;
+            })()}
           </>
         )}
       </div>
