@@ -4,11 +4,12 @@ import { useAuth } from './AuthContext';
 
 const styles: Record<string, React.CSSProperties> = {
     header: {
-        position: 'sticky',
+        position: 'fixed',
         top: 0,
+        left: 0,
+        right: 0,
         zIndex: 100,
         width: '100%',
-        maxWidth: '100%',
         boxSizing: 'border-box',
         background: 'linear-gradient(90deg, #1a1a2e 0%, #16213e 50%, #1a1a2e 100%)',
         height: 80,
