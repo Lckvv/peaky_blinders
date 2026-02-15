@@ -31,9 +31,9 @@ export default function AuthGuard({ children }: { children: ReactNode }) {
   return (
     <>
       <Header />
-      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+      <div style={{ display: 'flex', flex: 1, minHeight: 0, minWidth: 0 }}>
         <Navbar />
-        <main style={{ flex: 1, overflow: 'auto' }}>
+        <main style={{ flex: 1, overflow: 'auto', minWidth: 0 }}>
           {children}
         </main>
       </div>

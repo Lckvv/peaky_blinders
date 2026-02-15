@@ -15,7 +15,7 @@ export default function RootLayout({
   return (
     <html lang="pl">
       <body style={{ margin: 0, fontFamily: 'system-ui, sans-serif', background: '#0f0f23', color: '#eee' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', overflowX: 'hidden', width: '100%' }}>
           <AuthProvider>
             <AuthGuard>
               {children}
