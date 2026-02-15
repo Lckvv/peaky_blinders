@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { readFileSync, existsSync } from 'fs';
+import { join } from 'path';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 
@@ -32,12 +34,35 @@ export async function GET(request: NextRequest) {
   const host = request.headers.get('host') || 'localhost:3000';
   const backendUrl = `${proto}://${host}`;
 
-  return new NextResponse(generateScript(apiKey, backendUrl, user.username), {
+  // Pełny skrypt z repo (stroj, localStorage Margonem) lub fallback do minimalnego
+  const script = tryFullScript(apiKey, backendUrl, user.username)
+    ?? generateScript(apiKey, backendUrl, user.username);
+
+  return new NextResponse(script, {
     headers: {
       'Content-Type': 'text/javascript; charset=utf-8',
       'Cache-Control': 'no-store',
     },
   });
+}
+
+function escapeForJsSingleQuote(s: string): string {
+  return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+function tryFullScript(apiKey: string, backendUrl: string, username: string): string | null {
+  try {
+    const path = join(process.cwd(), 'tampermonkey-map-timer.user.js');
+    if (!existsSync(path)) return null;
+    let code = readFileSync(path, 'utf8');
+    const keyEscaped = escapeForJsSingleQuote(apiKey);
+    const urlEscaped = escapeForJsSingleQuote(backendUrl);
+    code = code.replace(/GM_getValue\s*\(\s*['"]api_key['"]\s*,\s*['"][^'"]*['"]\s*\)/, `GM_getValue('api_key', '${keyEscaped}')`);
+    code = code.replace(/GM_getValue\s*\(\s*['"]backend_url['"]\s*,\s*['"][^'"]*['"]\s*\)/, `GM_getValue('backend_url', '${urlEscaped}')`);
+    return code;
+  } catch {
+    return null;
+  }
 }
 
 function jsError(msg: string) {
