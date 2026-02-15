@@ -94,8 +94,8 @@ const s: Record<string, React.CSSProperties> = {
   hoverPngPopup: {
     position: 'absolute' as const,
     left: '50%',
-    bottom: '100%',
-    transform: 'translateX(-50%) translateY(-8px)',
+    top: '100%',
+    transform: 'translateX(-50%) translateY(8px)',
     zIndex: 100,
     padding: 6,
     background: '#1a1a2e',
@@ -104,7 +104,7 @@ const s: Record<string, React.CSSProperties> = {
     boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
     pointerEvents: 'none',
   },
-  hoverPngImg: { width: 64, height: 64, objectFit: 'contain', display: 'block' },
+  hoverPngImg: { width: 'auto', height: 'auto', maxWidth: '90vw', maxHeight: '70vh', objectFit: 'contain', display: 'block' },
   tableWrap: { marginTop: 0, minWidth: 0 },
   tableHeader: {
     display: 'grid',
