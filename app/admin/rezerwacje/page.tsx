@@ -54,15 +54,17 @@ const s: Record<string, React.CSSProperties> = {
   },
   subTabs: {
     display: 'flex',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 20,
+    width: '100%',
+    gap: 8,
+    marginBottom: 16,
   },
   subTab: {
-    display: 'inline-flex',
+    flex: 1,
+    display: 'flex',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
-    padding: '10px 14px',
+    padding: '10px 8px',
     background: '#1a1a2e',
     border: '1px solid #2a2a4a',
     borderRadius: 8,
@@ -70,10 +72,39 @@ const s: Record<string, React.CSSProperties> = {
     color: '#b8c5d6',
     fontSize: 13,
     transition: 'border-color 0.2s, background 0.2s',
+    minWidth: 0,
   },
   subTabOpen: { borderColor: '#3498db', background: 'rgba(52, 152, 219, 0.1)' },
   itemImg: { width: 28, height: 28, objectFit: 'contain', flexShrink: 0 },
-  tableWrap: { marginTop: 16 },
+  selectedPreview: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    minHeight: 48,
+  },
+  selectedGifWrap: {
+    position: 'relative' as const,
+    display: 'inline-block',
+    width: 32,
+    height: 32,
+  },
+  selectedGif: { width: 32, height: 32, objectFit: 'contain', display: 'block' },
+  hoverPngPopup: {
+    position: 'absolute' as const,
+    left: '50%',
+    bottom: '100%',
+    transform: 'translateX(-50%) translateY(-8px)',
+    zIndex: 100,
+    padding: 6,
+    background: '#1a1a2e',
+    border: '1px solid #2a2a4a',
+    borderRadius: 8,
+    boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+    pointerEvents: 'none',
+  },
+  hoverPngImg: { width: 64, height: 64, objectFit: 'contain', display: 'block' },
+  tableWrap: { marginTop: 0 },
   tableHeader: {
     display: 'grid',
     gridTemplateColumns: '1fr 140px 100px',
@@ -149,48 +180,71 @@ function ItemImage({
   titanSlug,
   itemKey,
   alt,
+  size = 28,
 }: {
   titanSlug: string;
   itemKey: string;
   alt: string;
+  size?: number;
 }) {
   const gifPath = getItemImagePath(titanSlug, itemKey, 'gif');
-  const pngPath = getItemImagePath(titanSlug, itemKey, 'png');
-  const [hover, setHover] = useState(false);
   if (!gifPath) return null;
-  // Domyślnie GIF; przy hover pokazujemy PNG (warstwa na wierzchu)
   return (
-    <span
-      style={{ position: 'relative', display: 'inline-block' }}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-    >
-      <img
-        src={gifPath}
-        alt={alt}
-        style={s.itemImg}
-        onError={(e) => {
-          (e.target as HTMLImageElement).style.display = 'none';
-        }}
-      />
-      {pngPath && hover && (
+    <img
+      src={gifPath}
+      alt={alt}
+      style={{ ...s.itemImg, width: size, height: size }}
+      onError={(e) => {
+        (e.target as HTMLImageElement).style.display = 'none';
+      }}
+    />
+  );
+}
+
+/** Obrazek 32x32 GIF wybranego itemu; przy hover — okienko z PNG. */
+function SelectedItemPreview({
+  titanSlug,
+  itemKey,
+  label,
+}: {
+  titanSlug: string;
+  itemKey: string;
+  label: string;
+}) {
+  const [hover, setHover] = useState(false);
+  const gifPath = getItemImagePath(titanSlug, itemKey, 'gif');
+  const pngPath = getItemImagePath(titanSlug, itemKey, 'png');
+  if (!gifPath) return null;
+  return (
+    <div style={s.selectedPreview}>
+      <span
+        style={s.selectedGifWrap}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+      >
         <img
-          src={pngPath}
-          alt=""
-          role="presentation"
-          style={{
-            ...s.itemImg,
-            position: 'absolute',
-            left: 0,
-            top: 0,
-            pointerEvents: 'none',
-          }}
+          src={gifPath}
+          alt={label}
+          style={s.selectedGif}
           onError={(e) => {
             (e.target as HTMLImageElement).style.display = 'none';
           }}
         />
-      )}
-    </span>
+        {pngPath && hover && (
+          <span style={s.hoverPngPopup}>
+            <img
+              src={pngPath}
+              alt=""
+              role="presentation"
+              style={s.hoverPngImg}
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          </span>
+        )}
+      </span>
+    </div>
   );
 }
 
@@ -320,10 +374,6 @@ export default function AdminRezerwacjePage() {
   return (
     <div style={s.container}>
       <h1 style={s.title}>Panel admina — Rezerwacje</h1>
-      <p style={s.sub}>
-        Przypisuj nicki do itemów (np. Bambosze, Pier Woj) w ramach tytana. Priorytet I/II/III określa kolejność i kolor
-        (w skrypcie i w tabeli). Inne tytany (Orla, Renegat itd.) można uzupełnić później.
-      </p>
 
       <div style={s.tabs}>
         {RESERVATION_TITANS.map((t) => (
@@ -364,7 +414,13 @@ export default function AdminRezerwacjePage() {
             </div>
 
             {openItem && (
-              <div style={s.tableWrap}>
+              <>
+                <SelectedItemPreview
+                  titanSlug={activeTitan}
+                  itemKey={openItem}
+                  label={items.find((i) => i.key === openItem)?.label ?? openItem}
+                />
+                <div style={s.tableWrap}>
                 <div style={s.tableHeader}>
                   <span>Nick</span>
                   <span>Priorytet</span>
@@ -468,7 +524,8 @@ export default function AdminRezerwacjePage() {
                     </div>
                   </>
                 )}
-              </div>
+                </div>
+              </>
             )}
           </>
         )}
