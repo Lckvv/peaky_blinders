@@ -113,3 +113,17 @@ model PhaseResult {
   @@index([phaseId])
   @@index([userId])
 }
+
+// Rezerwacje: przypisanie nicku do itemu (np. Bambosze) w ramach tytana (Kic) z priorytetem I/II/III
+model Reservation {
+  id         String   @id @default(cuid())
+  titanSlug  String   // orla, kic, renegat, arcy, zoons, lowczyni, przyzywacz, magua, teza, barbatos, tanroth
+  itemKey    String   // np. bambosze, pier_woj, pier_fiz, pier_mag, kokosy, uszy (dla Kic)
+  nick       String   // nick postaci w grze
+  priority   Int      // 1 = Priorytet I, 2 = Priorytet II, 3 = Priorytet III
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([titanSlug, itemKey, nick])
+  @@index([titanSlug, itemKey])
+}

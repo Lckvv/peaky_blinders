@@ -194,15 +194,26 @@ export default function Navbar() {
 
       <div style={navStyles.navSection}>
         {user?.role === 'admin' && (
-          <Link
-            href="/admin"
-            style={{
-              ...navStyles.adminLink,
-              ...(isAdmin ? navStyles.adminLinkActive : {}),
-            }}
-          >
-            ⚙ Admin — Fazy
-          </Link>
+          <>
+            <Link
+              href="/admin"
+              style={{
+                ...navStyles.adminLink,
+                ...(pathname === '/admin' ? navStyles.adminLinkActive : {}),
+              }}
+            >
+              ⚙ Admin — Fazy
+            </Link>
+            <Link
+              href="/admin/rezerwacje"
+              style={{
+                ...navStyles.adminLink,
+                ...(pathname === '/admin/rezerwacje' ? navStyles.adminLinkActive : {}),
+              }}
+            >
+              ⚙ Admin — Rezerwacje
+            </Link>
+          </>
         )}
       </div>
     </nav>
