@@ -183,29 +183,7 @@ const s: Record<string, React.CSSProperties> = {
   later: { color: '#8892b0', fontSize: 14, fontStyle: 'italic' },
 };
 
-function ItemImage({
-  titanSlug,
-  itemKey,
-  alt,
-  size = 28,
-}: {
-  titanSlug: string;
-  itemKey: string;
-  alt: string;
-  size?: number;
-}) {
-  const gifPath = getItemImagePath(titanSlug, itemKey, 'gif');
-  if (!gifPath) return null;
-  return (
-    <img
-      src={gifPath}
-      alt={alt}
-      style={{ ...s.itemImg, width: size, height: size }}
-    />
-  );
-}
-
-/** Obrazek 32x32 GIF wybranego itemu; przy hover — okienko z PNG. */
+/** Obrazek 32x32 GIF wybranego itemu (między podzakładkami a tabelą); przy hover — okienko z PNG. */
 function SelectedItemPreview({
   titanSlug,
   itemKey,
@@ -396,7 +374,6 @@ export default function AdminRezerwacjePage() {
                   }}
                   onClick={() => setOpenItem(openItem === item.key ? null : item.key)}
                 >
-                  <ItemImage titanSlug={activeTitan} itemKey={item.key} alt={item.label} />
                   <span>{item.label}</span>
                 </button>
               ))}
