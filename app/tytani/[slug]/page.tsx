@@ -118,14 +118,32 @@ const s: Record<string, React.CSSProperties> = {
     minHeight: 110,
     borderColor: '#92400e',
   },
-  podiumAvatar: {
-    width: 64,
-    height: 64,
-    borderRadius: '50%',
-    background: '#0f0f23',
-    border: '3px solid #2a2a4a',
+  /* Kontener: wyświetla fragment 32×48 px (lew górny róg GIF – pierwsza postawa frontowa) */
+  podiumAvatarWrap: {
+    width: 32,
+    height: 48,
+    overflow: 'hidden' as const,
+    position: 'relative' as const,
+    transform: 'scale(2)',
+    transformOrigin: 'top center',
     marginBottom: 8,
-    objectFit: 'cover' as const,
+    borderRadius: 6,
+    background: '#0f0f23',
+    border: '2px solid #2a2a4a',
+  },
+  podiumAvatarImg: {
+    position: 'absolute' as const,
+    left: 0,
+    top: 0,
+    display: 'block',
+  },
+  podiumAvatarPlaceholder: {
+    width: 32,
+    height: 48,
+    background: '#0f0f23',
+    border: '2px solid #2a2a4a',
+    borderRadius: 6,
+    marginBottom: 8,
   },
   podiumNick: { fontSize: 15, fontWeight: 700, color: '#e2b714', marginBottom: 4 },
   podiumTime: { fontSize: 13, color: '#2ecc71', fontFamily: 'monospace' },
@@ -259,9 +277,11 @@ export default function TytanPage() {
                   <div style={{ ...s.podiumBox, ...s.podiumSecond }}>
                     <span style={s.podiumRank}>2</span>
                     {second.avatarUrl ? (
-                      <img src={second.avatarUrl} alt="" style={s.podiumAvatar} />
+                      <div style={s.podiumAvatarWrap}>
+                        <img src={second.avatarUrl} alt="" style={s.podiumAvatarImg} />
+                      </div>
                     ) : (
-                      <div style={s.podiumAvatar} />
+                      <div style={{ ...s.podiumAvatarPlaceholder, transform: 'scale(2)', transformOrigin: 'top center' }} />
                     )}
                     <span style={s.podiumNick}>{second.nick || second.username}</span>
                     <span style={s.podiumTime}>{second.totalTimeFormatted}</span>
@@ -271,9 +291,11 @@ export default function TytanPage() {
                   <div style={{ ...s.podiumBox, ...s.podiumFirst }}>
                     <span style={s.podiumRank}>1</span>
                     {first.avatarUrl ? (
-                      <img src={first.avatarUrl} alt="" style={s.podiumAvatar} />
+                      <div style={s.podiumAvatarWrap}>
+                        <img src={first.avatarUrl} alt="" style={s.podiumAvatarImg} />
+                      </div>
                     ) : (
-                      <div style={s.podiumAvatar} />
+                      <div style={{ ...s.podiumAvatarPlaceholder, transform: 'scale(2)', transformOrigin: 'top center' }} />
                     )}
                     <span style={s.podiumNick}>{first.nick || first.username}</span>
                     <span style={s.podiumTime}>{first.totalTimeFormatted}</span>
@@ -283,9 +305,11 @@ export default function TytanPage() {
                   <div style={{ ...s.podiumBox, ...s.podiumThird }}>
                     <span style={s.podiumRank}>3</span>
                     {third.avatarUrl ? (
-                      <img src={third.avatarUrl} alt="" style={s.podiumAvatar} />
+                      <div style={s.podiumAvatarWrap}>
+                        <img src={third.avatarUrl} alt="" style={s.podiumAvatarImg} />
+                      </div>
                     ) : (
-                      <div style={s.podiumAvatar} />
+                      <div style={{ ...s.podiumAvatarPlaceholder, transform: 'scale(2)', transformOrigin: 'top center' }} />
                     )}
                     <span style={s.podiumNick}>{third.nick || third.username}</span>
                     <span style={s.podiumTime}>{third.totalTimeFormatted}</span>

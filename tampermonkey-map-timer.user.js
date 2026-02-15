@@ -103,20 +103,22 @@
         return GARMORY_OUTFIT_BASE.replace(/\/$/, '') + path;
     }
 
-    /** Fallback: strój z localStorage Margonem (charlist) po nicku postaci. */
+    /** Fallback: strój z localStorage Margonem po nicku postaci. Obsługuje data.charlist lub data = { "userId": [chars] }. */
     function getOutfitFromLocalStorage(heroName) {
         if (!heroName || typeof heroName !== 'string') return null;
         try {
             const raw = localStorage.getItem('Margonem');
             if (!raw) return null;
             const data = JSON.parse(raw);
-            if (!data.charlist || typeof data.charlist !== 'object') return null;
-            const nick = String(heroName).trim();
-            for (const userId of Object.keys(data.charlist)) {
-                const chars = data.charlist[userId];
+            // charlist może być w data.charlist albo cały data to obiekt userId -> tablica postaci
+            const charlist = data && typeof data.charlist === 'object' ? data.charlist : (data && typeof data === 'object' ? data : null);
+            if (!charlist) return null;
+            const nick = String(heroName).trim().toLowerCase();
+            for (const userId of Object.keys(charlist)) {
+                const chars = charlist[userId];
                 if (!Array.isArray(chars)) continue;
                 for (const char of chars) {
-                    if (char && String(char.nick || '').trim() === nick && char.icon) {
+                    if (char && char.icon && String(char.nick || '').trim().toLowerCase() === nick) {
                         const path = String(char.icon).startsWith('/') ? char.icon : '/' + char.icon;
                         return GARMORY_OUTFIT_BASE.replace(/\/$/, '') + path;
                     }
