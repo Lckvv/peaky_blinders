@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Margonem Map Timer
 // @namespace    http://tampermonkey.net/
-// @version      2.1
+// @version      2.2
 // @description  Tracks time spent on target maps and syncs with backend. Supports API key auth for multi-user leaderboards.
 // @author       Lucek
 // @match        https://*.margonem.com/*
@@ -55,6 +55,8 @@
     let worldName = null;
     let heroOutfitUrl = null;  // URL obrazka stroju z Garmory CDN (do rankingu)
     let uiElement = null;
+    let playersListBox = null;
+    let playersListContent = null;
     let settingsOpen = false;
     let sessionFinalized = false;
 
@@ -163,6 +165,39 @@
             world: engine.map?.d?.mainid || engine.hero.d?.world || engine.hero.world || 'Unknown',
             outfitUrl: outfitUrl,
         };
+    }
+
+    /** Lista postaci obecnych na mapie (Engine.others / g.other). */
+    function getPlayersOnMap() {
+        const engine = getEngine();
+        if (!engine) return [];
+        try {
+            if (typeof engine.others !== 'undefined' && typeof engine.others.check === 'function') {
+                const othersMap = engine.others.check();
+                if (!othersMap || typeof othersMap !== 'object') return [];
+                return Object.keys(othersMap)
+                    .map(function (key) {
+                        const o = othersMap[key];
+                        const d = o && o.d != null ? o.d : o;
+                        if (!d || !d.nick) return null;
+                        return { nick: d.nick, lvl: d.lvl, prof: d.prof || '' };
+                    })
+                    .filter(Boolean);
+            }
+            if (typeof window.g !== 'undefined' && window.g && window.g.other) {
+                const other = window.g.other;
+                return Object.keys(other)
+                    .map(function (key) {
+                        const d = other[key];
+                        if (!d || !d.nick) return null;
+                        return { nick: d.nick, lvl: d.lvl, prof: d.prof || '' };
+                    })
+                    .filter(Boolean);
+            }
+        } catch (e) {
+            if (CONFIG.DEBUG) log('getPlayersOnMap error:', e);
+        }
+        return [];
     }
 
     function findTarget(mapName) {
@@ -397,6 +432,7 @@
             }
             hideTimerUI();
         }
+        if (playersListContent) updatePlayersListUI();
     }
 
     // ================================================================
@@ -427,24 +463,66 @@
     }
 
     // ================================================================
-    //  UI — Settings panel
+    //  UI — Lista postaci na mapie (prawy dolny róg) + przycisk ustawień
     // ================================================================
-    function createSettingsButton() {
-        const btn = document.createElement('div');
-        btn.id = 'map-timer-settings-btn';
-        btn.textContent = '⏱';
-        btn.title = 'Map Timer Settings';
-        btn.style.cssText = `
-            position: fixed; bottom: 10px; right: 10px; width: 36px; height: 36px;
-            background: #2c3e50; color: #ecf0f1; border-radius: 50%; cursor: pointer;
-            display: flex; align-items: center; justify-content: center; font-size: 18px;
-            z-index: 99999; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-            transition: background 0.2s;
+    function createPlayersListBox() {
+        if (playersListBox) return;
+        playersListBox = document.createElement('div');
+        playersListBox.id = 'map-timer-players-box';
+        playersListBox.style.cssText = `
+            position: fixed; bottom: 10px; right: 10px; min-width: 180px; max-width: 260px;
+            background: #1a1a2e; color: #eee; border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5); z-index: 99999;
+            font-family: Arial, sans-serif; font-size: 12px; overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.08);
         `;
-        btn.addEventListener('mouseenter', () => btn.style.background = '#34495e');
-        btn.addEventListener('mouseleave', () => btn.style.background = '#2c3e50');
-        btn.addEventListener('click', toggleSettings);
-        document.body.appendChild(btn);
+        playersListContent = document.createElement('div');
+        playersListContent.style.cssText = `
+            padding: 10px 12px; max-height: 220px; overflow-y: auto;
+        `;
+        const header = document.createElement('div');
+        header.style.cssText = `
+            background: #16213e; padding: 8px 12px; font-size: 13px; font-weight: bold;
+            display: flex; justify-content: space-between; align-items: center;
+        `;
+        header.innerHTML = '<span>Postaci na mapie</span>';
+        const settingsBtn = document.createElement('button');
+        settingsBtn.textContent = '⚙';
+        settingsBtn.title = 'Ustawienia Map Timer';
+        settingsBtn.style.cssText = `
+            background: transparent; border: none; color: #aaa; cursor: pointer;
+            font-size: 14px; padding: 2px 6px; border-radius: 4px;
+        `;
+        settingsBtn.addEventListener('mouseenter', function () { settingsBtn.style.color = '#ecf0f1'; });
+        settingsBtn.addEventListener('mouseleave', function () { settingsBtn.style.color = '#aaa'; });
+        settingsBtn.addEventListener('click', toggleSettings);
+        header.appendChild(settingsBtn);
+        playersListBox.appendChild(header);
+        playersListBox.appendChild(playersListContent);
+        document.body.appendChild(playersListBox);
+        updatePlayersListUI();
+    }
+
+    function updatePlayersListUI() {
+        if (!playersListContent) return;
+        const players = getPlayersOnMap();
+        if (players.length === 0) {
+            playersListContent.innerHTML = '<div style="color:#888; font-size:11px;">Brak innych postaci na mapie</div>';
+            return;
+        }
+        playersListContent.innerHTML = players
+            .map(function (p) {
+                const lvlProf = [p.lvl, p.prof].filter(Boolean).join(' ');
+                const extra = lvlProf ? ' <span style="color:#888; font-size:10px;">(' + lvlProf + ')</span>' : '';
+                return '<div style="padding:3px 0; border-bottom:1px solid rgba(255,255,255,0.06);">' + escapeHtml(p.nick) + extra + '</div>';
+            })
+            .join('');
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     function toggleSettings() {
@@ -471,7 +549,7 @@
         panel.innerHTML = `
             <div style="background:#16213e; padding:12px 16px; font-size:15px; font-weight:bold; display:flex; justify-content:space-between; align-items:center;">
                 <span>⏱ Map Timer</span>
-                <span style="font-size:11px; color:#888;">v2.0</span>
+                <span style="font-size:11px; color:#888;">v2.2</span>
             </div>
             <div style="padding:16px;">
                 <div style="margin-bottom:12px;">
@@ -565,13 +643,11 @@
         log(`   BACKEND_URL: ${CONFIG.BACKEND_URL || '(pusty — ustaw w ⚙️)'}`);
         log(`   API Key: ${CONFIG.API_KEY ? '✅ ustawiony' : '❌ BRAK — kliknij ⏱ w rogu i wklej klucz, potem Zapisz'}`);
 
-        createSettingsButton();
-
-        const waitForEngine = setInterval(() => {
+        const waitForEngine = setInterval(function () {
             if (getEngine()) {
                 clearInterval(waitForEngine);
                 log('Engine znaleziony ✅');
-
+                createPlayersListBox();
                 flushPending();
                 setInterval(tick, CONFIG.CHECK_INTERVAL);
                 tick();
