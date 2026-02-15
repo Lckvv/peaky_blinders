@@ -1,21 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readFileSync, existsSync } from 'fs';
-import { join } from 'path';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 
+const SCRIPT_VERSION = '2.2';
+
 // GET /api/script/install.user.js?token=JWT
-// Tampermonkey auto-detects URLs ending in .user.js and opens install dialog
+// Serwuje LOADER â€“ maĹ‚y skrypt, ktĂłry Ĺ‚aduje wĹ‚aĹ›ciwy kod z serwera (ochrona oryginaĹ‚u).
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get('token');
 
   if (!token) {
-    return jsError('Missing token. Go to /dashboard and click "Install Script".');
+    return jsError('Missing token. Go to the site and click "Install Script".');
   }
 
   const payload = await verifyToken(token);
   if (!payload) {
-    return jsError('Invalid or expired token. Log in again at /dashboard.');
+    return jsError('Invalid or expired token. Log in again.');
   }
 
   const user = await prisma.user.findUnique({
@@ -26,19 +26,17 @@ export async function GET(request: NextRequest) {
   });
 
   if (!user || user.apiKeys.length === 0) {
-    return jsError('No active API key. Generate one at /dashboard first.');
+    return jsError('No active API key. Generate one on the site first.');
   }
 
-  const apiKey = user.apiKeys[0].key;
   const proto = request.headers.get('x-forwarded-proto') || 'https';
   const host = request.headers.get('host') || 'localhost:3000';
   const backendUrl = `${proto}://${host}`;
+  const scriptUrl = `${backendUrl}/api/script/serve.user.js?token=${encodeURIComponent(token)}&v=${SCRIPT_VERSION}`;
 
-  // Pełny skrypt z repo (stroj, localStorage Margonem) lub fallback do minimalnego
-  const script = tryFullScript(apiKey, backendUrl, user.username)
-    ?? generateScript(apiKey, backendUrl, user.username);
+  const loader = generateLoader(scriptUrl, backendUrl, SCRIPT_VERSION);
 
-  return new NextResponse(script, {
+  return new NextResponse(loader, {
     headers: {
       'Content-Type': 'text/javascript; charset=utf-8',
       'Cache-Control': 'no-store',
@@ -46,23 +44,27 @@ export async function GET(request: NextRequest) {
   });
 }
 
-function escapeForJsSingleQuote(s: string): string {
-  return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-}
+function generateLoader(scriptUrl: string, backendUrl: string, version: string): string {
+  return `// ==UserScript==
+// @name         Margonem Map Timer
+// @namespace    http://tampermonkey.net/
+// @version      ${version}
+// @description  Loader - laduje skrypt z serwera (Peaky Blinders Map Timer)
+// @author       Lucek
+// @match        https://*.margonem.com/*
+// @connect      *
+// @grant        none
+// ==/UserScript==
 
-function tryFullScript(apiKey: string, backendUrl: string, username: string): string | null {
-  try {
-    const path = join(process.cwd(), 'tampermonkey-map-timer.user.js');
-    if (!existsSync(path)) return null;
-    let code = readFileSync(path, 'utf8');
-    const keyEscaped = escapeForJsSingleQuote(apiKey);
-    const urlEscaped = escapeForJsSingleQuote(backendUrl);
-    code = code.replace(/GM_getValue\s*\(\s*['"]api_key['"]\s*,\s*['"][^'"]*['"]\s*\)/, `GM_getValue('api_key', '${keyEscaped}')`);
-    code = code.replace(/GM_getValue\s*\(\s*['"]backend_url['"]\s*,\s*['"][^'"]*['"]\s*\)/, `GM_getValue('backend_url', '${urlEscaped}')`);
-    return code;
-  } catch {
-    return null;
-  }
+(function () {
+  "use strict";
+  var url = "${scriptUrl.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}";
+  var script = document.createElement("script");
+  script.src = url;
+  script.onload = function () { this.remove(); };
+  (document.head || document.documentElement).appendChild(script);
+})();
+`;
 }
 
 function jsError(msg: string) {
@@ -71,325 +73,3 @@ function jsError(msg: string) {
     headers: { 'Content-Type': 'text/javascript; charset=utf-8' },
   });
 }
-
-function generateScript(apiKey: string, backendUrl: string, username: string): string {
-  // Use backtick-free approach to avoid escaping issues
-  const lines = [
-    '// ==UserScript==',
-    '// @name         Margonem Map Timer',
-    '// @namespace    http://tampermonkey.net/',
-    '// @version      2.1',
-    '// @description  Tracks time on target maps. Auto-configured for ' + username + '.',
-    '// @author       Lucek',
-    '// @match        https://*.margonem.com/*',
-    '// @grant        GM_xmlhttpRequest',
-    '// @grant        GM_getValue',
-    '// @grant        GM_setValue',
-    '// @connect      *',
-    '// ==/UserScript==',
-    '',
-    '(function () {',
-    '    "use strict";',
-    '',
-    '    // ================================================================',
-    '    //  CONFIG',
-    '    // ================================================================',
-    '    var CONFIG = {',
-    '        API_KEY: GM_getValue("api_key", "' + apiKey + '"),',
-    '        BACKEND_URL: GM_getValue("backend_url", "' + backendUrl + '"),',
-    '        TARGETS: [',
-    "            { map: \"Caerbannog's Grotto - 2nd Chamber\", monster: \"Kic\" },",
-    '            { map: "Shimmering Cavern", monster: "Orla" },',
-    '            { map: "Bandits\' Hideout - Vault", monster: "Renegat" },',
-    '            { map: "Politraka Volcano - Infernal Abyss", monster: "Arcy" },',
-    '            { map: "Chamber of Bloody Rites", monster: "Przyzywacz" },',
-    '            { map: "Hall of Ruined Temple", monster: "Barbatos" },',
-    '            { map: "Ice Throne Room", monster: "Tanroth" },',
-    '        ],',
-    '        CHECK_INTERVAL: 1000,',
-    '        MIN_TIME_TO_SEND: 5,',
-    '        DEBUG: true',
-    '    };',
-    '',
-    '    // ================================================================',
-    '    //  STATE',
-    '    // ================================================================',
-    '    var currentTarget = null;',
-    '    var sessionStartTime = null;',
-    '    var accumulatedSeconds = 0;',
-    '    var heroName = null;',
-    '    var worldName = null;',
-    '    var uiElement = null;',
-    '',
-    '    // ================================================================',
-    '    //  UTILS',
-    '    // ================================================================',
-    '    function log() {',
-    '        if (CONFIG.DEBUG) console.log.apply(console, ["[MapTimer]"].concat(Array.prototype.slice.call(arguments)));',
-    '    }',
-    '',
-    '    function getEngine() {',
-    '        try { if (typeof Engine !== "undefined" && Engine && Engine.map && Engine.map.d && Engine.map.d.name) return Engine; } catch(e) {}',
-    '        return null;',
-    '    }',
-    '',
-    '    function getCurrentMapName() {',
-    '        var e = getEngine();',
-    '        return e ? e.map.d.name : null;',
-    '    }',
-    '',
-    '    function getHeroInfo() {',
-    '        var e = getEngine();',
-    '        if (!e || !e.hero) return null;',
-    '        var d = e.hero.d || {};',
-    '        return {',
-    '            name: d.nick || e.hero.nick || e.hero.name || "Unknown",',
-    '            world: (e.map && e.map.d && e.map.d.mainid) || d.world || e.hero.world || "Unknown"',
-    '        };',
-    '    }',
-    '',
-    '    function findTarget(mapName) {',
-    '        for (var i = 0; i < CONFIG.TARGETS.length; i++) {',
-    '            if (CONFIG.TARGETS[i].map === mapName) return CONFIG.TARGETS[i];',
-    '        }',
-    '        return null;',
-    '    }',
-    '',
-    '    function formatTime(s) {',
-    '        var h = Math.floor(s / 3600);',
-    '        var m = Math.floor((s % 3600) / 60);',
-    '        var sec = s % 60;',
-    '        if (h > 0) return h + "h " + m + "m " + sec + "s";',
-    '        if (m > 0) return m + "m " + sec + "s";',
-    '        return sec + "s";',
-    '    }',
-    '',
-    '    // ================================================================',
-    '    //  API',
-    '    // ================================================================',
-    '    function sendToBackend(seconds, monster, map, reason) {',
-    '        if (seconds < CONFIG.MIN_TIME_TO_SEND) return;',
-    '        if (!CONFIG.API_KEY) { saveLocally({ time: seconds, monster: monster, map: map, hero: heroName, world: worldName, reason: reason, timestamp: new Date().toISOString() }); return; }',
-    '',
-    '        var payload = { time: seconds, monster: monster, map: map, hero: heroName || "Unknown", world: worldName || "Unknown", reason: reason, timestamp: new Date().toISOString() };',
-    '        log("Wysylam:", JSON.stringify(payload));',
-    '',
-    '        GM_xmlhttpRequest({',
-    '            url: CONFIG.BACKEND_URL + "/api/timer/session",',
-    '            method: "POST",',
-    '            headers: { "Content-Type": "application/json", "X-API-Key": CONFIG.API_KEY },',
-    '            data: JSON.stringify(payload),',
-    '            onload: function(res) {',
-    '                if (res.status >= 200 && res.status < 300) {',
-    '                    try {',
-    '                        var data = JSON.parse(res.responseText);',
-    '                        log("Zapisano! Total: " + data.totalTimeFormatted);',
-    '                        showToast("Zapisano " + formatTime(seconds) + " | lacznie: " + data.totalTimeFormatted);',
-    '                    } catch(e) { log("Zapisano"); }',
-    '                } else if (res.status === 401) {',
-    '                    showToast("Nieprawidlowy API key!", "error");',
-    '                    saveLocally(payload);',
-    '                } else {',
-    '                    log("Blad serwera: " + res.status);',
-    '                    saveLocally(payload);',
-    '                }',
-    '            },',
-    '            onerror: function() { saveLocally(payload); },',
-    '            ontimeout: function() { saveLocally(payload); }',
-    '        });',
-    '    }',
-    '',
-    '    function saveLocally(payload) {',
-    '        try {',
-    '            var p = JSON.parse(localStorage.getItem("maptimer_pending") || "[]");',
-    '            p.push(payload);',
-    '            localStorage.setItem("maptimer_pending", JSON.stringify(p));',
-    '            log("Zapisano lokalnie (" + p.length + " oczekujacych)");',
-    '        } catch(e) {}',
-    '    }',
-    '',
-    '    function flushPending() {',
-    '        if (!CONFIG.API_KEY) return;',
-    '        try {',
-    '            var p = JSON.parse(localStorage.getItem("maptimer_pending") || "[]");',
-    '            if (!p.length) return;',
-    '            log("Wysylam " + p.length + " zaległych...");',
-    '            localStorage.setItem("maptimer_pending", "[]");',
-    '            p.forEach(function(payload) {',
-    '                GM_xmlhttpRequest({',
-    '                    url: CONFIG.BACKEND_URL + "/api/timer/session",',
-    '                    method: "POST",',
-    '                    headers: { "Content-Type": "application/json", "X-API-Key": CONFIG.API_KEY },',
-    '                    data: JSON.stringify(payload),',
-    '                    onload: function(res) { if (res.status < 200 || res.status >= 300) saveLocally(payload); },',
-    '                    onerror: function() { saveLocally(payload); }',
-    '                });',
-    '            });',
-    '        } catch(e) {}',
-    '    }',
-    '',
-    '    // ================================================================',
-    '    //  TRACKING',
-    '    // ================================================================',
-    '    function onEnteredTargetMap(target) {',
-    '        currentTarget = target;',
-    '        sessionStartTime = Date.now();',
-    '        accumulatedSeconds = 0;',
-    '        var info = getHeroInfo();',
-    '        heroName = info ? info.name : null;',
-    '        worldName = info ? info.world : null;',
-    '        log("Na mapie: " + target.map + " — " + target.monster + " jako " + heroName);',
-    '    }',
-    '',
-    '    function onLeftTargetMap(reason) {',
-    '        if (!currentTarget) return;',
-    '        if (sessionStartTime) accumulatedSeconds = Math.floor((Date.now() - sessionStartTime) / 1000);',
-    '        log("Opuscil mape po " + accumulatedSeconds + "s (" + reason + ")");',
-    '        sendToBackend(accumulatedSeconds, currentTarget.monster, currentTarget.map, reason);',
-    '        currentTarget = null;',
-    '        sessionStartTime = null;',
-    '        accumulatedSeconds = 0;',
-    '    }',
-    '',
-    '    function tick() {',
-    '        var mapName = getCurrentMapName();',
-    '        var target = mapName ? findTarget(mapName) : null;',
-    '        if (target) {',
-    '            if (!currentTarget) onEnteredTargetMap(target);',
-    '            if (sessionStartTime) accumulatedSeconds = Math.floor((Date.now() - sessionStartTime) / 1000);',
-    '            updateTimerUI();',
-    '        } else {',
-    '            if (currentTarget) onLeftTargetMap("map_change");',
-    '            hideTimerUI();',
-    '        }',
-    '    }',
-    '',
-    '    // ================================================================',
-    '    //  UI — Timer',
-    '    // ================================================================',
-    '    function createTimerUI() {',
-    '        uiElement = document.createElement("div");',
-    '        uiElement.style.cssText = "position:fixed;top:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.85);color:#00ff88;padding:6px 16px;border-radius:6px;font-family:Consolas,monospace;font-size:14px;z-index:99999;display:none;border:1px solid rgba(0,255,136,0.3);text-shadow:0 0 4px rgba(0,255,136,0.5);pointer-events:none;";',
-    '        document.body.appendChild(uiElement);',
-    '    }',
-    '',
-    '    function updateTimerUI() {',
-    '        if (!uiElement) createTimerUI();',
-    '        uiElement.style.display = "block";',
-    '        var dot = CONFIG.API_KEY ? "\\u{1F7E2}" : "\\u{1F534}";',
-    '        uiElement.textContent = dot + " \\u23F1 " + (currentTarget ? currentTarget.monster : "") + " \\u2014 " + formatTime(accumulatedSeconds);',
-    '    }',
-    '',
-    '    function hideTimerUI() { if (uiElement) uiElement.style.display = "none"; }',
-    '',
-    '    // ================================================================',
-    '    //  UI — Settings',
-    '    // ================================================================',
-    '    function createSettingsButton() {',
-    '        var btn = document.createElement("div");',
-    '        btn.textContent = "\\u23F1";',
-    '        btn.title = "Map Timer Settings";',
-    '        btn.style.cssText = "position:fixed;bottom:10px;right:10px;width:36px;height:36px;background:#2c3e50;color:#ecf0f1;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;z-index:99999;box-shadow:0 2px 8px rgba(0,0,0,0.3);";',
-    '        btn.addEventListener("mouseenter", function() { btn.style.background = "#34495e"; });',
-    '        btn.addEventListener("mouseleave", function() { btn.style.background = "#2c3e50"; });',
-    '        btn.addEventListener("click", toggleSettings);',
-    '        document.body.appendChild(btn);',
-    '    }',
-    '',
-    '    function toggleSettings() {',
-    '        var panel = document.getElementById("mt-settings");',
-    '        if (panel) { panel.remove(); return; }',
-    '',
-    '        panel = document.createElement("div");',
-    '        panel.id = "mt-settings";',
-    '        panel.style.cssText = "position:fixed;bottom:55px;right:10px;width:320px;background:#1a1a2e;color:#eee;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.5);z-index:99999;font-family:Arial,sans-serif;font-size:13px;overflow:hidden;";',
-    '',
-    '        var pending = 0;',
-    '        try { pending = JSON.parse(localStorage.getItem("maptimer_pending") || "[]").length; } catch(e) {}',
-    '',
-    '        panel.innerHTML = \'<div style="background:#16213e;padding:12px 16px;font-weight:bold;">\\u23F1 Map Timer <span style="float:right;font-size:11px;color:#888;">v2.1</span></div>\'',
-    '            + \'<div style="padding:16px;">\'',
-    '            + \'<div style="margin-bottom:12px;"><label style="display:block;margin-bottom:4px;color:#aaa;font-size:11px;">BACKEND URL</label><input id="mt-url" value="\' + CONFIG.BACKEND_URL + \'" style="width:100%;padding:8px;background:#0f3460;border:1px solid #333;border-radius:6px;color:#fff;font-size:12px;box-sizing:border-box;" /></div>\'',
-    '            + \'<div style="margin-bottom:12px;"><label style="display:block;margin-bottom:4px;color:#aaa;font-size:11px;">API KEY</label><input id="mt-key" value="\' + CONFIG.API_KEY + \'" style="width:100%;padding:8px;background:#0f3460;border:1px solid #333;border-radius:6px;color:#fff;font-size:12px;box-sizing:border-box;font-family:monospace;" /></div>\'',
-    '            + \'<div style="display:flex;gap:8px;margin-bottom:12px;"><button id="mt-save" style="flex:1;padding:8px;background:#27ae60;color:#fff;border:none;border-radius:6px;cursor:pointer;">Zapisz</button><button id="mt-flush" style="flex:1;padding:8px;background:#e67e22;color:#fff;border:none;border-radius:6px;cursor:pointer;">Wyslij (\' + pending + \')</button></div>\'',
-    '            + \'<div style="background:#0a0a1a;border-radius:6px;padding:10px;font-size:11px;color:#888;">\'',
-    '            + "Status: " + (CONFIG.API_KEY ? \'<span style="color:#2ecc71;">OK</span>\' : \'<span style="color:#e74c3c;">Brak klucza</span>\') + "<br>"',
-    '            + "Mapa: " + (currentTarget ? currentTarget.monster : "nie na celu") + "<br>"',
-    '            + "Czas: " + (currentTarget ? formatTime(accumulatedSeconds) : "-") + "<br>"',
-    '            + "Postac: " + (heroName || "-") + "<br>"',
-    '            + "Zalegle: " + pending',
-    '            + \'</div></div>\';',
-    '',
-    '        document.body.appendChild(panel);',
-    '',
-    '        document.getElementById("mt-save").onclick = function() {',
-    '            CONFIG.BACKEND_URL = document.getElementById("mt-url").value.trim().replace(/\\/$/, "");',
-    '            CONFIG.API_KEY = document.getElementById("mt-key").value.trim();',
-    '            GM_setValue("backend_url", CONFIG.BACKEND_URL);',
-    '            GM_setValue("api_key", CONFIG.API_KEY);',
-    '            showToast("Zapisano!");',
-    '            panel.remove();',
-    '        };',
-    '',
-    '        document.getElementById("mt-flush").onclick = function() {',
-    '            flushPending();',
-    '            showToast("Wysylam...");',
-    '            panel.remove();',
-    '        };',
-    '    }',
-    '',
-    '    // ================================================================',
-    '    //  UI — Toast',
-    '    // ================================================================',
-    '    function showToast(msg, type) {',
-    '        var t = document.createElement("div");',
-    '        t.style.cssText = "position:fixed;bottom:60px;left:50%;transform:translateX(-50%);background:" + (type === "error" ? "#e74c3c" : "#27ae60") + ";color:#fff;padding:10px 20px;border-radius:8px;font-family:Arial,sans-serif;font-size:13px;z-index:100000;box-shadow:0 2px 10px rgba(0,0,0,0.3);transition:opacity 0.5s;";',
-    '        t.textContent = msg;',
-    '        document.body.appendChild(t);',
-    '        setTimeout(function() { t.style.opacity = "0"; setTimeout(function() { t.remove(); }, 500); }, 3000);',
-    '    }',
-    '',
-    '    // ================================================================',
-    '    //  EVENTS',
-    '    // ================================================================',
-    '    window.addEventListener("beforeunload", function() {',
-    '        if (currentTarget && sessionStartTime) {',
-    '            var s = Math.floor((Date.now() - sessionStartTime) / 1000);',
-    '            sendToBackend(s, currentTarget.monster, currentTarget.map, "tab_close");',
-    '            if (s >= CONFIG.MIN_TIME_TO_SEND) {',
-    '                saveLocally({ time: s, monster: currentTarget.monster, map: currentTarget.map, hero: heroName, world: worldName, reason: "tab_close_fallback", timestamp: new Date().toISOString() });',
-    '            }',
-    '        }',
-    '    });',
-    '',
-    '    // ================================================================',
-    '    //  INIT',
-    '    // ================================================================',
-    '    log("Start v2.1 (user: ' + username + ')");',
-    '    log("API Key: " + (CONFIG.API_KEY ? "set" : "missing"));',
-    '    createSettingsButton();',
-    '',
-    '    var wait = setInterval(function() {',
-    '        if (getEngine()) {',
-    '            clearInterval(wait);',
-    '            log("Engine found");',
-    '            flushPending();',
-    '            setInterval(tick, CONFIG.CHECK_INTERVAL);',
-    '            tick();',
-    '        }',
-    '    }, 500);',
-    '',
-    '    setTimeout(function() { if (!getEngine()) { clearInterval(wait); log("Engine not found after 30s"); } }, 30000);',
-    '',
-    '    window.MapTimer = {',
-    '        getState: function() { return { currentTarget: currentTarget, seconds: accumulatedSeconds, hero: heroName }; },',
-    '        forceFlush: function() { onLeftTargetMap("manual_flush"); },',
-    '        flushPending: flushPending,',
-    '        addTarget: function(map, monster) { CONFIG.TARGETS.push({ map: map, monster: monster }); }',
-    '    };',
-    '})();',
-  ];
-
-  return lines.join('\n');
-}
-
