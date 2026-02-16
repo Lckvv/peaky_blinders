@@ -35,7 +35,8 @@ export type ReservationItem = {
 
 export const RESERVATION_ITEMS_BY_TITAN: Record<string, ReservationItem[]> = {
   kic: [
-    { key: 'bambosze', label: 'Bambosze', gifFile: 'bambosze.gif', pngFile: 'bambosze.png' },
+    { key: 'bambosze', label: 'Bambosze', gifFile: 'kbunny_buty2.gif', pngFile: 'bambosze_scr.png' },
+    { key: 'palka', label: 'Palka', gifFile: 'krolik_craft_01.gif', pngFile: 'palka.png' },
     { key: 'buty', label: 'Buty', gifFile: 'kbunny_buty2.gif', pngFile: 'bambosze_scr.png' },
     { key: 'pier_woj', label: 'Pier Woj', gifFile: 'pierscien885.gif', pngFile: 'pier_woj.png' },
     { key: 'pier_fiz', label: 'Pier Fiz', gifFile: 'pierscien883.gif', pngFile: 'pier_fiz.png' },

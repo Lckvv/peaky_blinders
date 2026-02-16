@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 const SLUG_TO_NAME: Record<string, string> = {
   orla: 'Orla',
@@ -89,7 +89,7 @@ const s: Record<string, React.CSSProperties> = {
     flexDirection: 'column' as const,
     alignItems: 'center',
     justifyContent: 'flex-start',
-    padding: '12px 16px 16px',
+    padding: '14px 16px 18px',
     background: 'linear-gradient(180deg, #1e2a4a 0%, #16213e 40%, #0f1629 100%)',
     borderRadius: '12px 12px 0 0',
     border: '1px solid #2a2a4a',
@@ -101,23 +101,21 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column' as const,
     alignItems: 'center',
-    flex: 1,
     width: '100%',
-    minHeight: 0,
+    gap: 6,
   },
   podiumOutfitCenter: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
-    minHeight: 72,
-    marginTop: 4,
-    marginBottom: 4,
+    flexShrink: 0,
+    width: 64,
+    height: 96,
+    margin: '4px 0',
   },
   podiumFirst: {
     order: 2,
-    height: 200,
-    minHeight: 200,
+    minHeight: 220,
     transform: 'scale(1.05)',
     borderColor: '#c9a227',
     background: 'linear-gradient(180deg, #2a3f5f 0%, #1a2744 35%, #0f1629 100%)',
@@ -125,14 +123,12 @@ const s: Record<string, React.CSSProperties> = {
   },
   podiumSecond: {
     order: 3,
-    height: 150,
-    minHeight: 150,
+    minHeight: 200,
     borderColor: '#6b7280',
   },
   podiumThird: {
     order: 1,
-    height: 110,
-    minHeight: 110,
+    minHeight: 180,
     borderColor: '#92400e',
   },
   /* Fragment 32×48 px (lew górny róg GIF – pierwsza postawa frontowa) */
@@ -160,9 +156,24 @@ const s: Record<string, React.CSSProperties> = {
     border: '2px solid #2a2a4a',
     borderRadius: 6,
   },
-  podiumRank: { fontSize: 11, fontWeight: 700, color: '#888', marginBottom: 2 },
-  podiumNick: { fontSize: 14, fontWeight: 700, color: '#e2b714', textAlign: 'center' as const, lineHeight: 1.2 },
-  podiumTime: { fontSize: 13, color: '#2ecc71', fontFamily: 'monospace', marginTop: 4 },
+  podiumRank: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 28,
+    height: 28,
+    borderRadius: '50%',
+    fontSize: 14,
+    fontWeight: 800,
+    color: '#fff',
+    marginBottom: 6,
+    flexShrink: 0,
+  },
+  podiumRank1: { background: 'linear-gradient(135deg, #c9a227 0%, #a67c00 100%)', boxShadow: '0 2px 8px rgba(201, 162, 39, 0.4)' },
+  podiumRank2: { background: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)', boxShadow: '0 2px 8px rgba(107, 114, 128, 0.4)' },
+  podiumRank3: { background: 'linear-gradient(135deg, #92400e 0%, #78350f 100%)', boxShadow: '0 2px 8px rgba(146, 64, 14, 0.4)' },
+  podiumNick: { fontSize: 13, fontWeight: 700, color: '#e2b714', textAlign: 'center' as const, lineHeight: 1.25, flexShrink: 0, wordBreak: 'break-word' as const },
+  podiumTime: { fontSize: 12, color: '#2ecc71', fontFamily: 'monospace', flexShrink: 0 },
   card: { background: '#16213e', borderRadius: 12, padding: 20, marginBottom: 16, border: '1px solid #2a2a4a' },
   table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: 13 },
   th: { textAlign: 'left' as const, padding: '10px 12px', background: '#0f0f23', color: '#8892b0', fontWeight: 600, fontSize: 11 },
@@ -184,25 +195,28 @@ export default function TytanPage() {
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedPhaseId, setSelectedPhaseId] = useState<string>('');
+  const initialDefaultAppliedRef = useRef(false);
 
   useEffect(() => {
     if (!monsterName) {
       setLoading(false);
       return;
     }
+    initialDefaultAppliedRef.current = false;
     setSelectedPhaseId('');
     loadRanking(monsterName, null);
   }, [monsterName]);
 
-  // Domyślnie: jeśli jest aktywna faza, pokaż ją zamiast "łącznie"
+  // Tylko przy pierwszym załadowaniu: jeśli jest aktywna faza, ustaw ją zamiast "łącznie"
   useEffect(() => {
-    if (!data || !monsterName || selectedPhaseId !== '') return;
+    if (!data || !monsterName || initialDefaultAppliedRef.current) return;
     const active = data.phases?.find((p: PhaseOption) => p.isActive);
     if (active) {
       setSelectedPhaseId(active.id);
       loadRanking(monsterName, active.id);
     }
-  }, [data, monsterName, selectedPhaseId]);
+    initialDefaultAppliedRef.current = true;
+  }, [data, monsterName]);
 
   async function loadRanking(monster: string, phaseId: string | null) {
     setLoading(true);
@@ -301,7 +315,7 @@ export default function TytanPage() {
                 <div style={s.podiumWrap}>
                   {third && (
                     <div style={{ ...s.podiumBox, ...s.podiumThird }}>
-                      <span style={s.podiumRank}>3</span>
+                      <span style={{ ...s.podiumRank, ...s.podiumRank3 }}>3</span>
                       <div style={s.podiumBoxContent}>
                         <span style={s.podiumNick}>{third.nick || third.username}</span>
                         <div style={s.podiumOutfitCenter}>
@@ -319,7 +333,7 @@ export default function TytanPage() {
                   )}
                   {first && (
                     <div style={{ ...s.podiumBox, ...s.podiumFirst }}>
-                      <span style={s.podiumRank}>1</span>
+                      <span style={{ ...s.podiumRank, ...s.podiumRank1 }}>1</span>
                       <div style={s.podiumBoxContent}>
                         <span style={s.podiumNick}>{first.nick || first.username}</span>
                         <div style={s.podiumOutfitCenter}>
@@ -337,7 +351,7 @@ export default function TytanPage() {
                   )}
                   {second && (
                     <div style={{ ...s.podiumBox, ...s.podiumSecond }}>
-                      <span style={s.podiumRank}>2</span>
+                      <span style={{ ...s.podiumRank, ...s.podiumRank2 }}>2</span>
                       <div style={s.podiumBoxContent}>
                         <span style={s.podiumNick}>{second.nick || second.username}</span>
                         <div style={s.podiumOutfitCenter}>
