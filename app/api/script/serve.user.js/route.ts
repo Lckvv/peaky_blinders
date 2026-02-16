@@ -34,8 +34,9 @@ export async function GET(request: NextRequest) {
         const apiKey = user.apiKeys[0].key;
         const keyEscaped = String(apiKey).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         const urlEscaped = String(backendUrl).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        code = code.replace(/GM_getValue\s*\(\s*['"]api_key['"]\s*,\s*['"][^'"]*['"]\s*\)/, `GM_getValue('api_key', '${keyEscaped}')`);
-        code = code.replace(/GM_getValue\s*\(\s*['"]backend_url['"]\s*,\s*['"][^'"]*['"]\s*\)/, `GM_getValue('backend_url', '${urlEscaped}')`);
+        // Zamieniamy wszystkie wystąpienia — inaczej refreshConfigFromStorage() nadpisze klucz/URL pustym (GM_getValue z pustego storage zwraca default '').
+        code = code.replace(/GM_getValue\s*\(\s*['"]api_key['"]\s*,\s*['"][^'"]*['"]\s*\)/g, `GM_getValue('api_key', '${keyEscaped}')`);
+        code = code.replace(/GM_getValue\s*\(\s*['"]backend_url['"]\s*,\s*['"][^'"]*['"]\s*\)/g, `GM_getValue('backend_url', '${urlEscaped}')`);
       }
     }
   }
