@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Margonem Map Timer
 // @namespace    http://tampermonkey.net/
-// @version      2.2
+// @version      2.3
 // @description  Tracks time spent on target maps and syncs with backend. Supports API key auth for multi-user leaderboards.
 // @author       Lucek
 // @match        https://*.margonem.com/*
@@ -55,10 +55,14 @@
     let worldName = null;
     let heroOutfitUrl = null;  // URL obrazka stroju z Garmory CDN (do rankingu)
     let uiElement = null;
-    let playersListBox = null;
-    let playersListContent = null;
-    let settingsOpen = false;
+    let kolejkiWrap = null;
+    let kolejkiListPanel = null;
+    let kolejkiListContent = null;
+    let kolejkiOpen = false;
     let sessionFinalized = false;
+    let reservationsCache = { monster: null, data: null, ts: 0 };
+    const RESERVATIONS_CACHE_TTL_MS = 2 * 60 * 1000;
+    const PRIORITY_COLORS = { 1: '#C8F527', 2: '#27F584', 3: '#2768F5' };
 
     function refreshConfigFromStorage() {
         CONFIG.API_KEY = GM_getValue('api_key', '');
@@ -228,7 +232,7 @@
         }
 
         if (!CONFIG.API_KEY) {
-            log('⚠️ Brak API key! Otwórz ustawienia (kliknij ikonę ⚙️) i wklej swój klucz.');
+            log('⚠️ Brak API key! Zainstaluj skrypt ze strony (link z tokenem) — wtedy key będzie ustawiony automatycznie.');
             showToast('⚠️ Brak API key — nie zapisuję sesji.', 'error');
             return;
         }
@@ -432,7 +436,31 @@
             }
             hideTimerUI();
         }
-        if (playersListContent) updatePlayersListUI();
+        if (kolejkiListContent) updateKolejkiListUI();
+    }
+
+    /** Pobiera rezerwacje dla potwora (cache 2 min). */
+    function fetchReservationsForMonster(monster) {
+        if (!monster || !CONFIG.API_KEY) return [];
+        const now = Date.now();
+        if (reservationsCache.monster === monster && reservationsCache.data && (now - reservationsCache.ts) < RESERVATIONS_CACHE_TTL_MS) {
+            return reservationsCache.data;
+        }
+        var out = [];
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/reservations?monster=' + encodeURIComponent(monster), false);
+        xhr.setRequestHeader('X-API-Key', CONFIG.API_KEY);
+        try {
+            xhr.send();
+            if (xhr.status === 200) {
+                var json = JSON.parse(xhr.responseText);
+                out = json.reservations || [];
+                reservationsCache = { monster: monster, data: out, ts: now };
+            }
+        } catch (e) {
+            if (CONFIG.DEBUG) log('fetchReservations error:', e);
+        }
+        return out;
     }
 
     // ================================================================
@@ -463,60 +491,123 @@
     }
 
     // ================================================================
-    //  UI — Lista postaci na mapie (prawy dolny róg) + przycisk ustawień
+    //  UI — Kolejki: ikonka (przesuwalna), klik = lista graczy; rezerwacje na mapie Kic
     // ================================================================
-    function createPlayersListBox() {
-        if (playersListBox) return;
-        playersListBox = document.createElement('div');
-        playersListBox.id = 'map-timer-players-box';
-        playersListBox.style.cssText = `
-            position: fixed; bottom: 10px; right: 10px; min-width: 180px; max-width: 260px;
-            background: #1a1a2e; color: #eee; border-radius: 10px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5); z-index: 99999;
-            font-family: Arial, sans-serif; font-size: 12px; overflow: hidden;
-            border: 1px solid rgba(255,255,255,0.08);
-        `;
-        playersListContent = document.createElement('div');
-        playersListContent.style.cssText = `
-            padding: 10px 12px; max-height: 220px; overflow-y: auto;
-        `;
-        const header = document.createElement('div');
-        header.style.cssText = `
-            background: #16213e; padding: 8px 12px; font-size: 13px; font-weight: bold;
-            display: flex; justify-content: space-between; align-items: center;
-        `;
-        header.innerHTML = '<span>Postaci na mapie</span>';
-        const settingsBtn = document.createElement('button');
-        settingsBtn.textContent = '⚙';
-        settingsBtn.title = 'Ustawienia Map Timer';
-        settingsBtn.style.cssText = `
-            background: transparent; border: none; color: #aaa; cursor: pointer;
-            font-size: 14px; padding: 2px 6px; border-radius: 4px;
-        `;
-        settingsBtn.addEventListener('mouseenter', function () { settingsBtn.style.color = '#ecf0f1'; });
-        settingsBtn.addEventListener('mouseleave', function () { settingsBtn.style.color = '#aaa'; });
-        settingsBtn.addEventListener('click', toggleSettings);
-        header.appendChild(settingsBtn);
-        playersListBox.appendChild(header);
-        playersListBox.appendChild(playersListContent);
-        document.body.appendChild(playersListBox);
-        updatePlayersListUI();
+    function getStoredKolejkiPos() {
+        try {
+            if (typeof GM_getValue === 'function') {
+                const v = GM_getValue('kolejki_pos', null);
+                if (v && typeof v.left === 'number' && typeof v.top === 'number') return v;
+            }
+        } catch (e) { /* ignore */ }
+        return { left: Math.max(0, (document.documentElement.clientWidth || 400) - 220), top: Math.max(0, (document.documentElement.clientHeight || 300) - 320) };
     }
 
-    function updatePlayersListUI() {
-        if (!playersListContent) return;
+    function setStoredKolejkiPos(left, top) {
+        try {
+            if (typeof GM_setValue === 'function') GM_setValue('kolejki_pos', { left: left, top: top });
+        } catch (e) { /* ignore */ }
+    }
+
+    function createKolejkiBox() {
+        if (kolejkiWrap) return;
+        const pos = getStoredKolejkiPos();
+        kolejkiWrap = document.createElement('div');
+        kolejkiWrap.id = 'map-timer-kolejki-wrap';
+        kolejkiWrap.style.cssText = 'position:fixed;left:' + pos.left + 'px;top:' + pos.top + 'px;z-index:99998;';
+        kolejkiWrap.innerHTML = '<button type="button" class="map-timer-kolejki-btn" title="Kolejki">📋</button><div class="map-timer-kolejki-panel" style="display:none;"><div class="map-timer-kolejki-title">Kolejki</div><div class="map-timer-kolejki-list-content"></div></div>';
+        const btnStyle = 'background:#1a1a2e;border:1px solid rgba(255,255,255,0.2);color:#eee;width:40px;height:40px;border-radius:10px;cursor:pointer;font-size:18px;box-shadow:0 2px 10px rgba(0,0,0,0.4);';
+        const panelStyle = 'position:absolute;left:0;top:44px;min-width:200px;max-width:280px;background:#1a1a2e;color:#eee;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.08);font-family:Arial,sans-serif;font-size:12px;overflow:hidden;';
+        const titleStyle = 'background:#16213e;padding:8px 12px;font-size:13px;font-weight:bold;';
+        const listStyle = 'padding:8px 12px;max-height:240px;overflow-y:auto;';
+        const styleEl = document.createElement('style');
+        styleEl.textContent = '.map-timer-kolejki-btn{' + btnStyle + '}.map-timer-kolejki-btn:hover{background:#16213e;}.map-timer-kolejki-panel{' + panelStyle + '}.map-timer-kolejki-title{' + titleStyle + '}.map-timer-kolejki-list-content{' + listStyle + '}.map-timer-kolejki-row{padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06);}.map-timer-kolejki-meta{color:#888;font-size:10px;}.map-timer-kolejki-item-wrap{display:inline-block;vertical-align:middle;margin-left:4px;}.map-timer-kolejki-item-gif{width:20px;height:20px;object-fit:contain;cursor:pointer;}.map-timer-kolejki-png-popup{position:fixed;z-index:100001;background:#1a1a2e;padding:4px;border-radius:6px;box-shadow:0 4px 20px rgba(0,0,0,0.6);}.map-timer-kolejki-png-popup img{display:block;max-width:120px;max-height:120px;}';
+        document.head.appendChild(styleEl);
+        document.body.appendChild(kolejkiWrap);
+        kolejkiListPanel = kolejkiWrap.querySelector('.map-timer-kolejki-panel');
+        kolejkiListContent = kolejkiWrap.querySelector('.map-timer-kolejki-list-content');
+
+        const btn = kolejkiWrap.querySelector('.map-timer-kolejki-btn');
+        const drag = { active: false, startX: 0, startY: 0, startLeft: 0, startTop: 0 };
+        btn.addEventListener('mousedown', function (e) {
+            if (e.button !== 0) return;
+            drag.active = true;
+            drag.startX = e.clientX;
+            drag.startY = e.clientY;
+            const rect = kolejkiWrap.getBoundingClientRect();
+            drag.startLeft = rect.left;
+            drag.startTop = rect.top;
+            e.preventDefault();
+        });
+        document.addEventListener('mousemove', function (e) {
+            if (!drag.active) return;
+            const left = Math.max(0, drag.startLeft + (e.clientX - drag.startX));
+            const top = Math.max(0, drag.startTop + (e.clientY - drag.startY));
+            kolejkiWrap.style.left = left + 'px';
+            kolejkiWrap.style.top = top + 'px';
+            setStoredKolejkiPos(left, top);
+        });
+        document.addEventListener('mouseup', function (e) {
+            if (e.button !== 0) return;
+            if (drag.active) {
+                const moved = Math.abs(e.clientX - drag.startX) + Math.abs(e.clientY - drag.startY) > 5;
+                drag.active = false;
+                if (!moved) {
+                    kolejkiOpen = !kolejkiOpen;
+                    kolejkiListPanel.style.display = kolejkiOpen ? 'block' : 'none';
+                    if (kolejkiOpen) updateKolejkiListUI();
+                }
+            }
+        });
+        updateKolejkiListUI();
+    }
+
+    function updateKolejkiListUI() {
+        if (!kolejkiListContent) return;
         const players = getPlayersOnMap();
-        if (players.length === 0) {
-            playersListContent.innerHTML = '<div style="color:#888; font-size:11px;">Brak innych postaci na mapie</div>';
+        const target = findTarget(getCurrentMapName());
+        const reservations = (target && target.monster) ? fetchReservationsForMonster(target.monster) : [];
+        const byNick = {};
+        reservations.forEach(function (r) {
+            const n = (r.nick || '').trim().toLowerCase();
+            if (n) byNick[n] = r;
+        });
+
+        kolejkiListContent.innerHTML = '';
+        if (!players.length) {
+            kolejkiListContent.innerHTML = '<div style="color:#888;font-size:11px;">Brak danych o graczach</div>';
             return;
         }
-        playersListContent.innerHTML = players
-            .map(function (p) {
-                const lvlProf = [p.lvl, p.prof].filter(Boolean).join(' ');
-                const extra = lvlProf ? ' <span style="color:#888; font-size:10px;">(' + lvlProf + ')</span>' : '';
-                return '<div style="padding:3px 0; border-bottom:1px solid rgba(255,255,255,0.06);">' + escapeHtml(p.nick) + extra + '</div>';
-            })
-            .join('');
+        const baseUrl = (CONFIG.BACKEND_URL || '').replace(/\/$/, '');
+        const titanSlug = target && target.monster ? target.monster.toLowerCase() : '';
+        players.forEach(function (p) {
+            const nick = (p && p.nick) ? String(p.nick).trim() : '';
+            if (!nick) return;
+            const lvl = (p && p.lvl != null) ? p.lvl : '';
+            const prof = (p && p.prof) ? String(p.prof) : '';
+            const res = byNick[nick.toLowerCase()];
+            const row = document.createElement('div');
+            row.className = 'map-timer-kolejki-row';
+            if (res) {
+                const color = PRIORITY_COLORS[res.priority] || 'transparent';
+                row.style.borderLeft = '3px solid ' + color;
+                let html = '<span>' + escapeHtml(nick) + '</span>';
+                if (lvl !== '' || prof) html += ' <span class="map-timer-kolejki-meta">' + (lvl !== '' ? ' Lv.' + lvl : '') + (prof ? ' ' + prof : '') + '</span>';
+                const gifUrl = baseUrl && titanSlug && res.gifFile ? (baseUrl + '/api/titans-images/' + titanSlug + '/' + (res.itemKey || '') + '/' + res.gifFile) : '';
+                const pngUrl = baseUrl && titanSlug && res.pngFile ? (baseUrl + '/api/titans-images/' + titanSlug + '/' + (res.itemKey || '') + '/' + res.pngFile) : '';
+                if (gifUrl) html += ' <span class="map-timer-kolejki-item-wrap"><img class="map-timer-kolejki-item-gif" src="' + gifUrl + '" alt="" data-png="' + escapeHtml(pngUrl) + '"/></span>';
+                row.innerHTML = html;
+                if (pngUrl) {
+                    const img = row.querySelector('.map-timer-kolejki-item-gif');
+                    if (img) addHoverPng(img, pngUrl);
+                }
+            } else {
+                let plain = escapeHtml(nick);
+                if (lvl !== '' || prof) plain += ' <span class="map-timer-kolejki-meta">' + (lvl !== '' ? ' Lv.' + lvl : '') + (prof ? ' ' + prof : '') + '</span>';
+                row.innerHTML = plain;
+            }
+            kolejkiListContent.appendChild(row);
+        });
     }
 
     function escapeHtml(text) {
@@ -525,82 +616,24 @@
         return div.innerHTML;
     }
 
-    function toggleSettings() {
-        let panel = document.getElementById('map-timer-settings');
-        if (panel) {
-            panel.remove();
-            settingsOpen = false;
-            return;
-        }
-        settingsOpen = true;
-
-        panel = document.createElement('div');
-        panel.id = 'map-timer-settings';
-        panel.style.cssText = `
-            position: fixed; bottom: 55px; right: 10px; width: 320px;
-            background: #1a1a2e; color: #eee; border-radius: 10px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5); z-index: 99999;
-            font-family: Arial, sans-serif; font-size: 13px; overflow: hidden;
-        `;
-
-        const pendingCount = JSON.parse(localStorage.getItem('maptimer_pending') || '[]').length;
-        const hasKey = !!CONFIG.API_KEY;
-
-        panel.innerHTML = `
-            <div style="background:#16213e; padding:12px 16px; font-size:15px; font-weight:bold; display:flex; justify-content:space-between; align-items:center;">
-                <span>⏱ Map Timer</span>
-                <span style="font-size:11px; color:#888;">v2.2</span>
-            </div>
-            <div style="padding:16px;">
-                <div style="margin-bottom:12px;">
-                    <label style="display:block; margin-bottom:4px; color:#aaa; font-size:11px;">BACKEND URL</label>
-                    <input id="mt-backend-url" type="text" value="${CONFIG.BACKEND_URL}"
-                        placeholder="https://your-app.up.railway.app"
-                        style="width:100%; padding:8px; background:#0f3460; border:1px solid #333; border-radius:6px; color:#fff; font-size:12px; box-sizing:border-box;" />
-                </div>
-                <div style="margin-bottom:12px;">
-                    <label style="display:block; margin-bottom:4px; color:#aaa; font-size:11px;">API KEY</label>
-                    <input id="mt-api-key" type="text" value="${CONFIG.API_KEY}"
-                        placeholder="mgt_xxxxxxxxxxxxxxxx"
-                        style="width:100%; padding:8px; background:#0f3460; border:1px solid #333; border-radius:6px; color:#fff; font-size:12px; box-sizing:border-box; font-family:monospace;" />
-                </div>
-                <div style="display:flex; gap:8px; margin-bottom:16px;">
-                    <button id="mt-save" style="flex:1; padding:8px; background:#27ae60; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:12px;">💾 Zapisz</button>
-                    <button id="mt-flush" style="flex:1; padding:8px; background:#e67e22; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:12px;">📤 Wyślij zaległe (${pendingCount})</button>
-                </div>
-                <div style="background:#0a0a1a; border-radius:6px; padding:10px; font-size:11px; color:#888;">
-                    <div>Status: ${hasKey ? '<span style="color:#2ecc71;">✅ Skonfigurowany</span>' : '<span style="color:#e74c3c;">❌ Brak API key</span>'}</div>
-                    <div>Mapa: ${currentTarget ? `<span style="color:#2ecc71;">${currentTarget.monster}</span>` : '<span style="color:#888;">nie na mapie</span>'}</div>
-                    <div>Czas sesji: ${currentTarget ? formatTime(accumulatedSeconds) : '—'}</div>
-                    <div>Postać: ${heroName || '—'}</div>
-                    <div>Zaległe: ${pendingCount}</div>
-                </div>
-            </div>
-        `;
-
-        document.body.appendChild(panel);
-
-        // Event listeners
-        document.getElementById('mt-save').addEventListener('click', () => {
-            const newUrl = document.getElementById('mt-backend-url').value.trim().replace(/\/$/, '');
-            const newKey = document.getElementById('mt-api-key').value.trim();
-
-            CONFIG.BACKEND_URL = newUrl;
-            CONFIG.API_KEY = newKey;
-
-            GM_setValue('backend_url', newUrl);
-            GM_setValue('api_key', newKey);
-
-            showToast('✅ Ustawienia zapisane!');
-            panel.remove();
-            settingsOpen = false;
+    function addHoverPng(imgEl, pngUrl) {
+        let pop = null;
+        imgEl.addEventListener('mouseenter', function () {
+            if (pop && pop.parentNode) pop.parentNode.removeChild(pop);
+            pop = document.createElement('div');
+            pop.className = 'map-timer-kolejki-png-popup';
+            const i = document.createElement('img');
+            i.src = pngUrl;
+            i.alt = '';
+            pop.appendChild(i);
+            document.body.appendChild(pop);
+            const r = imgEl.getBoundingClientRect();
+            pop.style.left = (r.right + 4) + 'px';
+            pop.style.top = Math.max(4, r.top) + 'px';
         });
-
-        document.getElementById('mt-flush').addEventListener('click', () => {
-            flushPending();
-            showToast('📤 Wysyłam zaległe sesje...');
-            panel.remove();
-            settingsOpen = false;
+        imgEl.addEventListener('mouseleave', function () {
+            if (pop && pop.parentNode) pop.parentNode.removeChild(pop);
+            pop = null;
         });
     }
 
@@ -641,13 +674,13 @@
         log('🚀 Map Timer — inicjalizacja');
         log(`   Mapy: ${CONFIG.TARGETS.map(t => t.map).join(' | ')}`);
         log(`   BACKEND_URL: ${CONFIG.BACKEND_URL || '(pusty — ustaw w ⚙️)'}`);
-        log(`   API Key: ${CONFIG.API_KEY ? '✅ ustawiony' : '❌ BRAK — kliknij ⏱ w rogu i wklej klucz, potem Zapisz'}`);
+        log(`   API Key: ${CONFIG.API_KEY ? '✅ ustawiony' : '❌ BRAK — zainstaluj skrypt ze strony (link z tokenem)'}`);
 
         const waitForEngine = setInterval(function () {
             if (getEngine()) {
                 clearInterval(waitForEngine);
                 log('Engine znaleziony ✅');
-                createPlayersListBox();
+                createKolejkiBox();
                 flushPending();
                 setInterval(tick, CONFIG.CHECK_INTERVAL);
                 tick();
