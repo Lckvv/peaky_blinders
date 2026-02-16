@@ -61,10 +61,14 @@
     let kolejkiOpen = false;
     let sessionFinalized = false;
     let reservationsCache = { monster: null, data: null, ts: 0 };
+    let phaseLeaderboardCache = { monster: null, data: null, ts: 0 };
     const RESERVATIONS_CACHE_TTL_MS = 2 * 60 * 1000;
+    const LEADERBOARD_CACHE_TTL_MS = 2 * 60 * 1000;
     const PRIORITY_COLORS = { 1: '#C8F527', 2: '#27F584', 3: '#2768F5' };
     const PRIORITY_LABELS = { 1: 'Priorytet I', 2: 'Priorytet II', 3: 'Priorytet III' };
     const NICK_COLOR_NO_LIST = '#888';
+    let currentPngPopup = null;
+    let currentPngPopupImg = null;
 
     function refreshConfigFromStorage() {
         CONFIG.API_KEY = GM_getValue('api_key', '');
@@ -465,6 +469,33 @@
         return out;
     }
 
+    /** Pobiera ranking (suma czasu w aktywnym fazie) dla potwora — zwraca { heroName -> totalSeconds }. */
+    function fetchPhaseLeaderboard(monster) {
+        if (!monster) return {};
+        const now = Date.now();
+        if (phaseLeaderboardCache.monster === monster && phaseLeaderboardCache.data && (now - phaseLeaderboardCache.ts) < LEADERBOARD_CACHE_TTL_MS) {
+            return phaseLeaderboardCache.data;
+        }
+        var out = {};
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/leaderboard/ranking?monster=' + encodeURIComponent(monster), false);
+        try {
+            xhr.send();
+            if (xhr.status === 200) {
+                var json = JSON.parse(xhr.responseText);
+                var list = json.leaderboard || [];
+                list.forEach(function (e) {
+                    var name = (e.heroName || e.nick || '').trim();
+                    if (name) out[name.toLowerCase()] = (e.totalTime || 0);
+                });
+                phaseLeaderboardCache = { monster: monster, data: out, ts: now };
+            }
+        } catch (e) {
+            if (CONFIG.DEBUG) log('fetchPhaseLeaderboard error:', e);
+        }
+        return out;
+    }
+
     // ================================================================
     //  UI — Timer overlay
     // ================================================================
@@ -584,6 +615,12 @@
                 }
             }
         });
+        document.addEventListener('mousemove', function (e) {
+            if (currentPngPopup && currentPngPopupImg && e.target !== currentPngPopupImg && !(currentPngPopupImg.contains && currentPngPopupImg.contains(e.target))) {
+                hidePngPopup();
+            }
+        });
+        document.addEventListener('mouseleave', function () { hidePngPopup(); });
         updateKolejkiListUI();
     }
 
@@ -597,18 +634,19 @@
             const n = (r.nick || '').trim().toLowerCase();
             if (n) byNick[n] = r;
         });
-        // Kolejność: najpierw gracze z rezerwacji (wg kolejności z listy = priorytet, potem nick), potem reszta alfabetycznie
-        const orderNicks = reservations.map(function (r) { return (r.nick || '').trim().toLowerCase(); }).filter(Boolean);
+        const timeByNick = (target && target.monster) ? fetchPhaseLeaderboard(target.monster) : {};
+        // Sort: 1) suma czasu w fazie (malejąco), 2) ma rezerwację przed brakiem, 3) alfabetycznie
         const sortedPlayers = players.slice().filter(function (p) { return (p && p.nick) && String(p.nick).trim(); }).sort(function (a, b) {
             const na = String(a.nick).trim();
             const nb = String(b.nick).trim();
             const naLow = na.toLowerCase();
             const nbLow = nb.toLowerCase();
-            const idxA = orderNicks.indexOf(naLow);
-            const idxB = orderNicks.indexOf(nbLow);
-            if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-            if (idxA !== -1) return -1;
-            if (idxB !== -1) return 1;
+            const timeA = timeByNick[naLow] || 0;
+            const timeB = timeByNick[nbLow] || 0;
+            if (timeA !== timeB) return timeB - timeA;
+            const resA = byNick[naLow];
+            const resB = byNick[nbLow];
+            if (!!resA !== !!resB) return resA ? -1 : 1;
             return na.localeCompare(nb, 'pl');
         });
 
@@ -627,9 +665,9 @@
             const row = document.createElement('div');
             row.className = 'map-timer-kolejki-row';
             const nickColor = res ? (PRIORITY_COLORS[res.priority] || '#eee') : NICK_COLOR_NO_LIST;
-            if (res) row.title = PRIORITY_LABELS[res.priority] || ('Priorytet ' + res.priority);
+            const priorityTitle = res ? (PRIORITY_LABELS[res.priority] || ('Priorytet ' + res.priority)) : '';
             if (res) {
-                let html = '<span style="color:' + nickColor + ';">' + escapeHtml(nick) + '</span>';
+                let html = '<span class="map-timer-kolejki-nick" style="color:' + nickColor + ';" title="' + escapeHtml(priorityTitle) + '">' + escapeHtml(nick) + '</span>';
                 if (lvl !== '' || prof) html += ' <span class="map-timer-kolejki-meta">' + (lvl !== '' ? ' Lv.' + lvl : '') + (prof ? ' ' + prof : '') + '</span>';
                 const gifUrl = baseUrl && titanSlug && res.gifFile ? (baseUrl + '/api/titans-images/' + titanSlug + '/' + (res.itemKey || '') + '/' + res.gifFile) : '';
                 const pngUrl = baseUrl && titanSlug && res.pngFile ? (baseUrl + '/api/titans-images/' + titanSlug + '/' + (res.itemKey || '') + '/' + res.pngFile) : '';
@@ -652,24 +690,29 @@
         return div.innerHTML;
     }
 
+    function hidePngPopup() {
+        if (currentPngPopup && currentPngPopup.parentNode) currentPngPopup.parentNode.removeChild(currentPngPopup);
+        currentPngPopup = null;
+        currentPngPopupImg = null;
+    }
+
     function addHoverPng(imgEl, pngUrl) {
-        let pop = null;
         imgEl.addEventListener('mouseenter', function () {
-            if (pop && pop.parentNode) pop.parentNode.removeChild(pop);
-            pop = document.createElement('div');
-            pop.className = 'map-timer-kolejki-png-popup';
+            hidePngPopup();
+            currentPngPopupImg = imgEl;
+            currentPngPopup = document.createElement('div');
+            currentPngPopup.className = 'map-timer-kolejki-png-popup';
             const i = document.createElement('img');
             i.src = pngUrl;
             i.alt = '';
-            pop.appendChild(i);
-            document.body.appendChild(pop);
+            currentPngPopup.appendChild(i);
+            document.body.appendChild(currentPngPopup);
             const r = imgEl.getBoundingClientRect();
-            pop.style.left = (r.right + 4) + 'px';
-            pop.style.top = Math.max(4, r.top) + 'px';
+            currentPngPopup.style.left = (r.right + 4) + 'px';
+            currentPngPopup.style.top = Math.max(4, r.top) + 'px';
         });
         imgEl.addEventListener('mouseleave', function () {
-            if (pop && pop.parentNode) pop.parentNode.removeChild(pop);
-            pop = null;
+            hidePngPopup();
         });
     }
 
