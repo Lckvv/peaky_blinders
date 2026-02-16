@@ -63,6 +63,8 @@
     let reservationsCache = { monster: null, data: null, ts: 0 };
     const RESERVATIONS_CACHE_TTL_MS = 2 * 60 * 1000;
     const PRIORITY_COLORS = { 1: '#C8F527', 2: '#27F584', 3: '#2768F5' };
+    const PRIORITY_LABELS = { 1: 'Priorytet I', 2: 'Priorytet II', 3: 'Priorytet III' };
+    const NICK_COLOR_NO_LIST = '#888';
 
     function refreshConfigFromStorage() {
         CONFIG.API_KEY = GM_getValue('api_key', '');
@@ -517,15 +519,32 @@
         kolejkiWrap.style.cssText = 'position:fixed;left:' + pos.left + 'px;top:' + pos.top + 'px;z-index:99998;';
         kolejkiWrap.innerHTML = '<button type="button" class="map-timer-kolejki-btn" title="Kolejki">📋</button><div class="map-timer-kolejki-panel" style="display:none;"><div class="map-timer-kolejki-title">Kolejki</div><div class="map-timer-kolejki-list-content"></div></div>';
         const btnStyle = 'background:#1a1a2e;border:1px solid rgba(255,255,255,0.2);color:#eee;width:40px;height:40px;border-radius:10px;cursor:pointer;font-size:18px;box-shadow:0 2px 10px rgba(0,0,0,0.4);';
-        const panelStyle = 'position:absolute;left:0;top:44px;min-width:200px;max-width:280px;background:#1a1a2e;color:#eee;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.08);font-family:Arial,sans-serif;font-size:12px;overflow:hidden;';
+        const panelStyle = 'position:absolute;min-width:200px;max-width:280px;background:#1a1a2e;color:#eee;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.08);font-family:Arial,sans-serif;font-size:12px;overflow:hidden;';
         const titleStyle = 'background:#16213e;padding:8px 12px;font-size:13px;font-weight:bold;';
         const listStyle = 'padding:8px 12px;max-height:240px;overflow-y:auto;';
         const styleEl = document.createElement('style');
-        styleEl.textContent = '.map-timer-kolejki-btn{' + btnStyle + '}.map-timer-kolejki-btn:hover{background:#16213e;}.map-timer-kolejki-panel{' + panelStyle + '}.map-timer-kolejki-title{' + titleStyle + '}.map-timer-kolejki-list-content{' + listStyle + '}.map-timer-kolejki-row{padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06);}.map-timer-kolejki-meta{color:#888;font-size:10px;}.map-timer-kolejki-item-wrap{display:inline-block;vertical-align:middle;margin-left:4px;}.map-timer-kolejki-item-gif{width:20px;height:20px;object-fit:contain;cursor:pointer;}.map-timer-kolejki-png-popup{position:fixed;z-index:100001;background:#1a1a2e;padding:4px;border-radius:6px;box-shadow:0 4px 20px rgba(0,0,0,0.6);}.map-timer-kolejki-png-popup img{display:block;max-width:120px;max-height:120px;}';
+        styleEl.textContent = '.map-timer-kolejki-btn{' + btnStyle + '}.map-timer-kolejki-btn:hover{background:#16213e;}.map-timer-kolejki-panel{' + panelStyle + '}.map-timer-kolejki-title{' + titleStyle + '}.map-timer-kolejki-list-content{' + listStyle + '}.map-timer-kolejki-row{padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06);}.map-timer-kolejki-meta{color:#888;font-size:10px;}.map-timer-kolejki-item-wrap{display:inline-block;vertical-align:middle;margin-left:4px;}.map-timer-kolejki-item-gif{width:20px;height:20px;object-fit:contain;cursor:pointer;}.map-timer-kolejki-png-popup{position:fixed;z-index:100001;background:#1a1a2e;padding:6px;border:1px solid #2a2a4a;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5);pointer-events:none;}.map-timer-kolejki-png-popup img{display:block;width:auto;height:auto;max-width:90vw;max-height:70vh;object-fit:contain;}';
         document.head.appendChild(styleEl);
         document.body.appendChild(kolejkiWrap);
         kolejkiListPanel = kolejkiWrap.querySelector('.map-timer-kolejki-panel');
         kolejkiListContent = kolejkiWrap.querySelector('.map-timer-kolejki-list-content');
+
+        function applyKolejkiPanelPosition() {
+            if (!kolejkiWrap || !kolejkiListPanel) return;
+            const rect = kolejkiWrap.getBoundingClientRect();
+            const btnW = 40;
+            const btnH = 40;
+            const vw = document.documentElement.clientWidth || window.innerWidth;
+            const vh = document.documentElement.clientHeight || window.innerHeight;
+            const onRight = rect.left + btnW > vw / 2;
+            const onBottom = rect.top + btnH > vh / 2;
+            kolejkiListPanel.style.left = onRight ? 'auto' : '0';
+            kolejkiListPanel.style.right = onRight ? '0' : 'auto';
+            kolejkiListPanel.style.top = onBottom ? 'auto' : (btnH + 4) + 'px';
+            kolejkiListPanel.style.bottom = onBottom ? '100%' : 'auto';
+            kolejkiListPanel.style.marginBottom = onBottom ? '4px' : '0';
+            kolejkiListPanel.style.marginTop = onBottom ? '0' : '0';
+        }
 
         const btn = kolejkiWrap.querySelector('.map-timer-kolejki-btn');
         const drag = { active: false, startX: 0, startY: 0, startLeft: 0, startTop: 0 };
@@ -546,6 +565,7 @@
             kolejkiWrap.style.left = left + 'px';
             kolejkiWrap.style.top = top + 'px';
             setStoredKolejkiPos(left, top);
+            if (kolejkiOpen) applyKolejkiPanelPosition();
         });
         document.addEventListener('mouseup', function (e) {
             if (e.button !== 0) return;
@@ -554,8 +574,13 @@
                 drag.active = false;
                 if (!moved) {
                     kolejkiOpen = !kolejkiOpen;
-                    kolejkiListPanel.style.display = kolejkiOpen ? 'block' : 'none';
-                    if (kolejkiOpen) updateKolejkiListUI();
+                    if (kolejkiOpen) {
+                        applyKolejkiPanelPosition();
+                        kolejkiListPanel.style.display = 'block';
+                        updateKolejkiListUI();
+                    } else {
+                        kolejkiListPanel.style.display = 'none';
+                    }
                 }
             }
         });
@@ -572,26 +597,39 @@
             const n = (r.nick || '').trim().toLowerCase();
             if (n) byNick[n] = r;
         });
+        // Kolejność: najpierw gracze z rezerwacji (wg kolejności z listy = priorytet, potem nick), potem reszta alfabetycznie
+        const orderNicks = reservations.map(function (r) { return (r.nick || '').trim().toLowerCase(); }).filter(Boolean);
+        const sortedPlayers = players.slice().filter(function (p) { return (p && p.nick) && String(p.nick).trim(); }).sort(function (a, b) {
+            const na = String(a.nick).trim();
+            const nb = String(b.nick).trim();
+            const naLow = na.toLowerCase();
+            const nbLow = nb.toLowerCase();
+            const idxA = orderNicks.indexOf(naLow);
+            const idxB = orderNicks.indexOf(nbLow);
+            if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+            if (idxA !== -1) return -1;
+            if (idxB !== -1) return 1;
+            return na.localeCompare(nb, 'pl');
+        });
 
         kolejkiListContent.innerHTML = '';
-        if (!players.length) {
+        if (!sortedPlayers.length) {
             kolejkiListContent.innerHTML = '<div style="color:#888;font-size:11px;">Brak danych o graczach</div>';
             return;
         }
         const baseUrl = (CONFIG.BACKEND_URL || '').replace(/\/$/, '');
         const titanSlug = target && target.monster ? target.monster.toLowerCase() : '';
-        players.forEach(function (p) {
-            const nick = (p && p.nick) ? String(p.nick).trim() : '';
-            if (!nick) return;
+        sortedPlayers.forEach(function (p) {
+            const nick = String(p.nick).trim();
             const lvl = (p && p.lvl != null) ? p.lvl : '';
             const prof = (p && p.prof) ? String(p.prof) : '';
             const res = byNick[nick.toLowerCase()];
             const row = document.createElement('div');
             row.className = 'map-timer-kolejki-row';
+            const nickColor = res ? (PRIORITY_COLORS[res.priority] || '#eee') : NICK_COLOR_NO_LIST;
+            if (res) row.title = PRIORITY_LABELS[res.priority] || ('Priorytet ' + res.priority);
             if (res) {
-                const color = PRIORITY_COLORS[res.priority] || 'transparent';
-                row.style.borderLeft = '3px solid ' + color;
-                let html = '<span>' + escapeHtml(nick) + '</span>';
+                let html = '<span style="color:' + nickColor + ';">' + escapeHtml(nick) + '</span>';
                 if (lvl !== '' || prof) html += ' <span class="map-timer-kolejki-meta">' + (lvl !== '' ? ' Lv.' + lvl : '') + (prof ? ' ' + prof : '') + '</span>';
                 const gifUrl = baseUrl && titanSlug && res.gifFile ? (baseUrl + '/api/titans-images/' + titanSlug + '/' + (res.itemKey || '') + '/' + res.gifFile) : '';
                 const pngUrl = baseUrl && titanSlug && res.pngFile ? (baseUrl + '/api/titans-images/' + titanSlug + '/' + (res.itemKey || '') + '/' + res.pngFile) : '';
@@ -602,9 +640,7 @@
                     if (img) addHoverPng(img, pngUrl);
                 }
             } else {
-                let plain = escapeHtml(nick);
-                if (lvl !== '' || prof) plain += ' <span class="map-timer-kolejki-meta">' + (lvl !== '' ? ' Lv.' + lvl : '') + (prof ? ' ' + prof : '') + '</span>';
-                row.innerHTML = plain;
+                row.innerHTML = '<span style="color:' + NICK_COLOR_NO_LIST + ';">' + escapeHtml(nick) + '</span>' + (lvl !== '' || prof ? ' <span class="map-timer-kolejki-meta">' + (lvl !== '' ? ' Lv.' + lvl : '') + (prof ? ' ' + prof : '') + '</span>' : '');
             }
             kolejkiListContent.appendChild(row);
         });
