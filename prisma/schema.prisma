@@ -13,7 +13,7 @@ model User {
   username   String   @unique
   nick       String?  // nazwa w grze (opcjonalna)
   password   String   // bcrypt hash
-  role       String   @default("user") // "user" | "admin"
+  role       String   @default("user") // "user" | "admin" | "koordynator"
   profileUrl String?  // zewnętrzny link do profilu (z gry, przekazywany w POST)
   avatarUrl  String?  // stroj/avatar (opcjonalnie z gry)
   createdAt  DateTime @default(now())
@@ -22,6 +22,7 @@ model User {
   apiKeys     ApiKey[]
   mapSessions MapSession[]
   phaseResults PhaseResult[]
+  invitationCodeUsed InvitationCode?
 }
 
 model ApiKey {
@@ -126,4 +127,17 @@ model Reservation {
 
   @@unique([titanSlug, itemKey, nick])
   @@index([titanSlug, itemKey])
+}
+
+// Jednorazowe kody zaproszenia do rejestracji (generowane przez admina)
+model InvitationCode {
+  id           String    @id @default(cuid())
+  code         String    @unique // kilkunastoznakowy unikalny kod
+  usedAt       DateTime? // null = aktywny, po rejestracji ustawione
+  usedById     String?   @unique // userId kto użył (1:1 z User)
+  usedBy       User?     @relation(fields: [usedById], references: [id])
+  createdAt    DateTime  @default(now())
+
+  @@index([code])
+  @@index([usedAt])
 }

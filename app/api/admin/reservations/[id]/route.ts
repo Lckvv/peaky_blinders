@@ -2,19 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authFromCookie } from '@/lib/auth';
 
-async function requireAdmin() {
+async function requireAdminOrKoordynator() {
   const user = await authFromCookie();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (user.role !== 'admin') return NextResponse.json({ error: 'Forbidden - admin only' }, { status: 403 });
+  if (user.role !== 'admin' && user.role !== 'koordynator') return NextResponse.json({ error: 'Forbidden - admin or koordynator only' }, { status: 403 });
   return null;
 }
 
-// PATCH /api/admin/reservations/[id] — edytuj rezerwację (tylko admin)
+// PATCH /api/admin/reservations/[id] — edytuj rezerwację (admin lub koordynator)
 export async function PATCH(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireAdmin();
+  const auth = await requireAdminOrKoordynator();
   if (auth) return auth;
   const { id } = await params;
   try {
@@ -44,12 +44,12 @@ export async function PATCH(
   }
 }
 
-// DELETE /api/admin/reservations/[id] — usuń rezerwację (tylko admin)
+// DELETE /api/admin/reservations/[id] — usuń rezerwację (admin lub koordynator)
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireAdmin();
+  const auth = await requireAdminOrKoordynator();
   if (auth) return auth;
   const { id } = await params;
   try {

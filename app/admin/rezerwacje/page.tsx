@@ -331,7 +331,7 @@ export default function AdminRezerwacjePage() {
     return (
       <div style={s.container}>
         <div style={s.card}>
-          <p style={s.forbidden}>Brak dostępu. Tylko administrator może zarządzać rezerwacjami.</p>
+          <p style={s.forbidden}>Brak dostępu. Tylko administrator lub koordynator może zarządzać rezerwacjami.</p>
         </div>
       </div>
     );

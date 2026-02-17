@@ -193,6 +193,48 @@ export default function Navbar() {
       </div>
 
       <div style={navStyles.navSection}>
+        <div style={navStyles.sectionLabel}>Strony</div>
+        <Link
+          href="/kupie"
+          style={{
+            ...navStyles.link,
+            ...(pathname === '/kupie' ? navStyles.linkActive : {}),
+          }}
+        >
+          Kupie
+        </Link>
+        <Link
+          href="/sprzedam"
+          style={{
+            ...navStyles.link,
+            ...(pathname === '/sprzedam' ? navStyles.linkActive : {}),
+          }}
+        >
+          Sprzedam
+        </Link>
+        <Link
+          href="/event"
+          style={{
+            ...navStyles.link,
+            ...(pathname === '/event' ? navStyles.linkActive : {}),
+          }}
+        >
+          Event
+        </Link>
+      </div>
+
+      <div style={navStyles.navSection}>
+        {(user?.role === 'admin' || user?.role === 'koordynator') && (
+          <Link
+            href="/admin/rezerwacje"
+            style={{
+              ...navStyles.adminLink,
+              ...(pathname === '/admin/rezerwacje' ? navStyles.adminLinkActive : {}),
+            }}
+          >
+            ⚙ Rezerwacje
+          </Link>
+        )}
         {user?.role === 'admin' && (
           <>
             <Link
@@ -205,13 +247,13 @@ export default function Navbar() {
               ⚙ Admin — Fazy
             </Link>
             <Link
-              href="/admin/rezerwacje"
+              href="/admin/panel"
               style={{
                 ...navStyles.adminLink,
-                ...(pathname === '/admin/rezerwacje' ? navStyles.adminLinkActive : {}),
+                ...(pathname === '/admin/panel' ? navStyles.adminLinkActive : {}),
               }}
             >
-              ⚙ Admin — Rezerwacje
+              ⚙ Admin Panel
             </Link>
           </>
         )}

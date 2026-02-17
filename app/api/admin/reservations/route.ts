@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authFromCookie } from '@/lib/auth';
 
-// GET /api/admin/reservations?titanSlug=kic&itemKey=bambosze — lista rezerwacji (tylko admin)
+// GET /api/admin/reservations — lista rezerwacji (admin lub koordynator)
 export async function GET(request: NextRequest) {
   try {
     const user = await authFromCookie();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (user.role !== 'admin') return NextResponse.json({ error: 'Forbidden - admin only' }, { status: 403 });
+    if (user.role !== 'admin' && user.role !== 'koordynator') return NextResponse.json({ error: 'Forbidden - admin or koordynator only' }, { status: 403 });
 
     const { searchParams } = new URL(request.url);
     const titanSlug = searchParams.get('titanSlug');
@@ -28,12 +28,12 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/admin/reservations — dodaj rezerwację (tylko admin)
+// POST /api/admin/reservations — dodaj rezerwację (admin lub koordynator)
 export async function POST(request: NextRequest) {
   try {
     const user = await authFromCookie();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (user.role !== 'admin') return NextResponse.json({ error: 'Forbidden - admin only' }, { status: 403 });
+    if (user.role !== 'admin' && user.role !== 'koordynator') return NextResponse.json({ error: 'Forbidden - admin or koordynator only' }, { status: 403 });
 
     const body = await request.json();
     const { titanSlug, itemKey, nick, priority } = body;

@@ -93,6 +93,7 @@ export default function LoginForm() {
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [invitationCode, setInvitationCode] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -104,7 +105,7 @@ export default function LoginForm() {
       const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
       const body = isLogin
         ? { login: email || username, password }
-        : { email, username, password };
+        : { email, username, password, invitationCode: invitationCode.trim() || undefined };
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -173,6 +174,17 @@ export default function LoginForm() {
             style={s.input}
             required
           />
+          {!isLogin && (
+            <input
+              type="text"
+              placeholder="Kod zaproszenia"
+              value={invitationCode}
+              onChange={(e) => setInvitationCode(e.target.value)}
+              style={s.input}
+              required
+              autoComplete="off"
+            />
+          )}
           {error && <p style={s.error}>{error}</p>}
           <button type="submit" style={s.btn} disabled={submitting}>
             {isLogin ? 'Zaloguj się' : 'Zarejestruj się'}

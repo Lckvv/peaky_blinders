@@ -4,12 +4,38 @@ import { hashPassword, createToken, generateApiKey } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, username, password, nick } = await request.json();
+    const { email, username, password, nick, invitationCode } = await request.json();
 
     // Validation
     if (!email || !username || !password) {
       return NextResponse.json(
         { error: 'Email, username and password are required' },
+        { status: 400 }
+      );
+    }
+
+    if (!invitationCode || typeof invitationCode !== 'string' || !invitationCode.trim()) {
+      return NextResponse.json(
+        { error: 'Kod zaproszenia jest wymagany do rejestracji' },
+        { status: 400 }
+      );
+    }
+
+    const codeTrimmed = invitationCode.trim();
+
+    // Znajdź i zweryfikuj kod zaproszenia (jednorazowy)
+    const invCode = await prisma.invitationCode.findUnique({
+      where: { code: codeTrimmed },
+    });
+    if (!invCode) {
+      return NextResponse.json(
+        { error: 'Nieprawidłowy kod zaproszenia' },
+        { status: 400 }
+      );
+    }
+    if (invCode.usedAt != null) {
+      return NextResponse.json(
+        { error: 'Ten kod zaproszenia został już wykorzystany' },
         { status: 400 }
       );
     }
@@ -45,7 +71,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create user + first API key in a transaction
+    // Create user + first API key + dezaktywuj kod zaproszenia w jednej transakcji
     const { user, apiKey } = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
         data: {
@@ -62,6 +88,11 @@ export async function POST(request: NextRequest) {
           label: 'Default key',
           userId: user.id,
         },
+      });
+
+      await tx.invitationCode.update({
+        where: { id: invCode.id },
+        data: { usedAt: new Date(), usedById: user.id },
       });
 
       return { user, apiKey };
