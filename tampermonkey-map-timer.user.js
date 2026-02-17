@@ -105,6 +105,7 @@
     const DISCORD_WEBHOOK_HEROS = 'https://discord.com/api/webhooks/1473433710220148816/FWedosu8fOskXb7Dy1C2AUiJ99lSi75LD4JkjfbrYcizdE7vbD97MQK-Gwc9UPf0JBhC';
     let heroAlertPanelEl = null;
     let lastHeroAlertData = null;
+    let heroAlertSending = false;
 
     function refreshConfigFromStorage() {
         CONFIG.API_KEY = GM_getValue('api_key', '');
@@ -310,12 +311,18 @@
         if (!lastHeroAlertData) return;
         var lvlStr = lastHeroAlertData.lvl != null ? lastHeroAlertData.lvl + 'm' : '?';
         var posStr = (lastHeroAlertData.x != null && lastHeroAlertData.y != null) ? (lastHeroAlertData.x + ',' + lastHeroAlertData.y) : '?';
-        var content = '@here Hero! ' + lastHeroAlertData.nick + ' (' + lvlStr + '), ' + lastHeroAlertData.mapName + ' (' + posStr + ')';
+        if (heroAlertSending) return;
+        heroAlertSending = true;
+        var btn = heroAlertPanelEl && heroAlertPanelEl.querySelector('.map-timer-hero-alert-call');
+        if (btn) { btn.disabled = true; btn.textContent = 'Wysyłam…'; }
+        var content = '@Mulher Hero! ' + lastHeroAlertData.nick + ' (' + lvlStr + '), ' + lastHeroAlertData.mapName + ' (' + posStr + ')';
         fetch(DISCORD_WEBHOOK_HEROS, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ content: content }),
         }).then(function (r) {
+            heroAlertSending = false;
+            if (btn) { btn.disabled = false; btn.textContent = 'Zawołaj klan'; }
             if (r.ok) {
                 showToast('✅ Wysłano na Discord (herosi)');
                 hideHeroAlertPanel();
@@ -323,6 +330,8 @@
                 showToast('❌ Błąd wysyłania na Discord: ' + r.status, 'error');
             }
         }).catch(function (e) {
+            heroAlertSending = false;
+            if (btn) { btn.disabled = false; btn.textContent = 'Zawołaj klan'; }
             log('Discord webhook error:', e);
             showToast('❌ Błąd połączenia z Discord', 'error');
         });
