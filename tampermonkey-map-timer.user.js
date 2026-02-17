@@ -103,6 +103,43 @@
     let eveMapPopupCurrentMap = null;
     // Heros → Discord: webhook (kanał herosi), panel z przyciskiem „Zawołaj klan”
     const DISCORD_WEBHOOK_HEROS = 'https://discord.com/api/webhooks/1473433710220148816/FWedosu8fOskXb7Dy1C2AUiJ99lSi75LD4JkjfbrYcizdE7vbD97MQK-Gwc9UPf0JBhC';
+    // Nazwa herosa (z gry) → ping na Discord; brak na liście = @here
+    const HEROS_PING_MAP = {
+        'Wicked Patrick': '@Patryk',
+        'Crimson Avenger': '@Karm',
+        'Thief': '@Złodziej',
+        'Spiteful Guide': '@Przewo',
+        'Possessed Paladin': '@Opek',
+        'Hellish Skeletor': '@Kostek',
+        'Grove Sentinel': '@Koziec',
+        "Night's Mistress": '@Kocha',
+        'Prince Kasim': '@Pers',
+        'Pious Friar': '@Brat',
+        'Golden Roger': '@Roger',
+        'Sheepless Shepherd': '@Baca',
+        'Spellcaster Atalia': '@Atalia',
+        'Insane Orc Hunter': '@Obło',
+        'Usurer Grauhaz': '@Lichwa',
+        'Viviana Nandin': '@Viviana',
+        'Frightener': '@Przeraza',
+        'Demonis Lord of the Void': '@Demonis',
+        'Mulher Ma': '@Mulher',
+        'Vapor Veneno': '@Vapor',
+        'Oakhornus': '@Dębek',
+        'Tepeyollotl': '@Kot',
+        'Triad Specter': '@Wiedzma',
+        'Negthotep the Abyss Priest': '@Kapłan',
+        'Young Dragon': '@Smok',
+    };
+    function getHeroPing(heroName) {
+        if (!heroName || typeof heroName !== 'string') return '@here';
+        var key = heroName.trim();
+        var lower = key.toLowerCase();
+        for (var k in HEROS_PING_MAP) {
+            if (k.toLowerCase() === lower) return HEROS_PING_MAP[k];
+        }
+        return '@here';
+    }
     let heroAlertPanelEl = null;
     let lastHeroAlertData = null;
     let heroAlertSending = false;
@@ -315,7 +352,8 @@
         heroAlertSending = true;
         var btn = heroAlertPanelEl && heroAlertPanelEl.querySelector('.map-timer-hero-alert-call');
         if (btn) { btn.disabled = true; btn.textContent = 'Wysyłam…'; }
-        var content = '@Mulher Hero! ' + lastHeroAlertData.nick + ' (' + lvlStr + '), ' + lastHeroAlertData.mapName + ' (' + posStr + ')';
+        var ping = getHeroPing(lastHeroAlertData.nick);
+        var content = ping + ' Hero! ' + lastHeroAlertData.nick + ' (' + lvlStr + '), ' + lastHeroAlertData.mapName + ' (' + posStr + ')';
         fetch(DISCORD_WEBHOOK_HEROS, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
