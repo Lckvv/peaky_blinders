@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Margonem Map Timer
 // @namespace    http://tampermonkey.net/
-// @version      2.4
+// @version      2.5
 // @description  Tracks time spent on target maps and syncs with backend. Supports API key auth for multi-user leaderboards.
 // @author       Lucek
 // @match        https://*.margonem.com/*
@@ -71,10 +71,16 @@
     const NICK_COLOR_NO_LIST = '#888';
     let currentPngPopup = null;
     let currentPngPopupImg = null;
-    // Heros: wt > 79 (jak w Lootlog get-npc-type-by-wt: wt>79 = HERO)
+    // Tylko Heros (wt 80–89) lub Tytan (wt > 99) — jedno powiadomienie aż wyjście z mapy / odświeżenie
     const HEROS_WT_MIN = 80;
-    let lastHerosNotifyTime = 0;
-    const HEROS_NOTIFY_COOLDOWN_MS = 15000;
+    const HEROS_WT_MAX = 89;
+    const TITAN_WT_MIN = 100;
+    let lastHerosNotifiedMapName = null;
+    // Heros eventowy: listy map per EVE (wypełnisz później)
+    const EVE_MAPS = { 63: [], 143: [], 300: [] };
+    let eveWindowOpen = false;
+    let eveWindowEl = null;
+    let selectedEveKey = null;
 
     function refreshConfigFromStorage() {
         CONFIG.API_KEY = GM_getValue('api_key', '');
@@ -217,17 +223,27 @@
         return [];
     }
 
-    /** Sprawdza czy na mapie jest Heros (wt >= 80) i pokazuje powiadomienie (z cooldownem). */
+    /** Czy wt to Heros (80–89) lub Tytan (100+). Kolos (90–99) pomijamy. */
+    function isHeroOrTitan(wt) {
+        if (wt == null || typeof wt !== 'number') return false;
+        return (wt >= HEROS_WT_MIN && wt <= HEROS_WT_MAX) || wt >= TITAN_WT_MIN;
+    }
+
+    /** Jedno powiadomienie na mapę — reset przy wyjściu z mapy lub odświeżeniu. */
     function checkHerosOnMapAndNotify() {
+        const mapName = getCurrentMapName();
+        if (lastHerosNotifiedMapName !== null && lastHerosNotifiedMapName !== mapName) {
+            lastHerosNotifiedMapName = null;
+        }
+        if (!mapName) return;
         const npcs = getNpcsOnMap();
-        const now = Date.now();
-        const heroNpc = npcs.find(function (n) { return n.wt != null && n.wt >= HEROS_WT_MIN; });
+        const heroNpc = npcs.find(function (n) { return isHeroOrTitan(n.wt); });
         if (!heroNpc) return;
-        if (now - lastHerosNotifyTime < HEROS_NOTIFY_COOLDOWN_MS) return;
-        lastHerosNotifyTime = now;
-        const name = (heroNpc.nick && String(heroNpc.nick).trim()) || 'Heros';
+        if (lastHerosNotifiedMapName === mapName) return;
+        lastHerosNotifiedMapName = mapName;
+        const name = (heroNpc.nick && String(heroNpc.nick).trim()) || (heroNpc.wt >= TITAN_WT_MIN ? 'Tytan' : 'Heros');
         showToast('🦸 ' + name + ' na mapie!', 'success');
-        log('Heros na mapie:', name, '(wt:', heroNpc.wt + ')');
+        log('Heros/Tytan na mapie:', name, '(wt:', heroNpc.wt + ')');
     }
 
     /** Lista postaci obecnych na mapie (Engine.others / g.other). */
@@ -498,6 +514,7 @@
             hideTimerUI();
         }
         if (kolejkiListContent) updateKolejkiListUI();
+        if (eveWindowOpen && selectedEveKey != null && eveWindowEl) updateEveMapList();
     }
 
     /** Pobiera rezerwacje dla potwora (cache 2 min). */
@@ -606,8 +623,8 @@
         kolejkiWrap.innerHTML =
             '<button type="button" class="map-timer-kolejki-btn" title="Menu">📋</button>' +
             '<div class="map-timer-kolejki-menu" style="display:none;">' +
-            '<button type="button" class="map-timer-kolejki-icon-btn" data-action="kolejki" title="Kolejki">📋</button>' +
-            '<button type="button" class="map-timer-kolejki-icon-btn" data-action="heros" title="Heros eventowy">⭐</button>' +
+            '<div class="map-timer-kolejki-icon-wrap"><span class="map-timer-tooltip">Kolejki</span><button type="button" class="map-timer-kolejki-icon-btn" data-action="kolejki">📋</button></div>' +
+            '<div class="map-timer-kolejki-icon-wrap"><span class="map-timer-tooltip">Heros eventowy</span><button type="button" class="map-timer-kolejki-icon-btn" data-action="heros">⭐</button></div>' +
             '</div>' +
             '<div class="map-timer-kolejki-panel" style="display:none;">' +
             '<div class="map-timer-kolejki-title-row"><span class="map-timer-kolejki-title">Kolejki</span><button type="button" class="map-timer-kolejki-close" title="Zamknij">✕</button></div>' +
@@ -618,10 +635,12 @@
         const titleStyle = 'font-size:13px;font-weight:bold;';
         const listStyle = 'padding:8px 12px;max-height:240px;overflow-y:auto;';
         const menuStyle = 'position:absolute;left:100%;margin-left:4px;top:0;display:flex;gap:4px;background:#1a1a2e;border:1px solid rgba(255,255,255,0.15);border-radius:10px;padding:6px;box-shadow:0 4px 16px rgba(0,0,0,0.4);';
+        const iconWrapStyle = 'position:relative;';
         const iconBtnStyle = 'width:36px;height:36px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:#16213e;color:#eee;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;';
+        const tooltipStyle = 'position:absolute;left:100%;top:50%;transform:translateY(-50%);margin-left:6px;padding:4px 8px;background:#0f0f23;color:#eee;font-size:12px;white-space:nowrap;border-radius:6px;border:1px solid #2a2a4a;box-shadow:0 2px 8px rgba(0,0,0,0.4);z-index:100002;pointer-events:none;opacity:0;transition:none;visibility:hidden;';
         const closeBtnStyle = 'background:none;border:none;color:#8892b0;cursor:pointer;font-size:16px;padding:2px 6px;line-height:1;border-radius:4px;';
         const styleEl = document.createElement('style');
-        styleEl.textContent = '.map-timer-kolejki-btn{' + btnStyle + '}.map-timer-kolejki-btn:hover{background:#16213e;}.map-timer-kolejki-menu{' + menuStyle + '}.map-timer-kolejki-icon-btn{' + iconBtnStyle + '}.map-timer-kolejki-icon-btn:hover{background:#2a2a4a;}.map-timer-kolejki-close{' + closeBtnStyle + '}.map-timer-kolejki-close:hover{color:#fff;background:rgba(255,255,255,0.1);}.map-timer-kolejki-panel{' + panelStyle + '}.map-timer-kolejki-title-row{' + titleRowStyle + '}.map-timer-kolejki-title{' + titleStyle + '}.map-timer-kolejki-list-content{' + listStyle + '}.map-timer-kolejki-row{padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06);}.map-timer-kolejki-meta{color:#888;font-size:10px;}.map-timer-kolejki-item-wrap{display:inline-block;vertical-align:middle;margin-left:4px;}.map-timer-kolejki-item-gif{width:20px;height:20px;object-fit:contain;cursor:pointer;}.map-timer-kolejki-png-popup{position:fixed;z-index:100001;background:#1a1a2e;padding:6px;border:1px solid #2a2a4a;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5);pointer-events:none;}.map-timer-kolejki-png-popup img{display:block;width:auto;height:auto;max-width:90vw;max-height:70vh;object-fit:contain;}';
+        styleEl.textContent = '.map-timer-kolejki-btn{' + btnStyle + '}.map-timer-kolejki-btn:hover{background:#16213e;}.map-timer-kolejki-menu{' + menuStyle + '}.map-timer-kolejki-icon-wrap{' + iconWrapStyle + '}.map-timer-kolejki-icon-wrap:hover .map-timer-tooltip{opacity:1;visibility:visible;}.map-timer-kolejki-icon-btn{' + iconBtnStyle + '}.map-timer-kolejki-icon-btn:hover{background:#2a2a4a;}.map-timer-tooltip{' + tooltipStyle + '}.map-timer-kolejki-close{' + closeBtnStyle + '}.map-timer-kolejki-close:hover{color:#fff;background:rgba(255,255,255,0.1);}.map-timer-kolejki-panel{' + panelStyle + '}.map-timer-kolejki-title-row{' + titleRowStyle + '}.map-timer-kolejki-title{' + titleStyle + '}.map-timer-kolejki-list-content{' + listStyle + '}.map-timer-kolejki-row{padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06);}.map-timer-kolejki-meta{color:#888;font-size:10px;}.map-timer-kolejki-item-wrap{display:inline-block;vertical-align:middle;margin-left:4px;}.map-timer-kolejki-item-gif{width:20px;height:20px;object-fit:contain;cursor:pointer;}.map-timer-kolejki-png-popup{position:fixed;z-index:100001;background:#1a1a2e;padding:6px;border:1px solid #2a2a4a;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5);pointer-events:none;}.map-timer-kolejki-png-popup img{display:block;width:auto;height:auto;max-width:90vw;max-height:70vh;object-fit:contain;}';
         document.head.appendChild(styleEl);
         document.body.appendChild(kolejkiWrap);
         kolejkiMenuPanel = kolejkiWrap.querySelector('.map-timer-kolejki-menu');
@@ -698,6 +717,8 @@
                         applyKolejkiPanelPosition();
                         kolejkiListPanel.style.display = 'block';
                         updateKolejkiListUI();
+                    } else if (action === 'heros') {
+                        openEveWindow();
                     }
                 });
             });
@@ -808,6 +829,80 @@
         imgEl.addEventListener('mouseleave', function () {
             hidePngPopup();
         });
+    }
+
+    // ================================================================
+    //  UI — Heros eventowy (EVE): okno z 3 opcjami i listą map
+    // ================================================================
+    var EVE_OPTIONS = [
+        { key: 63, label: 'EVE 63 - Nazwa herosa' },
+        { key: 143, label: 'EVE 143 - Nazwa herosa' },
+        { key: 300, label: 'EVE 300 - Nazwa herosa' },
+    ];
+
+    function createEveWindow() {
+        if (eveWindowEl) return eveWindowEl;
+        eveWindowEl = document.createElement('div');
+        eveWindowEl.id = 'map-timer-eve-window';
+        eveWindowEl.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:100003;min-width:280px;max-width:360px;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.5);font-family:Arial,sans-serif;overflow:hidden;';
+        eveWindowEl.innerHTML =
+            '<div style="background:#16213e;padding:10px 12px;font-weight:bold;font-size:14px;border-bottom:1px solid #2a2a4a;">Heros eventowy</div>' +
+            '<div class="map-timer-eve-buttons" style="padding:12px;display:flex;flex-direction:column;gap:8px;">' +
+            EVE_OPTIONS.map(function (o) { return '<button type="button" class="map-timer-eve-opt" data-eve="' + o.key + '" style="padding:10px 12px;background:#16213e;border:1px solid #2a2a4a;border-radius:8px;color:#eee;cursor:pointer;text-align:left;font-size:13px;">' + escapeHtml(o.label) + '</button>'; }).join('') +
+            '</div>' +
+            '<div class="map-timer-eve-list-wrap" style="display:none;padding:0 12px 12px;border-top:1px solid #2a2a4a;max-height:200px;overflow-y:auto;">' +
+            '<div class="map-timer-eve-list-title" style="font-size:12px;color:#8892b0;margin:8px 0 6px;"></div>' +
+            '<div class="map-timer-eve-list"></div>' +
+            '</div>' +
+            '<button type="button" class="map-timer-eve-close" style="position:absolute;top:8px;right:8px;background:none;border:none;color:#8892b0;cursor:pointer;font-size:18px;padding:0 4px;">✕</button>';
+        document.body.appendChild(eveWindowEl);
+
+        eveWindowEl.querySelectorAll('.map-timer-eve-opt').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var key = parseInt(btn.getAttribute('data-eve'), 10);
+                selectedEveKey = key;
+                eveWindowEl.querySelector('.map-timer-eve-list-wrap').style.display = 'block';
+                eveWindowEl.querySelector('.map-timer-eve-list-title').textContent = 'Mapy (wybrano EVE ' + key + ')';
+                updateEveMapList();
+            });
+        });
+        eveWindowEl.querySelector('.map-timer-eve-close').addEventListener('click', function () {
+            eveWindowOpen = false;
+            if (eveWindowEl) eveWindowEl.style.display = 'none';
+        });
+        return eveWindowEl;
+    }
+
+    function updateEveMapList() {
+        if (!eveWindowEl || selectedEveKey == null) return;
+        var listEl = eveWindowEl.querySelector('.map-timer-eve-list');
+        if (!listEl) return;
+        var maps = EVE_MAPS[selectedEveKey] || [];
+        var currentMap = getCurrentMapName() || '';
+        var myNick = heroName || 'Ty';
+
+        listEl.innerHTML = '';
+        if (maps.length === 0) {
+            listEl.innerHTML = '<div style="color:#8892b0;font-size:12px;padding:8px 0;">Brak map (lista do uzupełnienia w skrypcie).</div>';
+            return;
+        }
+        maps.forEach(function (mapName) {
+            var isCurrent = (String(mapName).trim().toLowerCase() === currentMap.trim().toLowerCase());
+            var nick = isCurrent ? myNick : '—';
+            var rowColor = isCurrent ? '#2ecc71' : '#e74c3c';
+            var row = document.createElement('div');
+            row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.06);font-size:12px;';
+            row.innerHTML = '<span style="color:' + rowColor + ';">' + escapeHtml(mapName) + '</span><span style="color:' + rowColor + ';">' + escapeHtml(nick) + '</span>';
+            listEl.appendChild(row);
+        });
+    }
+
+    function openEveWindow() {
+        createEveWindow();
+        eveWindowOpen = true;
+        eveWindowEl.style.display = 'block';
+        selectedEveKey = null;
+        eveWindowEl.querySelector('.map-timer-eve-list-wrap').style.display = 'none';
     }
 
     // ================================================================
