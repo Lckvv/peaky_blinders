@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Margonem Map Timer
 // @namespace    http://tampermonkey.net/
-// @version      2.3
+// @version      2.4
 // @description  Tracks time spent on target maps and syncs with backend. Supports API key auth for multi-user leaderboards.
 // @author       Lucek
 // @match        https://*.margonem.com/*
@@ -58,7 +58,9 @@
     let kolejkiWrap = null;
     let kolejkiListPanel = null;
     let kolejkiListContent = null;
+    let kolejkiMenuPanel = null;
     let kolejkiOpen = false;
+    let kolejkiMenuOpen = false;
     let sessionFinalized = false;
     let reservationsCache = { monster: null, data: null, ts: 0 };
     let phaseLeaderboardCache = { monster: null, data: null, ts: 0 };
@@ -69,6 +71,10 @@
     const NICK_COLOR_NO_LIST = '#888';
     let currentPngPopup = null;
     let currentPngPopupImg = null;
+    // Heros: wt > 79 (jak w Lootlog get-npc-type-by-wt: wt>79 = HERO)
+    const HEROS_WT_MIN = 80;
+    let lastHerosNotifyTime = 0;
+    const HEROS_NOTIFY_COOLDOWN_MS = 15000;
 
     function refreshConfigFromStorage() {
         CONFIG.API_KEY = GM_getValue('api_key', '');
@@ -175,6 +181,53 @@
             world: engine.map?.d?.mainid || engine.hero.d?.world || engine.hero.world || 'Unknown',
             outfitUrl: outfitUrl,
         };
+    }
+
+    /** Lista NPCów na mapie (potwory, herosy itd.). Zwraca tablicę { id, wt, nick, tpl }. wt = widget type (Lootlog: >79 = Heros, >89 = Kolos, >99 = Tytan). */
+    function getNpcsOnMap() {
+        const engine = getEngine();
+        if (!engine) return [];
+        try {
+            if (typeof engine.npcs !== 'undefined' && typeof engine.npcs.getDrawableList === 'function') {
+                const list = engine.npcs.getDrawableList();
+                if (!Array.isArray(list)) return [];
+                const tplManager = engine.npcTplManager && typeof engine.npcTplManager.getNpcTpl === 'function' ? engine.npcTplManager : null;
+                return list.map(function (npc) {
+                    const d = npc && npc.d != null ? npc.d : npc;
+                    if (!d) return null;
+                    var wt = d.wt != null ? Number(d.wt) : undefined;
+                    if (wt == null && d.tpl != null && tplManager) {
+                        var tpl = tplManager.getNpcTpl(d.tpl);
+                        wt = tpl && tpl.wt != null ? Number(tpl.wt) : undefined;
+                    }
+                    return { id: d.id, wt: wt, nick: d.nick, tpl: d.tpl };
+                }).filter(Boolean);
+            }
+            if (typeof window.g !== 'undefined' && window.g && window.g.npc) {
+                const arr = Object.values(window.g.npc);
+                return arr.map(function (d) {
+                    if (!d) return null;
+                    const wt = d.wt != null ? Number(d.wt) : undefined;
+                    return { id: d.id, wt: wt, nick: d.nick, tpl: d.tpl };
+                }).filter(Boolean);
+            }
+        } catch (e) {
+            if (CONFIG.DEBUG) log('getNpcsOnMap error:', e);
+        }
+        return [];
+    }
+
+    /** Sprawdza czy na mapie jest Heros (wt >= 80) i pokazuje powiadomienie (z cooldownem). */
+    function checkHerosOnMapAndNotify() {
+        const npcs = getNpcsOnMap();
+        const now = Date.now();
+        const heroNpc = npcs.find(function (n) { return n.wt != null && n.wt >= HEROS_WT_MIN; });
+        if (!heroNpc) return;
+        if (now - lastHerosNotifyTime < HEROS_NOTIFY_COOLDOWN_MS) return;
+        lastHerosNotifyTime = now;
+        const name = (heroNpc.nick && String(heroNpc.nick).trim()) || 'Heros';
+        showToast('🦸 ' + name + ' na mapie!', 'success');
+        log('Heros na mapie:', name, '(wt:', heroNpc.wt + ')');
     }
 
     /** Lista postaci obecnych na mapie (Engine.others / g.other). */
@@ -436,7 +489,9 @@
                 accumulatedSeconds = Math.floor((Date.now() - sessionStartTime) / 1000);
             }
             updateTimerUI();
-        } else {
+        }
+        checkHerosOnMapAndNotify();
+        if (!target) {
             if (currentTarget) {
                 finalizeSession('map_change');
             }
@@ -548,15 +603,28 @@
         kolejkiWrap = document.createElement('div');
         kolejkiWrap.id = 'map-timer-kolejki-wrap';
         kolejkiWrap.style.cssText = 'position:fixed;left:' + pos.left + 'px;top:' + pos.top + 'px;z-index:99998;';
-        kolejkiWrap.innerHTML = '<button type="button" class="map-timer-kolejki-btn" title="Kolejki">📋</button><div class="map-timer-kolejki-panel" style="display:none;"><div class="map-timer-kolejki-title">Kolejki</div><div class="map-timer-kolejki-list-content"></div></div>';
+        kolejkiWrap.innerHTML =
+            '<button type="button" class="map-timer-kolejki-btn" title="Menu">📋</button>' +
+            '<div class="map-timer-kolejki-menu" style="display:none;">' +
+            '<button type="button" class="map-timer-kolejki-icon-btn" data-action="kolejki" title="Kolejki">📋</button>' +
+            '<button type="button" class="map-timer-kolejki-icon-btn" data-action="heros" title="Heros eventowy">⭐</button>' +
+            '</div>' +
+            '<div class="map-timer-kolejki-panel" style="display:none;">' +
+            '<div class="map-timer-kolejki-title-row"><span class="map-timer-kolejki-title">Kolejki</span><button type="button" class="map-timer-kolejki-close" title="Zamknij">✕</button></div>' +
+            '<div class="map-timer-kolejki-list-content"></div></div>';
         const btnStyle = 'background:#1a1a2e;border:1px solid rgba(255,255,255,0.2);color:#eee;width:40px;height:40px;border-radius:10px;cursor:pointer;font-size:18px;box-shadow:0 2px 10px rgba(0,0,0,0.4);';
         const panelStyle = 'position:absolute;min-width:200px;max-width:280px;background:#1a1a2e;color:#eee;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.08);font-family:Arial,sans-serif;font-size:12px;overflow:hidden;';
-        const titleStyle = 'background:#16213e;padding:8px 12px;font-size:13px;font-weight:bold;';
+        const titleRowStyle = 'background:#16213e;padding:8px 12px;font-size:13px;font-weight:bold;display:flex;align-items:center;justify-content:space-between;';
+        const titleStyle = 'font-size:13px;font-weight:bold;';
         const listStyle = 'padding:8px 12px;max-height:240px;overflow-y:auto;';
+        const menuStyle = 'position:absolute;left:100%;margin-left:4px;top:0;display:flex;gap:4px;background:#1a1a2e;border:1px solid rgba(255,255,255,0.15);border-radius:10px;padding:6px;box-shadow:0 4px 16px rgba(0,0,0,0.4);';
+        const iconBtnStyle = 'width:36px;height:36px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:#16213e;color:#eee;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;';
+        const closeBtnStyle = 'background:none;border:none;color:#8892b0;cursor:pointer;font-size:16px;padding:2px 6px;line-height:1;border-radius:4px;';
         const styleEl = document.createElement('style');
-        styleEl.textContent = '.map-timer-kolejki-btn{' + btnStyle + '}.map-timer-kolejki-btn:hover{background:#16213e;}.map-timer-kolejki-panel{' + panelStyle + '}.map-timer-kolejki-title{' + titleStyle + '}.map-timer-kolejki-list-content{' + listStyle + '}.map-timer-kolejki-row{padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06);}.map-timer-kolejki-meta{color:#888;font-size:10px;}.map-timer-kolejki-item-wrap{display:inline-block;vertical-align:middle;margin-left:4px;}.map-timer-kolejki-item-gif{width:20px;height:20px;object-fit:contain;cursor:pointer;}.map-timer-kolejki-png-popup{position:fixed;z-index:100001;background:#1a1a2e;padding:6px;border:1px solid #2a2a4a;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5);pointer-events:none;}.map-timer-kolejki-png-popup img{display:block;width:auto;height:auto;max-width:90vw;max-height:70vh;object-fit:contain;}';
+        styleEl.textContent = '.map-timer-kolejki-btn{' + btnStyle + '}.map-timer-kolejki-btn:hover{background:#16213e;}.map-timer-kolejki-menu{' + menuStyle + '}.map-timer-kolejki-icon-btn{' + iconBtnStyle + '}.map-timer-kolejki-icon-btn:hover{background:#2a2a4a;}.map-timer-kolejki-close{' + closeBtnStyle + '}.map-timer-kolejki-close:hover{color:#fff;background:rgba(255,255,255,0.1);}.map-timer-kolejki-panel{' + panelStyle + '}.map-timer-kolejki-title-row{' + titleRowStyle + '}.map-timer-kolejki-title{' + titleStyle + '}.map-timer-kolejki-list-content{' + listStyle + '}.map-timer-kolejki-row{padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06);}.map-timer-kolejki-meta{color:#888;font-size:10px;}.map-timer-kolejki-item-wrap{display:inline-block;vertical-align:middle;margin-left:4px;}.map-timer-kolejki-item-gif{width:20px;height:20px;object-fit:contain;cursor:pointer;}.map-timer-kolejki-png-popup{position:fixed;z-index:100001;background:#1a1a2e;padding:6px;border:1px solid #2a2a4a;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5);pointer-events:none;}.map-timer-kolejki-png-popup img{display:block;width:auto;height:auto;max-width:90vw;max-height:70vh;object-fit:contain;}';
         document.head.appendChild(styleEl);
         document.body.appendChild(kolejkiWrap);
+        kolejkiMenuPanel = kolejkiWrap.querySelector('.map-timer-kolejki-menu');
         kolejkiListPanel = kolejkiWrap.querySelector('.map-timer-kolejki-panel');
         kolejkiListContent = kolejkiWrap.querySelector('.map-timer-kolejki-list-content');
 
@@ -569,6 +637,14 @@
             const vh = document.documentElement.clientHeight || window.innerHeight;
             const onRight = rect.left + btnW > vw / 2;
             const onBottom = rect.top + btnH > vh / 2;
+            if (kolejkiMenuPanel) {
+                kolejkiMenuPanel.style.left = onRight ? 'auto' : '100%';
+                kolejkiMenuPanel.style.right = onRight ? '100%' : 'auto';
+                kolejkiMenuPanel.style.marginLeft = onRight ? '-4px' : '4px';
+                kolejkiMenuPanel.style.marginRight = onRight ? '4px' : '0';
+                kolejkiMenuPanel.style.top = '0';
+                kolejkiMenuPanel.style.bottom = 'auto';
+            }
             kolejkiListPanel.style.left = onRight ? 'auto' : '0';
             kolejkiListPanel.style.right = onRight ? '0' : 'auto';
             kolejkiListPanel.style.top = onBottom ? 'auto' : (btnH + 4) + 'px';
@@ -596,7 +672,7 @@
             kolejkiWrap.style.left = left + 'px';
             kolejkiWrap.style.top = top + 'px';
             setStoredKolejkiPos(left, top);
-            if (kolejkiOpen) applyKolejkiPanelPosition();
+            if (kolejkiOpen || kolejkiMenuOpen) applyKolejkiPanelPosition();
         });
         document.addEventListener('mouseup', function (e) {
             if (e.button !== 0) return;
@@ -604,17 +680,35 @@
                 const moved = Math.abs(e.clientX - drag.startX) + Math.abs(e.clientY - drag.startY) > 5;
                 drag.active = false;
                 if (!moved) {
-                    kolejkiOpen = !kolejkiOpen;
-                    if (kolejkiOpen) {
-                        applyKolejkiPanelPosition();
-                        kolejkiListPanel.style.display = 'block';
-                        updateKolejkiListUI();
-                    } else {
-                        kolejkiListPanel.style.display = 'none';
-                    }
+                    kolejkiMenuOpen = !kolejkiMenuOpen;
+                    if (kolejkiMenuPanel) kolejkiMenuPanel.style.display = kolejkiMenuOpen ? 'flex' : 'none';
+                    if (kolejkiMenuOpen) applyKolejkiPanelPosition();
                 }
             }
         });
+
+        if (kolejkiMenuPanel) {
+            kolejkiMenuPanel.querySelectorAll('.map-timer-kolejki-icon-btn').forEach(function (iconBtn) {
+                iconBtn.addEventListener('click', function () {
+                    const action = iconBtn.getAttribute('data-action');
+                    if (action === 'kolejki') {
+                        kolejkiMenuOpen = false;
+                        if (kolejkiMenuPanel) kolejkiMenuPanel.style.display = 'none';
+                        kolejkiOpen = true;
+                        applyKolejkiPanelPosition();
+                        kolejkiListPanel.style.display = 'block';
+                        updateKolejkiListUI();
+                    }
+                });
+            });
+        }
+        const closeBtn = kolejkiWrap.querySelector('.map-timer-kolejki-close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', function () {
+                kolejkiOpen = false;
+                kolejkiListPanel.style.display = 'none';
+            });
+        }
         document.addEventListener('mousemove', function (e) {
             if (currentPngPopup && currentPngPopupImg && e.target !== currentPngPopupImg && !(currentPngPopupImg.contains && currentPngPopupImg.contains(e.target))) {
                 hidePngPopup();
