@@ -76,12 +76,30 @@
     const HEROS_WT_MAX = 89;
     const TITAN_WT_MIN = 100;
     let lastHerosNotifiedMapName = null;
-    // Heros eventowy: listy map per EVE (wypełnisz później)
-    const EVE_MAPS = { 63: [], 143: [], 300: [] };
+    // Heros eventowy: listy map per EVE
+    const EVE_MAPS = {
+        63: [
+            'Dripping Honey Mine - 1st Level - 1st Chamber',
+            'Dripping Honey Mine - 2nd Level - 1st Chamber',
+            'Dripping Honey Mine - 3rd Level',
+            'Dripping Honey Mine - 2nd Level - 2nd Chamber',
+            'Dripping Honey Mine - Vestibule',
+        ],
+        143: [
+            "Vorundriel's Forge - 1st Level",
+            "Vorundriel's Forge - 2nd Level",
+            "Vorundriel's Forge - 3rd Level",
+        ],
+        300: [
+            'Shaiharrud Desert - East',
+        ],
+    };
     let eveWindowOpen = false;
     let eveWindowEl = null;
     let eveMapListPanel = null;
     let selectedEveKey = null;
+    let eveMapPopupEl = null;
+    let eveMapPopupCurrentMap = null;
 
     function refreshConfigFromStorage() {
         CONFIG.API_KEY = GM_getValue('api_key', '');
@@ -946,6 +964,39 @@
         updateEveMapList();
     }
 
+    function ensureEveMapPopup() {
+        if (eveMapPopupEl) return eveMapPopupEl;
+        eveMapPopupEl = document.createElement('div');
+        eveMapPopupEl.id = 'map-timer-eve-map-popup';
+        eveMapPopupEl.style.cssText = 'position:fixed;z-index:100005;min-width:220px;max-width:360px;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.5);font-family:Arial,sans-serif;overflow:hidden;display:none;';
+        eveMapPopupEl.innerHTML =
+            '<div style="background:#16213e;padding:10px 32px 10px 12px;font-weight:bold;font-size:13px;border-bottom:1px solid #2a2a4a;color:#fff;">Mapa</div>' +
+            '<div class="map-timer-eve-map-popup-body" style="padding:12px;font-size:13px;color:#eee;"></div>' +
+            '<button type="button" class="map-timer-eve-map-popup-close" style="position:absolute;top:8px;right:8px;background:none;border:none;color:#8892b0;cursor:pointer;font-size:18px;padding:0 4px;">✕</button>';
+        document.body.appendChild(eveMapPopupEl);
+        eveMapPopupEl.querySelector('.map-timer-eve-map-popup-close').addEventListener('click', function () {
+            eveMapPopupEl.style.display = 'none';
+            eveMapPopupCurrentMap = null;
+        });
+        return eveMapPopupEl;
+    }
+
+    function toggleEveMapPopup(mapName) {
+        ensureEveMapPopup();
+        if (eveMapPopupCurrentMap === mapName) {
+            eveMapPopupEl.style.display = 'none';
+            eveMapPopupCurrentMap = null;
+            return;
+        }
+        eveMapPopupCurrentMap = mapName;
+        eveMapPopupEl.querySelector('.map-timer-eve-map-popup-body').textContent = mapName;
+        eveMapPopupEl.style.display = 'block';
+        var w = document.documentElement.clientWidth || 400;
+        var h = document.documentElement.clientHeight || 300;
+        eveMapPopupEl.style.left = (w - 280) / 2 + 'px';
+        eveMapPopupEl.style.top = Math.max(60, (h - 120) / 2) + 'px';
+    }
+
     function updateEveMapList() {
         if (!eveMapListPanel || selectedEveKey == null) return;
         var listEl = eveMapListPanel.querySelector('.map-timer-eve-list');
@@ -964,8 +1015,9 @@
             var nick = isCurrent ? myNick : '—';
             var rowColor = isCurrent ? '#2ecc71' : '#e74c3c';
             var row = document.createElement('div');
-            row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.06);font-size:12px;';
+            row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.06);font-size:12px;cursor:pointer;';
             row.innerHTML = '<span style="color:' + rowColor + ';">' + escapeHtml(mapName) + '</span><span style="color:' + rowColor + ';">' + escapeHtml(nick) + '</span>';
+            row.addEventListener('click', function () { toggleEveMapPopup(mapName); });
             listEl.appendChild(row);
         });
     }
