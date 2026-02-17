@@ -80,6 +80,7 @@
     const EVE_MAPS = { 63: [], 143: [], 300: [] };
     let eveWindowOpen = false;
     let eveWindowEl = null;
+    let eveMapListPanel = null;
     let selectedEveKey = null;
 
     function refreshConfigFromStorage() {
@@ -514,7 +515,7 @@
             hideTimerUI();
         }
         if (kolejkiListContent) updateKolejkiListUI();
-        if (eveWindowOpen && selectedEveKey != null && eveWindowEl) updateEveMapList();
+        if (eveMapListPanel && selectedEveKey != null && eveMapListPanel.style.display !== 'none') updateEveMapList();
     }
 
     /** Pobiera rezerwacje dla potwora (cache 2 min). */
@@ -846,24 +847,43 @@
         eveWindowEl.id = 'map-timer-eve-window';
         eveWindowEl.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:100003;min-width:280px;max-width:360px;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.5);font-family:Arial,sans-serif;overflow:hidden;';
         eveWindowEl.innerHTML =
-            '<div style="background:#16213e;padding:10px 12px;font-weight:bold;font-size:14px;border-bottom:1px solid #2a2a4a;">Heros eventowy</div>' +
+            '<div class="map-timer-eve-title" style="background:#16213e;padding:10px 36px 10px 12px;font-weight:bold;font-size:14px;border-bottom:1px solid #2a2a4a;color:#fff;cursor:move;user-select:none;">Heros eventowy</div>' +
             '<div class="map-timer-eve-buttons" style="padding:12px;display:flex;flex-direction:column;gap:8px;">' +
             EVE_OPTIONS.map(function (o) { return '<button type="button" class="map-timer-eve-opt" data-eve="' + o.key + '" style="padding:10px 12px;background:#16213e;border:1px solid #2a2a4a;border-radius:8px;color:#eee;cursor:pointer;text-align:left;font-size:13px;">' + escapeHtml(o.label) + '</button>'; }).join('') +
             '</div>' +
-            '<div class="map-timer-eve-list-wrap" style="display:none;padding:0 12px 12px;border-top:1px solid #2a2a4a;max-height:200px;overflow-y:auto;">' +
-            '<div class="map-timer-eve-list-title" style="font-size:12px;color:#8892b0;margin:8px 0 6px;"></div>' +
-            '<div class="map-timer-eve-list"></div>' +
-            '</div>' +
             '<button type="button" class="map-timer-eve-close" style="position:absolute;top:8px;right:8px;background:none;border:none;color:#8892b0;cursor:pointer;font-size:18px;padding:0 4px;">✕</button>';
         document.body.appendChild(eveWindowEl);
+
+        var titleBar = eveWindowEl.querySelector('.map-timer-eve-title');
+        var drag = { active: false, startX: 0, startY: 0, startLeft: 0, startTop: 0 };
+        titleBar.addEventListener('mousedown', function (e) {
+            if (e.button !== 0) return;
+            drag.active = true;
+            drag.startX = e.clientX;
+            drag.startY = e.clientY;
+            var rect = eveWindowEl.getBoundingClientRect();
+            drag.startLeft = rect.left;
+            drag.startTop = rect.top;
+            eveWindowEl.style.transform = 'none';
+            eveWindowEl.style.left = rect.left + 'px';
+            eveWindowEl.style.top = rect.top + 'px';
+            e.preventDefault();
+        });
+        document.addEventListener('mousemove', function (e) {
+            if (!drag.active) return;
+            eveWindowEl.style.left = (drag.startLeft + (e.clientX - drag.startX)) + 'px';
+            eveWindowEl.style.top = (drag.startTop + (e.clientY - drag.startY)) + 'px';
+        });
+        document.addEventListener('mouseup', function (e) {
+            if (e.button !== 0) return;
+            drag.active = false;
+        });
 
         eveWindowEl.querySelectorAll('.map-timer-eve-opt').forEach(function (btn) {
             btn.addEventListener('click', function () {
                 var key = parseInt(btn.getAttribute('data-eve'), 10);
                 selectedEveKey = key;
-                eveWindowEl.querySelector('.map-timer-eve-list-wrap').style.display = 'block';
-                eveWindowEl.querySelector('.map-timer-eve-list-title').textContent = 'Mapy (wybrano EVE ' + key + ')';
-                updateEveMapList();
+                showEveMapListPanel(key);
             });
         });
         eveWindowEl.querySelector('.map-timer-eve-close').addEventListener('click', function () {
@@ -873,9 +893,61 @@
         return eveWindowEl;
     }
 
+    function showEveMapListPanel(eveKey) {
+        if (eveMapListPanel) {
+            eveMapListPanel.style.display = 'block';
+            eveMapListPanel.querySelector('.map-timer-eve-list-title').textContent = 'Mapy (EVE ' + eveKey + ')';
+            selectedEveKey = eveKey;
+            updateEveMapList();
+            return;
+        }
+        eveMapListPanel = document.createElement('div');
+        eveMapListPanel.id = 'map-timer-eve-list-panel';
+        eveMapListPanel.style.cssText = 'position:fixed;z-index:100004;min-width:260px;max-width:320px;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.5);font-family:Arial,sans-serif;overflow:hidden;';
+        var offLeft = (document.documentElement.clientWidth || 800) - 320;
+        var offTop = Math.max(80, ((document.documentElement.clientHeight || 600) - 280) / 2);
+        eveMapListPanel.style.left = offLeft + 'px';
+        eveMapListPanel.style.top = offTop + 'px';
+        eveMapListPanel.innerHTML =
+            '<div class="map-timer-eve-list-panel-title" style="background:#16213e;padding:10px 36px 10px 12px;font-weight:bold;font-size:14px;border-bottom:1px solid #2a2a4a;color:#fff;cursor:move;user-select:none;">Mapy</div>' +
+            '<div class="map-timer-eve-list-title" style="font-size:12px;color:#8892b0;padding:8px 12px 0;"></div>' +
+            '<div class="map-timer-eve-list" style="padding:8px 12px 12px;max-height:220px;overflow-y:auto;"></div>' +
+            '<button type="button" class="map-timer-eve-list-close" style="position:absolute;top:8px;right:8px;background:none;border:none;color:#8892b0;cursor:pointer;font-size:18px;padding:0 4px;">✕</button>';
+        document.body.appendChild(eveMapListPanel);
+
+        var listTitleBar = eveMapListPanel.querySelector('.map-timer-eve-list-panel-title');
+        var listDrag = { active: false, startX: 0, startY: 0, startLeft: 0, startTop: 0 };
+        listTitleBar.addEventListener('mousedown', function (e) {
+            if (e.button !== 0) return;
+            listDrag.active = true;
+            listDrag.startX = e.clientX;
+            listDrag.startY = e.clientY;
+            var rect = eveMapListPanel.getBoundingClientRect();
+            listDrag.startLeft = rect.left;
+            listDrag.startTop = rect.top;
+            e.preventDefault();
+        });
+        document.addEventListener('mousemove', function (e) {
+            if (!listDrag.active) return;
+            eveMapListPanel.style.left = (listDrag.startLeft + (e.clientX - listDrag.startX)) + 'px';
+            eveMapListPanel.style.top = (listDrag.startTop + (e.clientY - listDrag.startY)) + 'px';
+        });
+        document.addEventListener('mouseup', function (e) {
+            if (e.button !== 0) return;
+            listDrag.active = false;
+        });
+
+        eveMapListPanel.querySelector('.map-timer-eve-list-close').addEventListener('click', function () {
+            eveMapListPanel.style.display = 'none';
+        });
+
+        eveMapListPanel.querySelector('.map-timer-eve-list-title').textContent = 'Mapy (EVE ' + eveKey + ')';
+        updateEveMapList();
+    }
+
     function updateEveMapList() {
-        if (!eveWindowEl || selectedEveKey == null) return;
-        var listEl = eveWindowEl.querySelector('.map-timer-eve-list');
+        if (!eveMapListPanel || selectedEveKey == null) return;
+        var listEl = eveMapListPanel.querySelector('.map-timer-eve-list');
         if (!listEl) return;
         var maps = EVE_MAPS[selectedEveKey] || [];
         var currentMap = getCurrentMapName() || '';
@@ -902,7 +974,7 @@
         eveWindowOpen = true;
         eveWindowEl.style.display = 'block';
         selectedEveKey = null;
-        eveWindowEl.querySelector('.map-timer-eve-list-wrap').style.display = 'none';
+        if (eveMapListPanel) eveMapListPanel.style.display = 'none';
     }
 
     // ================================================================
