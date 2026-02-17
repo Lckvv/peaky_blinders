@@ -193,7 +193,6 @@ export default function Navbar() {
       </div>
 
       <div style={navStyles.navSection}>
-        <div style={navStyles.sectionLabel}>Strony</div>
         <Link
           href="/kupie"
           style={{
