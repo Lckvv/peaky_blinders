@@ -626,7 +626,7 @@
             '<div class="map-timer-kolejki-menu" style="display:none;">' +
             '<div class="map-timer-kolejki-icon-wrap"><span class="map-timer-tooltip">Kolejki</span><button type="button" class="map-timer-kolejki-icon-btn" data-action="kolejki">📋</button></div>' +
             '<div class="map-timer-kolejki-icon-wrap"><span class="map-timer-tooltip">Heros eventowy</span><button type="button" class="map-timer-kolejki-icon-btn" data-action="heros">⭐</button></div>' +
-            '<div class="map-timer-kolejki-icon-wrap"><span class="map-timer-tooltip">Strona Główna</span><a href="' + (CONFIG.BACKEND_URL.replace(/\/$/, '') + '/tytani/renegat') + '" target="_blank" rel="noopener" class="map-timer-kolejki-icon-btn map-timer-kolejki-icon-link" title="Strona Główna">↗</a></div>' +
+            '<div class="map-timer-kolejki-icon-wrap"><span class="map-timer-tooltip">Strona Główna</span><a href="' + (CONFIG.BACKEND_URL.replace(/\/$/, '')) + '" target="_blank" rel="noopener" class="map-timer-kolejki-icon-btn map-timer-kolejki-icon-link" title="Strona Główna">↗</a></div>' +
             '</div>' +
             '<div class="map-timer-kolejki-panel" style="display:none;">' +
             '<div class="map-timer-kolejki-title-row"><span class="map-timer-kolejki-title">Kolejki</span><button type="button" class="map-timer-kolejki-close" title="Zamknij">✕</button></div>' +
