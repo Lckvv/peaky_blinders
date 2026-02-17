@@ -11,6 +11,7 @@
 // @connect      *
 // @connect      *.railway.app
 // @connect      *.up.railway.app
+// @connect      discord.com
 // ==/UserScript==
 
 (function () {
@@ -100,6 +101,10 @@
     let selectedEveKey = null;
     let eveMapPopupEl = null;
     let eveMapPopupCurrentMap = null;
+    // Heros → Discord: webhook (kanał herosi), panel z przyciskiem „Zawołaj klan”
+    const DISCORD_WEBHOOK_HEROS = 'https://discord.com/api/webhooks/1473433710220148816/FWedosu8fOskXb7Dy1C2AUiJ99lSi75LD4JkjfbrYcizdE7vbD97MQK-Gwc9UPf0JBhC';
+    let heroAlertPanelEl = null;
+    let lastHeroAlertData = null;
 
     function refreshConfigFromStorage() {
         CONFIG.API_KEY = GM_getValue('api_key', '');
@@ -225,7 +230,7 @@
                         var tpl = tplManager.getNpcTpl(d.tpl);
                         wt = tpl && tpl.wt != null ? Number(tpl.wt) : undefined;
                     }
-                    return { id: d.id, wt: wt, nick: d.nick, tpl: d.tpl };
+                    return { id: d.id, wt: wt, nick: d.nick, tpl: d.tpl, lvl: d.lvl != null ? Number(d.lvl) : undefined, x: d.x != null ? Number(d.x) : undefined, y: d.y != null ? Number(d.y) : undefined };
                 }).filter(Boolean);
             }
             if (typeof window.g !== 'undefined' && window.g && window.g.npc) {
@@ -233,7 +238,7 @@
                 return arr.map(function (d) {
                     if (!d) return null;
                     const wt = d.wt != null ? Number(d.wt) : undefined;
-                    return { id: d.id, wt: wt, nick: d.nick, tpl: d.tpl };
+                    return { id: d.id, wt: wt, nick: d.nick, tpl: d.tpl, lvl: d.lvl != null ? Number(d.lvl) : undefined, x: d.x != null ? Number(d.x) : undefined, y: d.y != null ? Number(d.y) : undefined };
                 }).filter(Boolean);
             }
         } catch (e) {
@@ -248,11 +253,12 @@
         return (wt >= HEROS_WT_MIN && wt <= HEROS_WT_MAX) || wt >= TITAN_WT_MIN;
     }
 
-    /** Jedno powiadomienie na mapę — reset przy wyjściu z mapy lub odświeżeniu. */
+    /** Jedno powiadomienie na mapę — reset przy wyjściu z mapy lub odświeżeniu. Pokazuje panel z przyciskami Zawołaj klan / Zamknij. */
     function checkHerosOnMapAndNotify() {
         const mapName = getCurrentMapName();
         if (lastHerosNotifiedMapName !== null && lastHerosNotifiedMapName !== mapName) {
             lastHerosNotifiedMapName = null;
+            hideHeroAlertPanel();
         }
         if (!mapName) return;
         const npcs = getNpcsOnMap();
@@ -261,8 +267,65 @@
         if (lastHerosNotifiedMapName === mapName) return;
         lastHerosNotifiedMapName = mapName;
         const name = (heroNpc.nick && String(heroNpc.nick).trim()) || (heroNpc.wt >= TITAN_WT_MIN ? 'Tytan' : 'Heros');
-        showToast('🦸 ' + name + ' na mapie!', 'success');
+        lastHeroAlertData = {
+            nick: name,
+            lvl: heroNpc.lvl,
+            x: heroNpc.x,
+            y: heroNpc.y,
+            mapName: mapName,
+        };
+        showHeroAlertPanel();
         log('Heros/Tytan na mapie:', name, '(wt:', heroNpc.wt + ')');
+    }
+
+    function showHeroAlertPanel() {
+        if (!lastHeroAlertData) return;
+        if (!heroAlertPanelEl) {
+            heroAlertPanelEl = document.createElement('div');
+            heroAlertPanelEl.id = 'map-timer-hero-alert';
+            heroAlertPanelEl.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:100010;background:#1a1a2e;border:2px solid #e67e22;border-radius:12px;padding:14px 18px;box-shadow:0 8px 24px rgba(0,0,0,0.5);font-family:Arial,sans-serif;min-width:260px;';
+            heroAlertPanelEl.innerHTML =
+                '<div style="color:#fff;font-weight:bold;font-size:14px;margin-bottom:8px;">🦸 Heros na mapie!</div>' +
+                '<div class="map-timer-hero-alert-info" style="color:#b8c5d6;font-size:12px;margin-bottom:12px;"></div>' +
+                '<div style="display:flex;gap:8px;justify-content:center;">' +
+                '<button type="button" class="map-timer-hero-alert-call" style="padding:8px 14px;background:#27ae60;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:bold;">Zawołaj klan</button>' +
+                '<button type="button" class="map-timer-hero-alert-close" style="padding:8px 14px;background:#34495e;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;">Zamknij</button>' +
+                '</div>';
+            document.body.appendChild(heroAlertPanelEl);
+            heroAlertPanelEl.querySelector('.map-timer-hero-alert-call').addEventListener('click', sendHeroAlertToDiscord);
+            heroAlertPanelEl.querySelector('.map-timer-hero-alert-close').addEventListener('click', hideHeroAlertPanel);
+        }
+        var info = heroAlertPanelEl.querySelector('.map-timer-hero-alert-info');
+        var lvlStr = lastHeroAlertData.lvl != null ? lastHeroAlertData.lvl + 'm' : '?';
+        var posStr = (lastHeroAlertData.x != null && lastHeroAlertData.y != null) ? (lastHeroAlertData.x + ',' + lastHeroAlertData.y) : '?';
+        info.textContent = lastHeroAlertData.nick + ' (' + lvlStr + '), ' + lastHeroAlertData.mapName + ' (' + posStr + ')';
+        heroAlertPanelEl.style.display = 'block';
+    }
+
+    function hideHeroAlertPanel() {
+        if (heroAlertPanelEl) heroAlertPanelEl.style.display = 'none';
+    }
+
+    function sendHeroAlertToDiscord() {
+        if (!lastHeroAlertData) return;
+        var lvlStr = lastHeroAlertData.lvl != null ? lastHeroAlertData.lvl + 'm' : '?';
+        var posStr = (lastHeroAlertData.x != null && lastHeroAlertData.y != null) ? (lastHeroAlertData.x + ',' + lastHeroAlertData.y) : '?';
+        var content = '@here Hero! ' + lastHeroAlertData.nick + ' (' + lvlStr + '), ' + lastHeroAlertData.mapName + ' (' + posStr + ')';
+        fetch(DISCORD_WEBHOOK_HEROS, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: content }),
+        }).then(function (r) {
+            if (r.ok) {
+                showToast('✅ Wysłano na Discord (herosi)');
+                hideHeroAlertPanel();
+            } else {
+                showToast('❌ Błąd wysyłania na Discord: ' + r.status, 'error');
+            }
+        }).catch(function (e) {
+            log('Discord webhook error:', e);
+            showToast('❌ Błąd połączenia z Discord', 'error');
+        });
     }
 
     /** Lista postaci obecnych na mapie (Engine.others / g.other). */
