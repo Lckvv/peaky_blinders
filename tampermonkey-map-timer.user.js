@@ -103,6 +103,8 @@
     let eveMapPopupCurrentMap = null;
     // Heros → Discord: webhook (kanał herosi), panel z przyciskiem „Zawołaj klan”
     const DISCORD_WEBHOOK_HEROS = 'https://discord.com/api/webhooks/1473433710220148816/FWedosu8fOskXb7Dy1C2AUiJ99lSi75LD4JkjfbrYcizdE7vbD97MQK-Gwc9UPf0JBhC';
+    // Gdy herosa nie ma na liście (ping = @here) – dodatkowo na kanał herosi-eve (Spidey Bot)
+    const DISCORD_WEBHOOK_HEROS_EVE = 'https://discord.com/api/webhooks/1473567764483674183/nMHJepfgVrTl657vIzlWbgv-dLN4OyNrFDe9c2o715iv3uzPHWVSNO_mZMbwlhi3Elr2';
     // Nazwa herosa (z gry) → ping na Discord; brak na liście = @here
     const HEROS_PING_MAP = {
         'Wicked Patrick': '@Patryk',
@@ -131,6 +133,31 @@
         'Negthotep the Abyss Priest': '@Kapłan',
         'Young Dragon': '@Smok',
     };
+    // Nazwa herosa → Discord ROLE ID. Ping roli w treści: <@&ROLE_ID> (niebieski).
+    const HEROS_DISCORD_ROLE_IDS = {
+        'Wicked Patrick': '1417548939842027651',
+        'Spiteful Guide': '1417548990303436820',
+        'Possessed Paladin': '1417549095882457288',
+        'Hellish Skeletor': '1417549176194994297',
+        'Grove Sentinel': '1417549368587849888',
+        "Night's Mistress": '1417549435604308090',
+        'Prince Kasim': '1417549507629154415',
+        'Pious Friar': '1417549553992728646',
+        'Golden Roger': '1417549631113662676',
+        'Sheepless Shepherd': '1417549696012128327',
+        'Spellcaster Atalia': '1417549738399629322',
+        'Insane Orc Hunter': '1417549843374542918',
+        'Usurer Grauhaz': '1417549886080942171',
+        'Viviana Nandin': '1417549935842427154',
+        'Frightener': '1452579670833758238',
+        'Demonis Lord of the Void': '1417550055203934318',
+        'Mulher Ma': '1417549984311804027',
+        'Vapor Veneno': '1417550099889786970',
+        'Oakhornus': '1417550144097882252',
+        'Tepeyollotl': '1417550181070540981',
+        'Negthotep the Abyss Priest': '1417550230194487386',
+        'Young Dragon': '1417550287459061765',
+    };
     function getHeroPing(heroName) {
         if (!heroName || typeof heroName !== 'string') return '@here';
         var key = heroName.trim();
@@ -139,6 +166,19 @@
             if (k.toLowerCase() === lower) return HEROS_PING_MAP[k];
         }
         return '@here';
+    }
+    /** Zwraca fragment treści do pinga: <@&roleId> (rola, niebieski) albo @nick / @here. */
+    function getHeroMentionForContent(heroName) {
+        if (!heroName || typeof heroName !== 'string') return '@here';
+        var key = heroName.trim();
+        var lower = key.toLowerCase();
+        for (var k in HEROS_DISCORD_ROLE_IDS) {
+            if (k.toLowerCase() === lower) {
+                var id = HEROS_DISCORD_ROLE_IDS[k];
+                if (id && String(id).trim()) return '<@&' + String(id).trim() + '>';
+            }
+        }
+        return getHeroPing(heroName);
     }
     let heroAlertPanelEl = null;
     let lastHeroAlertData = null;
@@ -353,23 +393,51 @@
         var btn = heroAlertPanelEl && heroAlertPanelEl.querySelector('.map-timer-hero-alert-call');
         if (btn) { btn.disabled = true; btn.textContent = 'Wysyłam…'; }
         var ping = getHeroPing(lastHeroAlertData.nick);
-        var content = ping + ' Hero! ' + lastHeroAlertData.nick + ' (' + lvlStr + '), ' + lastHeroAlertData.mapName + ' (' + posStr + ')';
+        var mention = getHeroMentionForContent(lastHeroAlertData.nick);
+        var content = mention + ' Hero! ' + lastHeroAlertData.nick + ' (' + lvlStr + '), ' + lastHeroAlertData.mapName + ' (' + posStr + ')';
+        var isNoHeroOnList = (ping === '@here');
+        var payload = {
+            content: content,
+            allowed_mentions: { parse: ['everyone', 'users', 'roles'] }
+        };
+        function done() {
+            heroAlertSending = false;
+            if (btn) { btn.disabled = false; btn.textContent = 'Zawołaj klan'; }
+        }
         fetch(DISCORD_WEBHOOK_HEROS, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: content }),
+            body: JSON.stringify(payload),
         }).then(function (r) {
-            heroAlertSending = false;
-            if (btn) { btn.disabled = false; btn.textContent = 'Zawołaj klan'; }
-            if (r.ok) {
-                showToast('✅ Wysłano na Discord (herosi)');
-                hideHeroAlertPanel();
-            } else {
+            if (!r.ok) {
+                done();
                 showToast('❌ Błąd wysyłania na Discord: ' + r.status, 'error');
+                return;
             }
+            if (isNoHeroOnList) {
+                return fetch(DISCORD_WEBHOOK_HEROS_EVE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                }).then(function (r2) {
+                    done();
+                    if (r2.ok) {
+                        showToast('✅ Wysłano na Discord (herosi + herosi-eve)');
+                    } else {
+                        showToast('✅ Herosi OK, błąd herosi-eve: ' + r2.status, 'error');
+                    }
+                    hideHeroAlertPanel();
+                }).catch(function () {
+                    done();
+                    showToast('✅ Herosi OK, błąd połączenia z herosi-eve', 'error');
+                    hideHeroAlertPanel();
+                });
+            }
+            done();
+            showToast('✅ Wysłano na Discord (herosi)');
+            hideHeroAlertPanel();
         }).catch(function (e) {
-            heroAlertSending = false;
-            if (btn) { btn.disabled = false; btn.textContent = 'Zawołaj klan'; }
+            done();
             log('Discord webhook error:', e);
             showToast('❌ Błąd połączenia z Discord', 'error');
         });
