@@ -143,8 +143,10 @@
     };
     let eveWindowOpen = false;
     let eveWindowEl = null;
-    let eveMapListPanel = null;
+    var eveMapListPanelsByKey = {}; // eveKey -> { panel, listEl, listHeight }
     let selectedEveKey = null;
+    var eveMapReservationsCache = {}; // eveKey -> { data: [{mapName,nick}], ts }
+    const EVE_RESERVATIONS_CACHE_TTL_MS = 60 * 1000;
     let eveMapPopupEl = null;
     let eveMapPopupCurrentMap = null;
     // Heros → Discord: webhook (kanał herosi), panel z przyciskiem „Zawołaj klan”
@@ -757,7 +759,10 @@
             hideTimerUI();
         }
         if (kolejkiListContent) updateKolejkiListUI();
-        if (eveMapListPanel && selectedEveKey != null && eveMapListPanel.style.display !== 'none') updateEveMapList();
+        Object.keys(eveMapListPanelsByKey).forEach(function (k) {
+            var rec = eveMapListPanelsByKey[k];
+            if (rec && rec.panel && rec.panel.style.display !== 'none') updateEveMapListForPanel(parseInt(k, 10));
+        });
     }
 
     /** Pobiera rezerwacje dla potwora (cache 2 min). */
@@ -782,6 +787,46 @@
             if (CONFIG.DEBUG) log('fetchReservations error:', e);
         }
         return out;
+    }
+
+    /** Pobiera rezerwacje map EVE (eveKey 63|143|300). Zwraca [{ mapName, nick }]. */
+    function fetchEveMapReservations(eveKey) {
+        var now = Date.now();
+        if (eveMapReservationsCache[eveKey] && (now - eveMapReservationsCache[eveKey].ts) < EVE_RESERVATIONS_CACHE_TTL_MS) {
+            return eveMapReservationsCache[eveKey].data || [];
+        }
+        var out = [];
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-reservations?eveKey=' + eveKey, false);
+        try {
+            xhr.send();
+            if (xhr.status === 200) {
+                var json = JSON.parse(xhr.responseText);
+                out = json.reservations || [];
+                eveMapReservationsCache[eveKey] = { data: out, ts: now };
+            }
+        } catch (e) {
+            if (CONFIG.DEBUG) log('fetchEveMapReservations error:', e);
+        }
+        return out;
+    }
+
+    /** POST: zarezerwuj mapę EVE. Po sukcesie czyści cache dla eveKey. */
+    function reserveEveMap(eveKey, mapName, nick) {
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-reservations', false);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.setRequestHeader('X-API-Key', CONFIG.API_KEY || '');
+        try {
+            xhr.send(JSON.stringify({ eveKey: eveKey, mapName: mapName, nick: nick }));
+            if (xhr.status === 200) {
+                eveMapReservationsCache[eveKey] = null;
+                return true;
+            }
+        } catch (e) {
+            if (CONFIG.DEBUG) log('reserveEveMap error:', e);
+        }
+        return false;
     }
 
     /** Pobiera ranking (suma czasu w aktywnym fazie) dla potwora — zwraca { heroName -> totalSeconds }. */
@@ -989,11 +1034,13 @@
                 kolejkiOpen = true;
                 if (kolejkiListPanel) { kolejkiListPanel.style.display = 'block'; applyKolejkiPanelPosition(); }
             }
-            var savedEveKey = typeof GM_getValue === 'function' ? GM_getValue('eve_list_key', null) : null;
-            if (savedEveKey != null && savedEveKey !== '' && EVE_MAPS[parseInt(savedEveKey, 10)]) {
+            var savedEveKeys = getOpenEveKeys();
+            if (savedEveKeys.length > 0) {
                 createEveWindow();
-                selectedEveKey = parseInt(savedEveKey, 10);
-                showEveMapListPanel(selectedEveKey);
+                savedEveKeys.forEach(function (k) {
+                    var key = parseInt(k, 10);
+                    if (EVE_MAPS[key]) showEveMapListPanel(key);
+                });
                 if (eveWindowEl) eveWindowEl.style.display = 'none';
             }
         } catch (e) { /* ignore */ }
@@ -1152,58 +1199,100 @@
         return eveWindowEl;
     }
 
+    function getOpenEveKeys() {
+        try {
+            if (typeof GM_getValue !== 'function') return [];
+            var raw = GM_getValue('eve_list_keys', '[]');
+            var arr = JSON.parse(raw || '[]');
+            return Array.isArray(arr) ? arr.filter(function (k) { return [63, 143, 300].indexOf(parseInt(k, 10)) >= 0; }) : [];
+        } catch (e) { return []; }
+    }
+    function saveOpenEveKeys(openKeys) {
+        try { if (typeof GM_setValue === 'function') GM_setValue('eve_list_keys', JSON.stringify(openKeys)); } catch (e) { /* ignore */ }
+    }
+
     function showEveMapListPanel(eveKey) {
-        try { if (typeof GM_setValue === 'function') { GM_setValue('eve_list_panel_open', true); GM_setValue('eve_list_key', eveKey); } } catch (e) { /* ignore */ }
-        if (eveMapListPanel) {
-            eveMapListPanel.style.display = 'block';
-            eveMapListPanel.querySelector('.map-timer-eve-list-title').textContent = 'Mapy (EVE ' + eveKey + ')';
-            selectedEveKey = eveKey;
-            updateEveMapList();
+        var rec = eveMapListPanelsByKey[eveKey];
+        if (rec && rec.panel) {
+            rec.panel.style.display = 'block';
+            var openKeys = getOpenEveKeys();
+            if (openKeys.indexOf(eveKey) < 0) { openKeys.push(eveKey); saveOpenEveKeys(openKeys); }
+            updateEveMapListForPanel(eveKey);
             return;
         }
-        eveMapListPanel = document.createElement('div');
-        eveMapListPanel.id = 'map-timer-eve-list-panel';
-        eveMapListPanel.style.cssText = 'position:fixed;z-index:100004;min-width:260px;max-width:320px;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.5);font-family:Arial,sans-serif;overflow:hidden;';
-        var offLeft = (document.documentElement.clientWidth || 800) - 320;
-        var offTop = Math.max(80, ((document.documentElement.clientHeight || 600) - 280) / 2);
-        eveMapListPanel.style.left = offLeft + 'px';
-        eveMapListPanel.style.top = offTop + 'px';
-        eveMapListPanel.innerHTML =
+        var panel = document.createElement('div');
+        panel.setAttribute('data-eve-key', eveKey);
+        panel.className = 'map-timer-eve-list-panel';
+        panel.style.cssText = 'position:fixed;z-index:100004;min-width:260px;max-width:320px;width:280px;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.5);font-family:Arial,sans-serif;overflow:visible;display:flex;flex-direction:column;';
+        var count = Object.keys(eveMapListPanelsByKey).length;
+        var offLeft = (document.documentElement.clientWidth || 800) - 320 - (count * 20);
+        var offTop = Math.max(60, ((document.documentElement.clientHeight || 600) - 320) / 2) + (count * 24);
+        panel.style.left = offLeft + 'px';
+        panel.style.top = offTop + 'px';
+        var listHeight = 280;
+        panel.innerHTML =
             '<div class="map-timer-eve-list-panel-title" style="background:#16213e;padding:10px 36px 10px 12px;font-weight:bold;font-size:14px;border-bottom:1px solid #2a2a4a;color:#fff;cursor:move;user-select:none;">Mapy</div>' +
             '<div class="map-timer-eve-list-title" style="font-size:12px;color:#8892b0;padding:8px 12px 0;"></div>' +
-            '<div class="map-timer-eve-list" style="padding:8px 12px 12px;max-height:220px;overflow-y:auto;"></div>' +
+            '<div class="map-timer-eve-list" style="padding:8px 12px 12px;overflow-y:auto;overflow-x:hidden;flex:1;min-height:120px;max-height:400px;"></div>' +
+            '<div class="map-timer-eve-list-resize" style="height:6px;background:#2a2a4a;cursor:ns-resize;flex-shrink:0;border-radius:0 0 12px 12px;"></div>' +
             '<button type="button" class="map-timer-eve-list-close" style="position:absolute;top:8px;right:8px;background:none;border:none;color:#8892b0;cursor:pointer;font-size:18px;padding:0 4px;">✕</button>';
-        document.body.appendChild(eveMapListPanel);
+        document.body.appendChild(panel);
 
-        var listTitleBar = eveMapListPanel.querySelector('.map-timer-eve-list-panel-title');
+        var listEl = panel.querySelector('.map-timer-eve-list');
+        listEl.style.height = listHeight + 'px';
+        var listTitleBar = panel.querySelector('.map-timer-eve-list-panel-title');
         var listDrag = { active: false, startX: 0, startY: 0, startLeft: 0, startTop: 0 };
         listTitleBar.addEventListener('mousedown', function (e) {
             if (e.button !== 0) return;
             listDrag.active = true;
             listDrag.startX = e.clientX;
             listDrag.startY = e.clientY;
-            var rect = eveMapListPanel.getBoundingClientRect();
+            var rect = panel.getBoundingClientRect();
             listDrag.startLeft = rect.left;
             listDrag.startTop = rect.top;
             e.preventDefault();
         });
         document.addEventListener('mousemove', function (e) {
             if (!listDrag.active) return;
-            eveMapListPanel.style.left = (listDrag.startLeft + (e.clientX - listDrag.startX)) + 'px';
-            eveMapListPanel.style.top = (listDrag.startTop + (e.clientY - listDrag.startY)) + 'px';
+            panel.style.left = (listDrag.startLeft + (e.clientX - listDrag.startX)) + 'px';
+            panel.style.top = (listDrag.startTop + (e.clientY - listDrag.startY)) + 'px';
         });
         document.addEventListener('mouseup', function (e) {
             if (e.button !== 0) return;
             listDrag.active = false;
         });
 
-        eveMapListPanel.querySelector('.map-timer-eve-list-close').addEventListener('click', function () {
-            eveMapListPanel.style.display = 'none';
-            try { if (typeof GM_setValue === 'function') { GM_setValue('eve_list_panel_open', false); GM_setValue('eve_list_key', ''); } } catch (e) { /* ignore */ }
+        var resizeEl = panel.querySelector('.map-timer-eve-list-resize');
+        var resizeDrag = { active: false, startY: 0, startHeight: 0 };
+        resizeEl.addEventListener('mousedown', function (e) {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            resizeDrag.active = true;
+            resizeDrag.startY = e.clientY;
+            resizeDrag.startHeight = listEl.offsetHeight;
+        });
+        document.addEventListener('mousemove', function (e) {
+            if (!resizeDrag.active) return;
+            var dy = e.clientY - resizeDrag.startY;
+            var h = Math.max(120, Math.min(400, resizeDrag.startHeight + dy));
+            listEl.style.height = h + 'px';
+        });
+        document.addEventListener('mouseup', function (e) {
+            if (e.button !== 0) return;
+            resizeDrag.active = false;
         });
 
-        eveMapListPanel.querySelector('.map-timer-eve-list-title').textContent = 'Mapy (EVE ' + eveKey + ')';
-        updateEveMapList();
+        panel.querySelector('.map-timer-eve-list-close').addEventListener('click', function () {
+            panel.style.display = 'none';
+            var openKeys = getOpenEveKeys().filter(function (k) { return parseInt(k, 10) !== eveKey; });
+            saveOpenEveKeys(openKeys);
+        });
+
+        panel.querySelector('.map-timer-eve-list-title').textContent = 'Mapy (EVE ' + eveKey + ')';
+        eveMapListPanelsByKey[eveKey] = { panel: panel, listEl: listEl, listHeight: listHeight };
+        var openKeys = getOpenEveKeys();
+        if (openKeys.indexOf(eveKey) < 0) { openKeys.push(eveKey); saveOpenEveKeys(openKeys); }
+        updateEveMapListForPanel(eveKey);
     }
 
     function ensureEveMapPopup() {
@@ -1239,13 +1328,51 @@
         eveMapPopupEl.style.top = Math.max(60, (h - 120) / 2) + 'px';
     }
 
-    function updateEveMapList() {
-        if (!eveMapListPanel || selectedEveKey == null) return;
-        var listEl = eveMapListPanel.querySelector('.map-timer-eve-list');
-        if (!listEl) return;
-        var maps = EVE_MAPS[selectedEveKey] || [];
+    var eveContextMenuEl = null;
+    function showEveReserveContextMenu(e, eveKey, mapName) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (eveContextMenuEl && eveContextMenuEl.parentNode) eveContextMenuEl.parentNode.removeChild(eveContextMenuEl);
+        eveContextMenuEl = document.createElement('div');
+        eveContextMenuEl.style.cssText = 'position:fixed;z-index:100020;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5);padding:4px 0;min-width:140px;';
+        eveContextMenuEl.style.left = e.clientX + 'px';
+        eveContextMenuEl.style.top = e.clientY + 'px';
+        var item = document.createElement('div');
+        item.style.cssText = 'padding:8px 14px;font-size:13px;color:#eee;cursor:pointer;';
+        item.textContent = 'Zarezerwuj';
+        item.addEventListener('click', function () {
+            if (eveContextMenuEl && eveContextMenuEl.parentNode) eveContextMenuEl.parentNode.removeChild(eveContextMenuEl);
+            eveContextMenuEl = null;
+            var nick = heroName || 'Ty';
+            if (!CONFIG.API_KEY) { showToast('Ustaw API Key w ustawieniach', 'error'); return; }
+            if (reserveEveMap(eveKey, mapName, nick)) {
+                showToast('Zarezerwowano: ' + mapName);
+                updateEveMapListForPanel(eveKey);
+            } else {
+                showToast('Błąd rezerwacji', 'error');
+            }
+        });
+        eveContextMenuEl.appendChild(item);
+        document.body.appendChild(eveContextMenuEl);
+        setTimeout(function () {
+            document.addEventListener('click', function closeMenu() {
+                document.removeEventListener('click', closeMenu);
+                if (eveContextMenuEl && eveContextMenuEl.parentNode) eveContextMenuEl.parentNode.removeChild(eveContextMenuEl);
+                eveContextMenuEl = null;
+            });
+        }, 0);
+    }
+
+    function updateEveMapListForPanel(eveKey) {
+        var rec = eveMapListPanelsByKey[eveKey];
+        if (!rec || !rec.panel || !rec.listEl) return;
+        var listEl = rec.listEl;
+        var maps = EVE_MAPS[eveKey] || [];
         var currentMap = getCurrentMapName() || '';
         var myNick = heroName || 'Ty';
+        var reservations = fetchEveMapReservations(eveKey);
+        var reservedByMap = {};
+        reservations.forEach(function (r) { reservedByMap[String(r.mapName).trim()] = r.nick || ''; });
 
         listEl.innerHTML = '';
         if (maps.length === 0) {
@@ -1255,11 +1382,15 @@
         maps.forEach(function (mapName) {
             var isCurrent = (String(mapName).trim().toLowerCase() === currentMap.trim().toLowerCase());
             var nick = isCurrent ? myNick : '—';
-            var rowColor = isCurrent ? '#2ecc71' : '#e74c3c';
+            var reservedNick = reservedByMap[String(mapName).trim()];
+            var isReserved = !!reservedNick;
+            var rowColor = isReserved ? '#e67e22' : (isCurrent ? '#2ecc71' : '#e74c3c');
             var row = document.createElement('div');
             row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.06);font-size:12px;cursor:pointer;';
-            row.innerHTML = '<span style="color:' + rowColor + ';">' + escapeHtml(mapName) + '</span><span style="color:' + rowColor + ';">' + escapeHtml(nick) + '</span>';
-            row.addEventListener('click', function () { toggleEveMapPopup(mapName); });
+            row.innerHTML = '<span style="color:' + rowColor + ';">' + escapeHtml(mapName) + '</span><span style="color:' + rowColor + ';">' + escapeHtml(isCurrent ? nick : (reservedNick || '—')) + '</span>';
+            if (isReserved) row.title = 'Zarezerwował: ' + escapeHtml(reservedNick);
+            row.addEventListener('click', function (ev) { if (ev.button === 0) toggleEveMapPopup(mapName); });
+            row.addEventListener('contextmenu', function (ev) { showEveReserveContextMenu(ev, eveKey, mapName); });
             listEl.appendChild(row);
         });
     }
@@ -1269,7 +1400,6 @@
         eveWindowOpen = true;
         eveWindowEl.style.display = 'block';
         selectedEveKey = null;
-        if (eveMapListPanel) eveMapListPanel.style.display = 'none';
     }
 
     // ================================================================

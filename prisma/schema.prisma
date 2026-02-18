@@ -129,6 +129,18 @@ model Reservation {
   @@index([titanSlug, itemKey])
 }
 
+// Rezerwacje map EVE (63, 143, 300) — kto zarezerwował mapę (widoczne dla wszystkich ze skryptem)
+model EveMapReservation {
+  id        String   @id @default(cuid())
+  eveKey    Int      // 63 | 143 | 300
+  mapName   String
+  nick      String   // nick z gry
+  createdAt DateTime @default(now())
+
+  @@unique([eveKey, mapName])
+  @@index([eveKey])
+}
+
 // Jednorazowe kody zaproszenia do rejestracji (generowane przez admina)
 model InvitationCode {
   id           String    @id @default(cuid())
