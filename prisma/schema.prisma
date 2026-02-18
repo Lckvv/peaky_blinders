@@ -141,6 +141,19 @@ model EveMapReservation {
   @@index([eveKey])
 }
 
+// Obecność na mapach EVE — kto aktualnie jest na której mapie (lastSeen odświeżane przez skrypt)
+model EveMapPresence {
+  id        String   @id @default(cuid())
+  eveKey    Int
+  mapName   String
+  nick      String
+  lastSeen  DateTime @default(now())
+
+  @@unique([eveKey, mapName, nick])
+  @@index([eveKey])
+  @@index([eveKey, mapName])
+}
+
 // Jednorazowe kody zaproszenia do rejestracji (generowane przez admina)
 model InvitationCode {
   id           String    @id @default(cuid())

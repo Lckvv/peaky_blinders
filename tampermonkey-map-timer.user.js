@@ -338,6 +338,11 @@
             outfitUrl: outfitUrl,
         };
     }
+    /** Aktualny nick z gry (z Engine), nie tylko po wejściu na mapę tytana. */
+    function getCurrentHeroName() {
+        var info = getHeroInfo();
+        return (info && info.name) ? info.name : (heroName || 'Ty');
+    }
 
     /** Lista NPCów na mapie (potwory, herosy itd.). Zwraca tablicę { id, wt, nick, tpl }. wt = widget type (Lootlog: >79 = Heros, >89 = Kolos, >99 = Tytan). */
     function getNpcsOnMap() {
@@ -752,6 +757,7 @@
             updateTimerUI();
         }
         checkHerosOnMapAndNotify();
+        sendEveMapPresenceIfNeeded();
         if (!target) {
             if (currentTarget) {
                 finalizeSession('map_change');
@@ -789,26 +795,51 @@
         return out;
     }
 
-    /** Pobiera rezerwacje map EVE (eveKey 63|143|300). Zwraca [{ mapName, nick }]. */
-    function fetchEveMapReservations(eveKey) {
+    /** Pobiera rezerwacje i obecność map EVE. Zwraca { reservations: [{mapName,nick}], presence: [{mapName,nick}] }. */
+    function fetchEveMapReservationsAndPresence(eveKey) {
         var now = Date.now();
         if (eveMapReservationsCache[eveKey] && (now - eveMapReservationsCache[eveKey].ts) < EVE_RESERVATIONS_CACHE_TTL_MS) {
-            return eveMapReservationsCache[eveKey].data || [];
+            return eveMapReservationsCache[eveKey];
         }
-        var out = [];
+        var out = { reservations: [], presence: [] };
         var xhr = new XMLHttpRequest();
         xhr.open('GET', CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-reservations?eveKey=' + eveKey, false);
         try {
             xhr.send();
             if (xhr.status === 200) {
                 var json = JSON.parse(xhr.responseText);
-                out = json.reservations || [];
-                eveMapReservationsCache[eveKey] = { data: out, ts: now };
+                out = { reservations: json.reservations || [], presence: json.presence || [] };
+                eveMapReservationsCache[eveKey] = { reservations: out.reservations, presence: out.presence, ts: now };
             }
         } catch (e) {
             if (CONFIG.DEBUG) log('fetchEveMapReservations error:', e);
         }
         return out;
+    }
+    function fetchEveMapReservations(eveKey) {
+        return (fetchEveMapReservationsAndPresence(eveKey).reservations || []);
+    }
+    var lastEvePresenceSent = {}; // eveKey -> timestamp
+    function sendEveMapPresenceIfNeeded() {
+        if (!CONFIG.API_KEY) return;
+        var currentMap = getCurrentMapName();
+        if (!currentMap) return;
+        var nick = getCurrentHeroName();
+        var now = Date.now();
+        [63, 143, 300].forEach(function (eveKey) {
+            var maps = EVE_MAPS[eveKey] || [];
+            var isOnMap = maps.some(function (m) { return String(m).trim().toLowerCase() === currentMap.trim().toLowerCase(); });
+            if (!isOnMap) return;
+            if (lastEvePresenceSent[eveKey] && (now - lastEvePresenceSent[eveKey]) < 10000) return;
+            lastEvePresenceSent[eveKey] = now;
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-presence', false);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.setRequestHeader('X-API-Key', CONFIG.API_KEY);
+            try {
+                xhr.send(JSON.stringify({ eveKey: eveKey, mapName: currentMap, nick: nick }));
+            } catch (e) { /* ignore */ }
+        });
     }
 
     /** POST: zarezerwuj mapę EVE. Po sukcesie czyści cache dla eveKey. */
@@ -825,6 +856,23 @@
             }
         } catch (e) {
             if (CONFIG.DEBUG) log('reserveEveMap error:', e);
+        }
+        return false;
+    }
+
+    /** DELETE: usuń rezerwację mapy EVE. */
+    function deleteEveMapReservation(eveKey, mapName) {
+        var xhr = new XMLHttpRequest();
+        xhr.open('DELETE', CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-reservations?eveKey=' + encodeURIComponent(eveKey) + '&mapName=' + encodeURIComponent(mapName), false);
+        xhr.setRequestHeader('X-API-Key', CONFIG.API_KEY || '');
+        try {
+            xhr.send();
+            if (xhr.status === 200) {
+                eveMapReservationsCache[eveKey] = null;
+                return true;
+            }
+        } catch (e) {
+            if (CONFIG.DEBUG) log('deleteEveMapReservation error:', e);
         }
         return false;
     }
@@ -1240,6 +1288,18 @@
 
         var listEl = panel.querySelector('.map-timer-eve-list');
         listEl.style.height = listHeight + 'px';
+        listEl.setAttribute('tabindex', '0');
+        listEl.addEventListener('wheel', function (ev) {
+            var el = listEl;
+            if (ev.deltaY === 0) return;
+            var maxScroll = el.scrollHeight - el.clientHeight;
+            if (maxScroll <= 0) return;
+            el.scrollTop += ev.deltaY;
+            if (el.scrollTop <= 0) el.scrollTop = 0;
+            if (el.scrollTop >= maxScroll) el.scrollTop = maxScroll;
+            ev.preventDefault();
+            ev.stopPropagation();
+        }, { passive: false });
         var listTitleBar = panel.querySelector('.map-timer-eve-list-panel-title');
         var listDrag = { active: false, startX: 0, startY: 0, startLeft: 0, startTop: 0 };
         listTitleBar.addEventListener('mousedown', function (e) {
@@ -1329,21 +1389,22 @@
     }
 
     var eveContextMenuEl = null;
-    function showEveReserveContextMenu(e, eveKey, mapName) {
+    function showEveReserveContextMenu(e, eveKey, mapName, isReserved) {
         e.preventDefault();
         e.stopPropagation();
         if (eveContextMenuEl && eveContextMenuEl.parentNode) eveContextMenuEl.parentNode.removeChild(eveContextMenuEl);
         eveContextMenuEl = document.createElement('div');
-        eveContextMenuEl.style.cssText = 'position:fixed;z-index:100020;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5);padding:4px 0;min-width:140px;';
+        eveContextMenuEl.style.cssText = 'position:fixed;z-index:100020;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5);padding:4px 0;min-width:160px;';
         eveContextMenuEl.style.left = e.clientX + 'px';
         eveContextMenuEl.style.top = e.clientY + 'px';
-        var item = document.createElement('div');
-        item.style.cssText = 'padding:8px 14px;font-size:13px;color:#eee;cursor:pointer;';
-        item.textContent = 'Zarezerwuj';
-        item.addEventListener('click', function () {
+
+        var itemReserve = document.createElement('div');
+        itemReserve.style.cssText = 'padding:8px 14px;font-size:13px;color:#eee;cursor:pointer;';
+        itemReserve.textContent = 'Zarezerwuj';
+        itemReserve.addEventListener('click', function () {
             if (eveContextMenuEl && eveContextMenuEl.parentNode) eveContextMenuEl.parentNode.removeChild(eveContextMenuEl);
             eveContextMenuEl = null;
-            var nick = heroName || 'Ty';
+            var nick = getCurrentHeroName();
             if (!CONFIG.API_KEY) { showToast('Ustaw API Key w ustawieniach', 'error'); return; }
             if (reserveEveMap(eveKey, mapName, nick)) {
                 showToast('Zarezerwowano: ' + mapName);
@@ -1352,7 +1413,26 @@
                 showToast('Błąd rezerwacji', 'error');
             }
         });
-        eveContextMenuEl.appendChild(item);
+        eveContextMenuEl.appendChild(itemReserve);
+
+        if (isReserved) {
+            var itemDelete = document.createElement('div');
+            itemDelete.style.cssText = 'padding:8px 14px;font-size:13px;color:#e74c3c;cursor:pointer;border-top:1px solid rgba(255,255,255,0.08);';
+            itemDelete.textContent = 'Usuń rezerwację';
+            itemDelete.addEventListener('click', function () {
+                if (eveContextMenuEl && eveContextMenuEl.parentNode) eveContextMenuEl.parentNode.removeChild(eveContextMenuEl);
+                eveContextMenuEl = null;
+                if (!CONFIG.API_KEY) { showToast('Ustaw API Key w ustawieniach', 'error'); return; }
+                if (deleteEveMapReservation(eveKey, mapName)) {
+                    showToast('Rezerwacja usunięta');
+                    updateEveMapListForPanel(eveKey);
+                } else {
+                    showToast('Błąd usuwania rezerwacji', 'error');
+                }
+            });
+            eveContextMenuEl.appendChild(itemDelete);
+        }
+
         document.body.appendChild(eveContextMenuEl);
         setTimeout(function () {
             document.addEventListener('click', function closeMenu() {
@@ -1369,10 +1449,18 @@
         var listEl = rec.listEl;
         var maps = EVE_MAPS[eveKey] || [];
         var currentMap = getCurrentMapName() || '';
-        var myNick = heroName || 'Ty';
-        var reservations = fetchEveMapReservations(eveKey);
+        var myNick = getCurrentHeroName();
+        var data = fetchEveMapReservationsAndPresence(eveKey);
+        var reservations = data.reservations || [];
+        var presence = data.presence || [];
         var reservedByMap = {};
         reservations.forEach(function (r) { reservedByMap[String(r.mapName).trim()] = r.nick || ''; });
+        var presenceByMap = {};
+        presence.forEach(function (p) {
+            var key = String(p.mapName).trim();
+            if (!presenceByMap[key]) presenceByMap[key] = [];
+            presenceByMap[key].push(p.nick || '');
+        });
 
         listEl.innerHTML = '';
         if (maps.length === 0) {
@@ -1380,17 +1468,25 @@
             return;
         }
         maps.forEach(function (mapName) {
-            var isCurrent = (String(mapName).trim().toLowerCase() === currentMap.trim().toLowerCase());
-            var nick = isCurrent ? myNick : '—';
-            var reservedNick = reservedByMap[String(mapName).trim()];
+            var mapKey = String(mapName).trim();
+            var isCurrent = (mapKey.toLowerCase() === currentMap.trim().toLowerCase());
+            var onMapNicks = presenceByMap[mapKey] || [];
+            var displayNick = '—';
+            if (onMapNicks.length > 0) {
+                displayNick = onMapNicks.map(function (n) { return (n && myNick && String(n).trim().toLowerCase() === String(myNick).trim().toLowerCase()) ? 'Ty' : n; }).join(', ');
+            } else {
+                var reservedNick = reservedByMap[mapKey];
+                if (reservedNick) displayNick = reservedNick;
+            }
+            var reservedNick = reservedByMap[mapKey];
             var isReserved = !!reservedNick;
             var rowColor = isReserved ? '#e67e22' : (isCurrent ? '#2ecc71' : '#e74c3c');
             var row = document.createElement('div');
             row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.06);font-size:12px;cursor:pointer;';
-            row.innerHTML = '<span style="color:' + rowColor + ';">' + escapeHtml(mapName) + '</span><span style="color:' + rowColor + ';">' + escapeHtml(isCurrent ? nick : (reservedNick || '—')) + '</span>';
+            row.innerHTML = '<span style="color:' + rowColor + ';">' + escapeHtml(mapName) + '</span><span style="color:' + rowColor + ';">' + escapeHtml(displayNick) + '</span>';
             if (isReserved) row.title = 'Zarezerwował: ' + escapeHtml(reservedNick);
             row.addEventListener('click', function (ev) { if (ev.button === 0) toggleEveMapPopup(mapName); });
-            row.addEventListener('contextmenu', function (ev) { showEveReserveContextMenu(ev, eveKey, mapName); });
+            row.addEventListener('contextmenu', function (ev) { showEveReserveContextMenu(ev, eveKey, mapName, isReserved); });
             listEl.appendChild(row);
         });
     }
