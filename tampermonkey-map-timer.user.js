@@ -146,7 +146,7 @@
     var eveMapListPanelsByKey = {}; // eveKey -> { panel, listEl, listHeight }
     let selectedEveKey = null;
     var eveMapReservationsCache = {}; // eveKey -> { data: [{mapName,nick}], ts }
-    const EVE_RESERVATIONS_CACHE_TTL_MS = 60 * 1000;
+    const EVE_RESERVATIONS_CACHE_TTL_MS = 8 * 1000; // krótki cache, żeby pozycje (obecność) odświeżały się na bieżąco
     let eveMapPopupEl = null;
     let eveMapPopupCurrentMap = null;
     // Heros → Discord: webhook (kanał herosi), panel z przyciskiem „Zawołaj klan”
@@ -854,6 +854,7 @@
                 xhr.setRequestHeader('X-API-Key', CONFIG.API_KEY);
                 try {
                     xhr.send(JSON.stringify({ eveKey: eveKey, mapName: currentMap, nick: nick }));
+                    if (xhr.status === 200) eveMapReservationsCache[eveKey] = null;
                 } catch (e) { /* ignore */ }
             } else {
                 if (lastMap) {
