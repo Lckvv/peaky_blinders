@@ -820,25 +820,47 @@
         return (fetchEveMapReservationsAndPresence(eveKey).reservations || []);
     }
     var lastEvePresenceSent = {}; // eveKey -> timestamp
+    var lastEveMapPresence = {};  // eveKey -> mapName (ostatnia mapa, na której zgłosiliśmy obecność)
+    function deleteEveMapPresence(eveKey, mapName, nick) {
+        var xhr = new XMLHttpRequest();
+        xhr.open('DELETE', CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-presence?eveKey=' + encodeURIComponent(eveKey) + '&mapName=' + encodeURIComponent(mapName) + '&nick=' + encodeURIComponent(nick), false);
+        xhr.setRequestHeader('X-API-Key', CONFIG.API_KEY || '');
+        try {
+            xhr.send();
+            if (xhr.status === 200) { eveMapReservationsCache[eveKey] = null; return true; }
+        } catch (e) { /* ignore */ }
+        return false;
+    }
     function sendEveMapPresenceIfNeeded() {
         if (!CONFIG.API_KEY) return;
         var currentMap = getCurrentMapName();
-        if (!currentMap) return;
         var nick = getCurrentHeroName();
         var now = Date.now();
         [63, 143, 300].forEach(function (eveKey) {
             var maps = EVE_MAPS[eveKey] || [];
-            var isOnMap = maps.some(function (m) { return String(m).trim().toLowerCase() === currentMap.trim().toLowerCase(); });
-            if (!isOnMap) return;
-            if (lastEvePresenceSent[eveKey] && (now - lastEvePresenceSent[eveKey]) < 10000) return;
-            lastEvePresenceSent[eveKey] = now;
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-presence', false);
-            xhr.setRequestHeader('Content-Type', 'application/json');
-            xhr.setRequestHeader('X-API-Key', CONFIG.API_KEY);
-            try {
-                xhr.send(JSON.stringify({ eveKey: eveKey, mapName: currentMap, nick: nick }));
-            } catch (e) { /* ignore */ }
+            var isOnEveMap = currentMap && maps.some(function (m) { return String(m).trim().toLowerCase() === currentMap.trim().toLowerCase(); });
+            var lastMap = lastEveMapPresence[eveKey];
+            if (isOnEveMap) {
+                if (lastMap && lastMap.toLowerCase() !== currentMap.trim().toLowerCase()) {
+                    deleteEveMapPresence(eveKey, lastMap, nick);
+                    lastEveMapPresence[eveKey] = null;
+                }
+                if (lastEvePresenceSent[eveKey] && (now - lastEvePresenceSent[eveKey]) < 10000) return;
+                lastEvePresenceSent[eveKey] = now;
+                lastEveMapPresence[eveKey] = currentMap;
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-presence', false);
+                xhr.setRequestHeader('Content-Type', 'application/json');
+                xhr.setRequestHeader('X-API-Key', CONFIG.API_KEY);
+                try {
+                    xhr.send(JSON.stringify({ eveKey: eveKey, mapName: currentMap, nick: nick }));
+                } catch (e) { /* ignore */ }
+            } else {
+                if (lastMap) {
+                    deleteEveMapPresence(eveKey, lastMap, nick);
+                    lastEveMapPresence[eveKey] = null;
+                }
+            }
         });
     }
 
@@ -1480,7 +1502,8 @@
             }
             var reservedNick = reservedByMap[mapKey];
             var isReserved = !!reservedNick;
-            var rowColor = isReserved ? '#e67e22' : (isCurrent ? '#2ecc71' : '#e74c3c');
+            var hasSomeoneOnMap = onMapNicks.length > 0;
+            var rowColor = hasSomeoneOnMap ? '#2ecc71' : (isReserved ? '#e67e22' : '#e74c3c');
             var row = document.createElement('div');
             row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.06);font-size:12px;cursor:pointer;';
             row.innerHTML = '<span style="color:' + rowColor + ';">' + escapeHtml(mapName) + '</span><span style="color:' + rowColor + ';">' + escapeHtml(displayNick) + '</span>';

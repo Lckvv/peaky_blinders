@@ -47,3 +47,34 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }
+
+// DELETE /api/timer/eve-map-presence — usuń obecność "wyszedłem z mapy" (X-API-Key, query: eveKey, mapName, nick)
+export async function DELETE(request: NextRequest) {
+  try {
+    const user = await authFromApiKey(request);
+    if (!user) {
+      return NextResponse.json({ error: 'Invalid or missing API key' }, { status: 401 });
+    }
+
+    const eveKeyStr = request.nextUrl.searchParams.get('eveKey');
+    const eveKey = eveKeyStr ? parseInt(eveKeyStr, 10) : NaN;
+    const mapName = request.nextUrl.searchParams.get('mapName')?.trim() ?? '';
+    const nick = request.nextUrl.searchParams.get('nick')?.trim() ?? '';
+
+    if (!Number.isInteger(eveKey) || ![63, 143, 300].includes(eveKey)) {
+      return NextResponse.json({ error: 'eveKey must be 63, 143 or 300' }, { status: 400 });
+    }
+    if (!mapName || !nick) {
+      return NextResponse.json({ error: 'mapName and nick are required' }, { status: 400 });
+    }
+
+    await prisma.eveMapPresence.deleteMany({
+      where: { eveKey, mapName, nick },
+    });
+
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    console.error('[DELETE /api/timer/eve-map-presence]', e);
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
+  }
+}
