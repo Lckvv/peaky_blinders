@@ -85,14 +85,60 @@
             'Dripping Honey Mine - 3rd Level',
             'Dripping Honey Mine - 2nd Level - 2nd Chamber',
             'Dripping Honey Mine - Vestibule',
+            'Gnoll Settlement',
+            'Cheerful Glade',
+            'Cave of Gnoll Shamans - 2nd Level',
+            'Cave of Gnoll Shamans - 1st Level',
+            'Cave of Gnoll Shamans - 3rd Level',
+            'Abandoned Beehives',
+            'Pregnolls Grotto - 2nd Level - 2nd Chamber',
+            'Pregnolls Grotto - 2nd Level',
+            'Wolf Horde\'s Den',
+            'Pregnolls Grotto - 1st Level - 2nd Chamber',
+            'Pregnolls Grotto - 1st Level',
+            'Pregnolls Grotto - 3rd Level',
+            'Abyss of Conflagration',
         ],
         143: [
             "Vorundriel's Forge - 1st Level",
             "Vorundriel's Forge - 2nd Level",
             "Vorundriel's Forge - 3rd Level",
+            'Small Fortress - Vestibule',
+            'Small Fortress - East Walls',
+            'Small Fortress - Western Corridor',
+            'Small Fortress - West Walls',
+            'Forsaken Fastness',
+            'Fiendish Quagmire',
+            'Ancestral Vault',
+            'Lost Valley',
+            'Mrinding Gallery - 1st Level - 1st Chamber',
+            'Mrinding Gallery - 2nd Level - 1st Chamber',
+            'Mrinding Gallery - 1st Level - 2nd Chamber',
+            'Mrinding Gallery - 2nd Level - 2nd Chamber',
+            'Erebeth Gallery - 2nd Level - 1st Chamber',
+            'Erebeth Gallery - 2nd Level - 2nd Chamber',
+            'Erebeth Gallery - 3rd Level',
+            'Fire Well - 3rd Level',
+            'Fire Well - 2nd Level',
+            'Fire Well - 1st Level',
         ],
         300: [
             'Shaiharrud Desert - East',
+            'Frost Lords\' Passage',
+            'Hall of Ice Magic',
+            'Hall of Chilling Whispers',
+            'Hall of Frozen Bolts',
+            'Shaiharrud Desert - West',
+            'Rocks of Dead',
+            'Dragon Rockfoil',
+            'Vapor\'s Cliff',
+            'Kai Floodplains',
+            'Gvar Hamryd',
+            'Cave of Dry Shoots - 4th Level',
+            'Cave of Dry Shoots - 3rd Level',
+            'Cave of Dry Shoots - 2nd Level',
+            'Cave of Dry Shoots - 1st Level',
+            'Rustling Backwoods',
         ],
     };
     let eveWindowOpen = false;
@@ -914,6 +960,7 @@
                         kolejkiOpen = true;
                         applyKolejkiPanelPosition();
                         kolejkiListPanel.style.display = 'block';
+                        try { if (typeof GM_setValue === 'function') GM_setValue('kolejki_panel_open', true); } catch (e) { /* ignore */ }
                         updateKolejkiListUI();
                     } else if (action === 'heros') {
                         openEveWindow();
@@ -926,6 +973,7 @@
             closeBtn.addEventListener('click', function () {
                 kolejkiOpen = false;
                 kolejkiListPanel.style.display = 'none';
+                try { if (typeof GM_setValue === 'function') GM_setValue('kolejki_panel_open', false); } catch (e) { /* ignore */ }
             });
         }
         document.addEventListener('mousemove', function (e) {
@@ -935,6 +983,20 @@
         });
         document.addEventListener('mouseleave', function () { hidePngPopup(); });
         updateKolejkiListUI();
+        // Przywróć stan paneli po odświeżeniu / zmianie postaci (tylko ręczne X zamyka)
+        try {
+            if (typeof GM_getValue === 'function' && GM_getValue('kolejki_panel_open', false)) {
+                kolejkiOpen = true;
+                if (kolejkiListPanel) { kolejkiListPanel.style.display = 'block'; applyKolejkiPanelPosition(); }
+            }
+            var savedEveKey = typeof GM_getValue === 'function' ? GM_getValue('eve_list_key', null) : null;
+            if (savedEveKey != null && savedEveKey !== '' && EVE_MAPS[parseInt(savedEveKey, 10)]) {
+                createEveWindow();
+                selectedEveKey = parseInt(savedEveKey, 10);
+                showEveMapListPanel(selectedEveKey);
+                if (eveWindowEl) eveWindowEl.style.display = 'none';
+            }
+        } catch (e) { /* ignore */ }
     }
 
     function updateKolejkiListUI() {
@@ -1091,6 +1153,7 @@
     }
 
     function showEveMapListPanel(eveKey) {
+        try { if (typeof GM_setValue === 'function') { GM_setValue('eve_list_panel_open', true); GM_setValue('eve_list_key', eveKey); } } catch (e) { /* ignore */ }
         if (eveMapListPanel) {
             eveMapListPanel.style.display = 'block';
             eveMapListPanel.querySelector('.map-timer-eve-list-title').textContent = 'Mapy (EVE ' + eveKey + ')';
@@ -1136,6 +1199,7 @@
 
         eveMapListPanel.querySelector('.map-timer-eve-list-close').addEventListener('click', function () {
             eveMapListPanel.style.display = 'none';
+            try { if (typeof GM_setValue === 'function') { GM_setValue('eve_list_panel_open', false); GM_setValue('eve_list_key', ''); } } catch (e) { /* ignore */ }
         });
 
         eveMapListPanel.querySelector('.map-timer-eve-list-title').textContent = 'Mapy (EVE ' + eveKey + ')';
