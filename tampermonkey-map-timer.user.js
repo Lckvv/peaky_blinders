@@ -109,6 +109,7 @@
             "Vorundriel's Forge - 1st Level",
             "Vorundriel's Forge - 2nd Level",
             "Vorundriel's Forge - 3rd Level",
+            'Cenotaph of Berserkers - 1st Level',
             'Small Fortress - Vestibule',
             'Small Fortress - East Walls',
             'Small Fortress - Western Corridor',
@@ -152,6 +153,8 @@
     var eveMapListPanelsByKey = {}; // eveKey -> { panel, listEl, listHeight }
     let selectedEveKey = null;
     var eveMapReservationsCache = {}; // eveKey -> { data: [{mapName,nick}], ts }
+    var eveMapLastLeftAt = {};        // eveKey -> { mapKey: timestamp } — kiedy ostatnio mapa została opuszczona
+    var evePrevPresenceByMap = {};    // eveKey -> { mapKey: [nicks] } — poprzedni stan obecności (do wykrycia wyjścia)
     const EVE_RESERVATIONS_CACHE_TTL_MS = 8 * 1000; // krótki cache, żeby pozycje (obecność) odświeżały się na bieżąco
     let eveMapPopupEl = null;
     let eveMapPopupCurrentMap = null;
@@ -420,17 +423,25 @@
         if (!heroAlertPanelEl) {
             heroAlertPanelEl = document.createElement('div');
             heroAlertPanelEl.id = 'map-timer-hero-alert';
-            heroAlertPanelEl.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:100010;background:#1a1a2e;border:2px solid #e67e22;border-radius:12px;padding:14px 18px;box-shadow:0 8px 24px rgba(0,0,0,0.5);font-family:Arial,sans-serif;min-width:260px;';
+            heroAlertPanelEl.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:100010;background:#1a1a2e;border:2px solid #e67e22;border-radius:12px;padding:14px 18px;box-shadow:0 8px 24px rgba(0,0,0,0.5);font-family:Arial,sans-serif;min-width:280px;';
             heroAlertPanelEl.innerHTML =
                 '<div style="color:#fff;font-weight:bold;font-size:14px;margin-bottom:8px;">🦸 Heros na mapie!</div>' +
                 '<div class="map-timer-hero-alert-info" style="color:#b8c5d6;font-size:12px;margin-bottom:12px;"></div>' +
-                '<div style="display:flex;gap:8px;justify-content:center;">' +
-                '<button type="button" class="map-timer-hero-alert-call" style="padding:8px 14px;background:#27ae60;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:bold;">Zawołaj klan</button>' +
-                '<button type="button" class="map-timer-hero-alert-close" style="padding:8px 14px;background:#34495e;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;">Zamknij</button>' +
-                '</div>';
+                '<button type="button" class="map-timer-hero-alert-call" style="display:block;width:100%;margin-bottom:10px;padding:8px 14px;background:#27ae60;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:bold;">Powiadom klan na Discordzie</button>' +
+                '<div style="font-size:11px;color:#8892b0;margin-bottom:6px;">Powiadomienie w grze (level):</div>' +
+                '<div class="map-timer-hero-alert-level-btns" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;"></div>' +
+                '<button type="button" class="map-timer-hero-alert-close" style="padding:8px 14px;background:#34495e;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;">Zamknij</button>';
             document.body.appendChild(heroAlertPanelEl);
             heroAlertPanelEl.querySelector('.map-timer-hero-alert-call').addEventListener('click', sendHeroAlertToDiscord);
             heroAlertPanelEl.querySelector('.map-timer-hero-alert-close').addEventListener('click', hideHeroAlertPanel);
+            [64, 83, 114, 144, 217, 300].forEach(function (level) {
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.textContent = level;
+                btn.style.cssText = 'padding:6px 12px;background:#2a2a4a;color:#eee;border:1px solid #444;border-radius:6px;cursor:pointer;font-size:12px;';
+                btn.addEventListener('click', function () { sendHeroLevelNotification(level); });
+                heroAlertPanelEl.querySelector('.map-timer-hero-alert-level-btns').appendChild(btn);
+            });
         }
         var info = heroAlertPanelEl.querySelector('.map-timer-hero-alert-info');
         var lvlStr = lastHeroAlertData.lvl != null ? lastHeroAlertData.lvl + 'm' : '?';
@@ -441,6 +452,104 @@
 
     function hideHeroAlertPanel() {
         if (heroAlertPanelEl) heroAlertPanelEl.style.display = 'none';
+    }
+
+    var lastSeenHeroNotificationTs = 0;
+    var lastFetchedHeroNotifTs = 0;
+    function sendHeroLevelNotification(level) {
+        if (!lastHeroAlertData) return;
+        var lvlStr = lastHeroAlertData.lvl != null ? lastHeroAlertData.lvl + 'm' : '?';
+        var posStr = (lastHeroAlertData.x != null && lastHeroAlertData.y != null) ? (lastHeroAlertData.x + ',' + lastHeroAlertData.y) : '?';
+        var heroImageUrl = getOutfitFromLocalStorage(lastHeroAlertData.nick) || null;
+        try {
+            var charlist = typeof window.Margonem !== 'undefined' && window.Margonem.charlist ? window.Margonem.charlist : (typeof window.g !== 'undefined' && window.g && window.g.charlist ? window.g.charlist : null);
+            if (!heroImageUrl && charlist) heroImageUrl = findOutfitInCharlist(charlist, lastHeroAlertData.nick) || null;
+        } catch (e) { /* ignore */ }
+        var payload = {
+            level: level,
+            nick: lastHeroAlertData.nick,
+            mapName: lastHeroAlertData.mapName,
+            x: lastHeroAlertData.x,
+            y: lastHeroAlertData.y,
+            lvl: lastHeroAlertData.lvl,
+            heroImageUrl: heroImageUrl || undefined
+        };
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/hero-level-notifications', false);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.setRequestHeader('X-API-Key', CONFIG.API_KEY || '');
+        try {
+            xhr.send(JSON.stringify(payload));
+            if (xhr.status === 200) {
+                showHeroLevelPopup({
+                    level: level,
+                    nick: lastHeroAlertData.nick,
+                    mapName: lastHeroAlertData.mapName,
+                    x: lastHeroAlertData.x,
+                    y: lastHeroAlertData.y,
+                    lvl: lastHeroAlertData.lvl,
+                    heroImageUrl: heroImageUrl
+                });
+                showToast('Powiadomienie (level ' + level + ') wysłane');
+            } else {
+                showToast('Błąd wysyłania powiadomienia: ' + xhr.status, 'error');
+            }
+        } catch (e) {
+            showToast('Błąd połączenia', 'error');
+        }
+    }
+
+    function showHeroLevelPopup(data) {
+        var lvlStr = (data.lvl != null) ? data.lvl + 'm' : '?';
+        var posStr = (data.x != null && data.y != null) ? (data.x + ',' + data.y) : '?';
+        var textNoPing = 'Hero! ' + (data.nick || '') + ' (' + lvlStr + '), ' + (data.mapName || '') + ' (' + posStr + ')';
+        var pop = document.createElement('div');
+        pop.className = 'map-timer-hero-level-popup';
+        pop.style.cssText = 'position:fixed;top:80px;right:20px;z-index:100012;background:#1a1a2e;border:2px solid #e67e22;border-radius:12px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,0.5);font-family:Arial,sans-serif;max-width:360px;display:flex;align-items:center;gap:12px;';
+        var imgEl = document.createElement('div');
+        imgEl.style.cssText = 'width:64px;height:64px;flex-shrink:0;background:#2a2a4a;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:32px;';
+        if (data.heroImageUrl) {
+            var img = document.createElement('img');
+            img.src = data.heroImageUrl;
+            img.alt = '';
+            img.style.cssText = 'width:100%;height:100%;object-fit:contain;border-radius:8px;';
+            img.onerror = function () { imgEl.textContent = '🦸'; imgEl.removeChild(img); };
+            imgEl.appendChild(img);
+        } else {
+            imgEl.textContent = '🦸';
+        }
+        var right = document.createElement('div');
+        right.style.cssText = 'flex:1;min-width:0;';
+        right.innerHTML =
+            '<div style="color:#b8c5d6;font-size:12px;margin-bottom:4px;">' + escapeHtml(textNoPing) + '</div>' +
+            '<div style="font-weight:bold;font-size:16px;color:#e67e22;text-align:center;margin:6px 0;">LEVEL: ' + (data.level || '') + '</div>' +
+            '<div style="color:#8892b0;font-size:11px;">' + (data.mapName || '') + ' (' + posStr + ')</div>';
+        var closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.textContent = '×';
+        closeBtn.style.cssText = 'position:absolute;top:4px;right:4px;background:none;border:none;color:#8892b0;cursor:pointer;font-size:18px;line-height:1;padding:0 4px;';
+        closeBtn.addEventListener('click', function () { if (pop.parentNode) pop.parentNode.removeChild(pop); });
+        pop.appendChild(imgEl);
+        pop.appendChild(right);
+        pop.appendChild(closeBtn);
+        document.body.appendChild(pop);
+        setTimeout(function () { if (pop.parentNode) pop.parentNode.removeChild(pop); }, 15000);
+    }
+
+    function fetchAndShowHeroLevelNotifications() {
+        if (!CONFIG.BACKEND_URL) return;
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/hero-level-notifications?since=' + lastSeenHeroNotificationTs, false);
+        try {
+            xhr.send();
+            if (xhr.status !== 200) return;
+            var json = JSON.parse(xhr.responseText);
+            var list = json.notifications || [];
+            list.forEach(function (n) {
+                if (n.createdAt && n.createdAt > lastSeenHeroNotificationTs) lastSeenHeroNotificationTs = n.createdAt;
+                showHeroLevelPopup({ level: n.level, nick: n.nick, mapName: n.mapName, x: n.x, y: n.y, lvl: n.lvl, heroImageUrl: n.heroImageUrl });
+            });
+        } catch (e) { /* ignore */ }
     }
 
     function sendHeroAlertToDiscord() {
@@ -461,40 +570,40 @@
         };
         function done() {
             heroAlertSending = false;
-            if (btn) { btn.disabled = false; btn.textContent = 'Zawołaj klan'; }
+            if (btn) { btn.disabled = false; btn.textContent = 'Powiadom klan na Discordzie'; }
+        }
+        if (isNoHeroOnList) {
+            fetch(DISCORD_WEBHOOK_HEROS_EVE, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            }).then(function (r) {
+                done();
+                if (r.ok) {
+                    showToast('✅ Wysłano na Discord (herosi-eve)');
+                    hideHeroAlertPanel();
+                } else {
+                    showToast('❌ Błąd wysyłania na herosi-eve: ' + r.status, 'error');
+                }
+            }).catch(function (e) {
+                done();
+                log('Discord webhook herosi-eve error:', e);
+                showToast('❌ Błąd połączenia z Discord', 'error');
+            });
+            return;
         }
         fetch(DISCORD_WEBHOOK_HEROS, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
         }).then(function (r) {
-            if (!r.ok) {
-                done();
-                showToast('❌ Błąd wysyłania na Discord: ' + r.status, 'error');
-                return;
-            }
-            if (isNoHeroOnList) {
-                return fetch(DISCORD_WEBHOOK_HEROS_EVE, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
-                }).then(function (r2) {
-                    done();
-                    if (r2.ok) {
-                        showToast('✅ Wysłano na Discord (herosi + herosi-eve)');
-                    } else {
-                        showToast('✅ Herosi OK, błąd herosi-eve: ' + r2.status, 'error');
-                    }
-                    hideHeroAlertPanel();
-                }).catch(function () {
-                    done();
-                    showToast('✅ Herosi OK, błąd połączenia z herosi-eve', 'error');
-                    hideHeroAlertPanel();
-                });
-            }
             done();
-            showToast('✅ Wysłano na Discord (herosi)');
-            hideHeroAlertPanel();
+            if (r.ok) {
+                showToast('✅ Wysłano na Discord (herosi)');
+                hideHeroAlertPanel();
+            } else {
+                showToast('❌ Błąd wysyłania na Discord: ' + r.status, 'error');
+            }
         }).catch(function (e) {
             done();
             log('Discord webhook error:', e);
@@ -764,6 +873,11 @@
         }
         checkHerosOnMapAndNotify();
         sendEveMapPresenceIfNeeded();
+        var now = Date.now();
+        if (now - lastFetchedHeroNotifTs >= 8000) {
+            lastFetchedHeroNotifTs = now;
+            fetchAndShowHeroLevelNotifications();
+        }
         if (!target) {
             if (currentTarget) {
                 finalizeSession('map_change');
@@ -773,7 +887,10 @@
         if (kolejkiListContent) updateKolejkiListUI();
         Object.keys(eveMapListPanelsByKey).forEach(function (k) {
             var rec = eveMapListPanelsByKey[k];
-            if (rec && rec.panel && rec.panel.style.display !== 'none') updateEveMapListForPanel(parseInt(k, 10));
+            if (rec && rec.panel && rec.panel.style.display !== 'none') {
+                updateEveMapListForPanel(parseInt(k, 10));
+                updateEvePanelTitle(parseInt(k, 10));
+            }
         });
     }
 
@@ -1219,10 +1336,12 @@
     //  UI — Heros eventowy (EVE): okno z 3 opcjami i listą map
     // ================================================================
     var EVE_OPTIONS = [
-        { key: 63, label: 'EVE 63 - Nazwa herosa' },
-        { key: 143, label: 'EVE 143 - Nazwa herosa' },
-        { key: 300, label: 'EVE 300 - Nazwa herosa' },
+        { key: 63, label: 'EVE 63 - Seeker of Creation' },
+        { key: 143, label: 'EVE 143 - Harbinger of Elancia' },
+        { key: 300, label: 'EVE 300 - Thunder-Wielding Barbarian' },
     ];
+    var EVE_HERO_NAMES = { 63: 'Seeker of Creation', 143: 'Harbinger of Elancia', 300: 'Thunder-Wielding Barbarian' };
+    var EVE_RESPAWN_SECONDS = { 63: 30 * 60, 143: 30 * 60, 300: 30 * 60 }; // domyślnie 30 min, można zmienić
 
     function createEveWindow() {
         if (eveWindowEl) return eveWindowEl;
@@ -1300,7 +1419,7 @@
         var panel = document.createElement('div');
         panel.setAttribute('data-eve-key', eveKey);
         panel.className = 'map-timer-eve-list-panel';
-        panel.style.cssText = 'position:fixed;z-index:100004;min-width:260px;max-width:320px;width:280px;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.5);font-family:Arial,sans-serif;overflow:visible;display:flex;flex-direction:column;';
+        panel.style.cssText = 'position:fixed;z-index:100004;min-width:260px;max-width:520px;width:280px;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.5);font-family:Arial,sans-serif;overflow:visible;display:flex;flex-direction:column;';
         var count = Object.keys(eveMapListPanelsByKey).length;
         var offLeft = (document.documentElement.clientWidth || 800) - 320 - (count * 20);
         var offTop = Math.max(60, ((document.documentElement.clientHeight || 600) - 320) / 2) + (count * 24);
@@ -1312,6 +1431,7 @@
             '<div class="map-timer-eve-list-title" style="font-size:12px;color:#8892b0;padding:8px 12px 0;"></div>' +
             '<div class="map-timer-eve-list" style="padding:8px 12px 12px;overflow-y:auto;overflow-x:hidden;flex:1;min-height:120px;max-height:400px;"></div>' +
             '<div class="map-timer-eve-list-resize" style="height:6px;background:#2a2a4a;cursor:ns-resize;flex-shrink:0;border-radius:0 0 12px 12px;"></div>' +
+            '<div class="map-timer-eve-list-resize-w" style="position:absolute;top:40px;right:0;width:8px;bottom:0;cursor:ew-resize;"></div>' +
             '<button type="button" class="map-timer-eve-list-close" style="position:absolute;top:8px;right:8px;background:none;border:none;color:#8892b0;cursor:pointer;font-size:18px;padding:0 4px;">✕</button>';
         document.body.appendChild(panel);
 
@@ -1330,6 +1450,16 @@
             ev.stopPropagation();
         }, { passive: false });
         var listTitleBar = panel.querySelector('.map-timer-eve-list-panel-title');
+        listTitleBar.addEventListener('contextmenu', function (e) {
+            e.preventDefault();
+            try {
+                if (typeof GM_setValue === 'function') {
+                    GM_setValue('eve_respawn_' + eveKey, String(Date.now()));
+                    updateEvePanelTitle(eveKey);
+                    showToast('Hero zabity — timer respu uruchomiony');
+                }
+            } catch (err) { /* ignore */ }
+        });
         var listDrag = { active: false, startX: 0, startY: 0, startLeft: 0, startTop: 0 };
         listTitleBar.addEventListener('mousedown', function (e) {
             if (e.button !== 0) return;
@@ -1349,6 +1479,25 @@
         document.addEventListener('mouseup', function (e) {
             if (e.button !== 0) return;
             listDrag.active = false;
+        });
+        var resizeWEl = panel.querySelector('.map-timer-eve-list-resize-w');
+        var resizeWDrag = { active: false, startX: 0, startW: 0 };
+        resizeWEl.addEventListener('mousedown', function (e) {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            resizeWDrag.active = true;
+            resizeWDrag.startX = e.clientX;
+            resizeWDrag.startW = panel.offsetWidth;
+        });
+        document.addEventListener('mousemove', function (e) {
+            if (!resizeWDrag.active) return;
+            var dw = e.clientX - resizeWDrag.startX;
+            var w = Math.max(260, Math.min(520, resizeWDrag.startW + dw));
+            panel.style.width = w + 'px';
+        });
+        document.addEventListener('mouseup', function (e) {
+            if (e.button !== 0) return;
+            resizeWDrag.active = false;
         });
 
         var resizeEl = panel.querySelector('.map-timer-eve-list-resize');
@@ -1472,6 +1621,19 @@
         }, 0);
     }
 
+    function formatTimeSince(sec) {
+        if (sec < 0) return '—';
+        var m = Math.floor(sec / 60);
+        var s = Math.floor(sec % 60);
+        return m + ':' + (s < 10 ? '0' : '') + s;
+    }
+    function colorByTimeSinceLeft(sec) {
+        if (sec < 0) return '#8B0000';
+        if (sec <= 30) return '#FA8072';
+        if (sec <= 60) return '#CD5C5C';
+        if (sec <= 120) return '#FF0000';
+        return '#8B0000';
+    }
     function updateEveMapListForPanel(eveKey) {
         var rec = eveMapListPanelsByKey[eveKey];
         if (!rec || !rec.panel || !rec.listEl) return;
@@ -1490,6 +1652,19 @@
             if (!presenceByMap[key]) presenceByMap[key] = [];
             presenceByMap[key].push(p.nick || '');
         });
+        if (!eveMapLastLeftAt[eveKey]) eveMapLastLeftAt[eveKey] = {};
+        if (!evePrevPresenceByMap[eveKey]) evePrevPresenceByMap[eveKey] = {};
+        var prev = evePrevPresenceByMap[eveKey];
+        var now = Date.now();
+        maps.forEach(function (mapName) {
+            var mapKey = String(mapName).trim();
+            var onMapNicks = presenceByMap[mapKey] || [];
+            var hadSomeone = (prev[mapKey] && prev[mapKey].length > 0);
+            if (hadSomeone && onMapNicks.length === 0) {
+                eveMapLastLeftAt[eveKey][mapKey] = now;
+            }
+            prev[mapKey] = onMapNicks.slice();
+        });
 
         listEl.innerHTML = '';
         if (maps.length === 0) {
@@ -1498,27 +1673,58 @@
         }
         maps.forEach(function (mapName) {
             var mapKey = String(mapName).trim();
-            var isCurrent = (mapKey.toLowerCase() === currentMap.trim().toLowerCase());
             var onMapNicks = presenceByMap[mapKey] || [];
-            var displayNick = '—';
-            if (onMapNicks.length > 0) {
-                displayNick = onMapNicks.map(function (n) { return (n && myNick && String(n).trim().toLowerCase() === String(myNick).trim().toLowerCase()) ? 'Ty' : n; }).join(', ');
-            } else {
-                var reservedNick = reservedByMap[mapKey];
-                if (reservedNick) displayNick = reservedNick;
-            }
+            var hasSomeoneOnMap = onMapNicks.length > 0;
             var reservedNick = reservedByMap[mapKey];
             var isReserved = !!reservedNick;
-            var hasSomeoneOnMap = onMapNicks.length > 0;
-            var rowColor = hasSomeoneOnMap ? '#2ecc71' : (isReserved ? '#e67e22' : '#e74c3c');
+            var displayRight = '—';
+            var rowColor = '#8B0000';
+            if (hasSomeoneOnMap) {
+                rowColor = '#228B22';
+                displayRight = onMapNicks.map(function (n) { return (n && myNick && String(n).trim().toLowerCase() === String(myNick).trim().toLowerCase()) ? 'Ty' : n; }).join(', ');
+            } else {
+                var lastLeft = eveMapLastLeftAt[eveKey] && eveMapLastLeftAt[eveKey][mapKey];
+                var secSince = lastLeft ? (now - lastLeft) / 1000 : -1;
+                rowColor = colorByTimeSinceLeft(secSince);
+                displayRight = (secSince >= 0) ? formatTimeSince(secSince) : (isReserved ? reservedNick : '—');
+            }
+            var mapDisplay = (isReserved ? '* ' : '') + mapName;
             var row = document.createElement('div');
             row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.06);font-size:12px;cursor:pointer;';
-            row.innerHTML = '<span style="color:' + rowColor + ';">' + escapeHtml(mapName) + '</span><span style="color:' + rowColor + ';">' + escapeHtml(displayNick) + '</span>';
+            row.innerHTML = '<span style="color:' + rowColor + ';">' + escapeHtml(mapDisplay) + '</span><span style="color:' + rowColor + ';">' + escapeHtml(displayRight) + '</span>';
             if (isReserved) row.title = 'Zarezerwował: ' + escapeHtml(reservedNick);
             row.addEventListener('click', function (ev) { if (ev.button === 0) toggleEveMapPopup(mapName); });
             row.addEventListener('contextmenu', function (ev) { showEveReserveContextMenu(ev, eveKey, mapName, isReserved); });
             listEl.appendChild(row);
         });
+        updateEvePanelTitle(eveKey);
+    }
+    function getEveRespawnText(eveKey) {
+        try {
+            var raw = typeof GM_getValue === 'function' ? GM_getValue('eve_respawn_' + eveKey, null) : null;
+            var ts = raw != null ? parseInt(raw, 10) : NaN;
+            if (!Number.isInteger(ts) || ts <= 0) return { text: null, secLeft: null };
+            var duration = EVE_RESPAWN_SECONDS[eveKey] || 30 * 60;
+            var elapsed = (Date.now() - ts) / 1000;
+            if (elapsed >= duration) return { text: null, secLeft: null };
+            var left = Math.floor(duration - elapsed);
+            return { text: 'Respawn: ' + formatTimeSince(left), secLeft: left };
+        } catch (e) { return { text: null, secLeft: null }; }
+    }
+    function updateEvePanelTitle(eveKey) {
+        var rec = eveMapListPanelsByKey[eveKey];
+        if (!rec || !rec.panel) return;
+        var titleEl = rec.panel.querySelector('.map-timer-eve-list-panel-title');
+        if (!titleEl) return;
+        var resp = getEveRespawnText(eveKey);
+        titleEl.textContent = resp.text || 'Mapy';
+        if (resp.secLeft != null) {
+            if (resp.secLeft <= 60) titleEl.style.color = '#2ecc71';
+            else if (resp.secLeft <= 120) titleEl.style.color = '#f1c40f';
+            else titleEl.style.color = '#fff';
+        } else {
+            titleEl.style.color = '#fff';
+        }
     }
 
     function openEveWindow() {

@@ -154,6 +154,21 @@ model EveMapPresence {
   @@index([eveKey, mapName])
 }
 
+// Powiadomienia w grze: level (64,83,114,144,217,300), gracze ze skryptem odbierają i widzą popup z grafiką herosa
+model HeroLevelNotification {
+  id            String   @id @default(cuid())
+  level         Int      // 64 | 83 | 114 | 144 | 217 | 300
+  nick          String   // nazwa herosa z gry
+  mapName       String
+  x             Int?
+  y             Int?
+  lvl           Int?     // poziom herosa (np. 265m)
+  heroImageUrl  String?  // opcjonalny URL obrazka
+  createdAt     DateTime @default(now())
+
+  @@index([createdAt])
+}
+
 // Jednorazowe kody zaproszenia do rejestracji (generowane przez admina)
 model InvitationCode {
   id           String    @id @default(cuid())
