@@ -1768,6 +1768,12 @@
         selectedEveKey = null;
     }
 
+    // Odświeżanie czasów respu z bazy co 6 s (żeby wszyscy widzieli to samo po zapisie przez innego gracza)
+    setInterval(function () {
+        if (!eveWindowOpen) return;
+        [63, 143, 300].forEach(function (k) { updateEvePanelTitle(k); });
+    }, 6000);
+
     // ================================================================
     //  UI — Toast notifications
     // ================================================================
