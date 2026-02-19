@@ -153,9 +153,11 @@
     var eveMapListPanelsByKey = {}; // eveKey -> { panel, listEl, listHeight }
     let selectedEveKey = null;
     var eveMapReservationsCache = {}; // eveKey -> { data: [{mapName,nick}], ts }
-    var eveMapLastLeftAt = {};        // eveKey -> { mapKey: timestamp } — kiedy ostatnio mapa została opuszczona
-    var evePrevPresenceByMap = {};    // eveKey -> { mapKey: [nicks] } — poprzedni stan obecności (do wykrycia wyjścia)
+    var eveMapLastLeftCache = {};    // eveKey -> { lastLeft: { mapName: ms }, ts } — z API, żeby czasy przetrwały odświeżenie
+    var eveMapLastLeftAt = {};       // eveKey -> { mapKey: timestamp } — lokalna nadpiska (np. właśnie wykryte wyjście)
+    var evePrevPresenceByMap = {};   // eveKey -> { mapKey: [nicks] } — poprzedni stan obecności (do wykrycia wyjścia)
     const EVE_RESERVATIONS_CACHE_TTL_MS = 8 * 1000; // krótki cache, żeby pozycje (obecność) odświeżały się na bieżąco
+    const EVE_LAST_LEFT_CACHE_TTL_MS = 5 * 1000;
     let eveMapPopupEl = null;
     let eveMapPopupCurrentMap = null;
     // Heros → Discord: webhook (kanał herosi), panel z przyciskiem „Zawołaj klan”
@@ -942,6 +944,39 @@
     function fetchEveMapReservations(eveKey) {
         return (fetchEveMapReservationsAndPresence(eveKey).reservations || []);
     }
+    /** Pobiera z API kiedy ostatnio opuszczono każdą mapę (eveKey). Zwraca { mapName: timestampMs }. */
+    function fetchEveMapLastLeft(eveKey) {
+        var now = Date.now();
+        if (eveMapLastLeftCache[eveKey] && (now - eveMapLastLeftCache[eveKey].ts) < EVE_LAST_LEFT_CACHE_TTL_MS) {
+            return eveMapLastLeftCache[eveKey].lastLeft || {};
+        }
+        var out = {};
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-last-left?eveKey=' + eveKey, false);
+        try {
+            xhr.send();
+            if (xhr.status === 200) {
+                var json = JSON.parse(xhr.responseText);
+                out = json.lastLeft || {};
+                eveMapLastLeftCache[eveKey] = { lastLeft: out, ts: now };
+            }
+        } catch (e) { /* ignore */ }
+        return out;
+    }
+    /** Zapisuje w API że mapa została właśnie opuszczona (wspólne dla wszystkich, przetrwa odświeżenie). */
+    function setEveMapLastLeft(eveKey, mapName) {
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-last-left', false);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        try {
+            xhr.send(JSON.stringify({ eveKey: eveKey, mapName: mapName }));
+            if (xhr.status === 200) {
+                eveMapLastLeftCache[eveKey] = null;
+                return true;
+            }
+        } catch (e) { /* ignore */ }
+        return false;
+    }
     var lastEvePresenceSent = {}; // eveKey -> timestamp
     var lastEveMapPresence = {};  // eveKey -> mapName (ostatnia mapa, na której zgłosiliśmy obecność)
     function deleteEveMapPresence(eveKey, mapName, nick) {
@@ -1646,6 +1681,7 @@
         var data = fetchEveMapReservationsAndPresence(eveKey);
         var reservations = data.reservations || [];
         var presence = data.presence || [];
+        var apiLastLeft = fetchEveMapLastLeft(eveKey); // czasy z bazy — wspólne dla wszystkich, przetrwają odświeżenie
         var reservedByMap = {};
         reservations.forEach(function (r) { reservedByMap[String(r.mapName).trim()] = r.nick || ''; });
         var presenceByMap = {};
@@ -1663,6 +1699,7 @@
             var onMapNicks = presenceByMap[mapKey] || [];
             var hadSomeone = (prev[mapKey] && prev[mapKey].length > 0);
             if (hadSomeone && onMapNicks.length === 0) {
+                setEveMapLastLeft(eveKey, mapKey);
                 eveMapLastLeftAt[eveKey][mapKey] = now;
             }
             prev[mapKey] = onMapNicks.slice();
@@ -1685,8 +1722,8 @@
                 rowColor = '#228B22';
                 displayRight = onMapNicks.map(function (n) { return (n && myNick && String(n).trim().toLowerCase() === String(myNick).trim().toLowerCase()) ? 'Ty' : n; }).join(', ');
             } else {
-                var lastLeft = eveMapLastLeftAt[eveKey] && eveMapLastLeftAt[eveKey][mapKey];
-                var secSince = lastLeft ? (now - lastLeft) / 1000 : -1;
+                var lastLeft = (eveMapLastLeftAt[eveKey] && eveMapLastLeftAt[eveKey][mapKey]) || apiLastLeft[mapKey];
+                var secSince = (lastLeft && typeof lastLeft === 'number') ? (now - lastLeft) / 1000 : -1;
                 rowColor = colorByTimeSinceLeft(secSince);
                 displayRight = (secSince >= 0) ? formatTimeSince(secSince) : (isReserved ? reservedNick : '—');
             }

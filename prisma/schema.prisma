@@ -154,6 +154,17 @@ model EveMapPresence {
   @@index([eveKey, mapName])
 }
 
+// Kiedy ostatnio ktoś opuścił daną mapę EVE (63, 143, 300) — wspólne dla wszystkich, przetrwa odświeżenie
+model EveMapLastLeft {
+  id         String   @id @default(cuid())
+  eveKey     Int
+  mapName    String
+  lastLeftAt DateTime @default(now())
+
+  @@unique([eveKey, mapName])
+  @@index([eveKey])
+}
+
 // Czasy respu herosów EVE (63, 143, 300) — kiedy ostatnio zabito, wspólne dla wszystkich graczy
 model EveRespawnTimer {
   id        String   @id @default(cuid())
