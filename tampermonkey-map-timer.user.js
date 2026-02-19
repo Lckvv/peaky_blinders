@@ -2037,22 +2037,14 @@
         selectedEveKey = null;
     }
 
-    // Odliczanie czasów lokalnie co 1 s — czasy płyną bez requestów
+    // Odliczanie sekund lokalnie co 1 s — zero requestów, tylko przeliczanie „X min temu” i „Respawn: MM:SS” z cache
     setInterval(function () {
-        if (!eveWindowOpen) return;
         [63, 143, 300].forEach(function (k) {
             var rec = eveMapListPanelsByKey[k];
             if (rec && rec.panel && rec.panel.style.display !== 'none') refreshEvePanelDisplayFromCache(k);
         });
     }, 1000);
-    // Backend co 15 s — czasy i pozycje graczy (rezerwacje, kto na mapie); odświeżamy cache, odliczanie dalej lokalne
-    setInterval(function () {
-        if (!eveWindowOpen) return;
-        [63, 143, 300].forEach(function (k) {
-            var rec = eveMapListPanelsByKey[k];
-            if (rec && rec.panel && rec.panel.style.display !== 'none') fetchEveDashboardAsync(k, applyEveDashboardToPanel);
-        });
-    }, 15000);
+    // Backend tylko przy wejściu na mapę i przy odświeżeniu (w tick przy zmianie mapy + przy otwarciu/restore panelu)
     // Kolejki — dane z API co 5 s async (bez blokowania głównego wątku)
     setInterval(refreshKolejkiAsync, 5000);
 
