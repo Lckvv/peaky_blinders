@@ -396,6 +396,29 @@
         return (wt >= HEROS_WT_MIN && wt <= HEROS_WT_MAX) || wt >= TITAN_WT_MIN;
     }
 
+    /** Pobiera URL obrazka NPC/herosa z gry (silnik — szablon tpl). Zwraca null gdy brak. */
+    function getNpcImageUrlFromEngine(tpl) {
+        if (tpl == null || tpl === '') return null;
+        try {
+            const engine = getEngine();
+            const tplManager = engine && engine.npcTplManager && typeof engine.npcTplManager.getNpcTpl === 'function' ? engine.npcTplManager : null;
+            if (!tplManager) return null;
+            const obj = tplManager.getNpcTpl(tpl);
+            if (!obj || typeof obj !== 'object') return null;
+            var pathOrUrl = obj.icon ?? obj.gfx ?? obj.img ?? obj.image ?? obj.src ?? obj.url ?? obj.outfit ?? obj.avatar;
+            if (typeof pathOrUrl !== 'string' || !pathOrUrl.trim()) return null;
+            pathOrUrl = pathOrUrl.trim();
+            if (pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')) return pathOrUrl;
+            if (pathOrUrl.startsWith('//')) return 'https:' + pathOrUrl;
+            var path = pathOrUrl.startsWith('/') ? pathOrUrl : '/' + pathOrUrl;
+            var origin = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : 'https://margonem.com';
+            return origin.replace(/\/$/, '') + path;
+        } catch (e) {
+            if (CONFIG.DEBUG) log('getNpcImageUrlFromEngine error:', e);
+            return null;
+        }
+    }
+
     /** Jedno powiadomienie na mapę — reset przy wyjściu z mapy lub odświeżeniu. Pokazuje panel z przyciskami Zawołaj klan / Zamknij. */
     function checkHerosOnMapAndNotify() {
         const mapName = getCurrentMapName();
@@ -416,6 +439,7 @@
             x: heroNpc.x,
             y: heroNpc.y,
             mapName: mapName,
+            tpl: heroNpc.tpl,
         };
         showHeroAlertPanel();
         log('Heros/Tytan na mapie:', name, '(wt:', heroNpc.wt + ')');
@@ -490,7 +514,8 @@
         if (!lastHeroAlertData) return;
         var lvlStr = lastHeroAlertData.lvl != null ? lastHeroAlertData.lvl + 'm' : '?';
         var posStr = (lastHeroAlertData.x != null && lastHeroAlertData.y != null) ? (lastHeroAlertData.x + ',' + lastHeroAlertData.y) : '?';
-        var heroImageUrl = getOutfitFromLocalStorage(lastHeroAlertData.nick) || null;
+        var heroImageUrl = getNpcImageUrlFromEngine(lastHeroAlertData.tpl) || null;
+        if (!heroImageUrl) heroImageUrl = getOutfitFromLocalStorage(lastHeroAlertData.nick) || null;
         try {
             var charlist = typeof window.Margonem !== 'undefined' && window.Margonem.charlist ? window.Margonem.charlist : (typeof window.g !== 'undefined' && window.g && window.g.charlist ? window.g.charlist : null);
             if (!heroImageUrl && charlist) heroImageUrl = findOutfitInCharlist(charlist, lastHeroAlertData.nick) || null;
@@ -530,6 +555,11 @@
         }
     }
 
+    /** URL obrazka/GIF herosa po levelu z backendu (np. /api/hero-level-images/64/hero.gif). */
+    function getHeroLevelImageUrl(level, ext) {
+        if (!CONFIG.BACKEND_URL || level == null) return null;
+        return CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/hero-level-images/' + level + '/hero.' + (ext || 'gif');
+    }
     function showHeroLevelPopup(data) {
         var lvlStr = (data.lvl != null) ? data.lvl + 'm' : '?';
         var posStr = (data.x != null && data.y != null) ? (data.x + ',' + data.y) : '?';
@@ -539,12 +569,30 @@
         pop.style.cssText = 'position:fixed;top:80px;right:20px;z-index:100012;background:#1a1a2e;border:2px solid #e67e22;border-radius:12px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,0.5);font-family:Arial,sans-serif;max-width:360px;display:flex;align-items:center;gap:12px;';
         var imgEl = document.createElement('div');
         imgEl.style.cssText = 'width:64px;height:64px;flex-shrink:0;background:#2a2a4a;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:32px;';
-        if (data.heroImageUrl) {
-            var img = document.createElement('img');
-            img.src = data.heroImageUrl;
-            img.alt = '';
-            img.style.cssText = 'width:100%;height:100%;object-fit:contain;border-radius:8px;';
-            img.onerror = function () { imgEl.textContent = '🦸'; imgEl.removeChild(img); };
+        var img = document.createElement('img');
+        img.alt = '';
+        img.style.cssText = 'width:100%;height:100%;object-fit:contain;border-radius:8px;';
+        var tryOrder = [];
+        if (data.level != null) {
+            tryOrder.push(getHeroLevelImageUrl(data.level, 'gif'));
+            tryOrder.push(getHeroLevelImageUrl(data.level, 'png'));
+        }
+        if (data.heroImageUrl) tryOrder.push(data.heroImageUrl);
+        var idx = 0;
+        function tryNext() {
+            if (idx < tryOrder.length && tryOrder[idx]) {
+                img.src = tryOrder[idx];
+                idx++;
+            } else {
+                imgEl.textContent = '🦸';
+                if (img.parentNode) imgEl.removeChild(img);
+            }
+        }
+        img.onerror = tryNext;
+        img.onload = function () { idx = 999; };
+        if (tryOrder.length > 0 && tryOrder[0]) {
+            img.src = tryOrder[0];
+            idx = 1;
             imgEl.appendChild(img);
         } else {
             imgEl.textContent = '🦸';
@@ -907,6 +955,14 @@
         const mapName = getCurrentMapName();
         var nowTick = now;
         const target = mapName ? findTarget(mapName) : null;
+        var currentMapForEve = mapName || '';
+        if (currentMapForEve !== lastEveFetchMapName) {
+            lastEveFetchMapName = currentMapForEve;
+            [63, 143, 300].forEach(function (k) {
+                var rec = eveMapListPanelsByKey[k];
+                if (rec && rec.panel && rec.panel.style.display !== 'none') fetchEveDashboardAsync(k, applyEveDashboardToPanel);
+            });
+        }
 
         if (mapName && !target && mapName !== lastLoggedMapName) {
             log('⚠️ Wykryta mapa nie jest w TARGETS:', JSON.stringify(mapName), '— dodaj ją do listy w skrypcie');
@@ -1440,13 +1496,14 @@
     var EVE_HERO_NAMES = { 63: 'Seeker of Creation', 143: 'Harbinger of Elancia', 300: 'Thunder-Wielding Barbarian' };
     var EVE_RESPAWN_SECONDS = { 63: 30 * 60, 143: 30 * 60, 300: 30 * 60 }; // domyślnie 30 min, można zmienić
     var eveRespawnCache = null;
-    var EVE_RESPAWN_CACHE_TTL_MS = 5 * 1000;
+    var eveDashboardCache = {};  // eveKey -> { reservations, presence, lastLeft, respawnTimer } — do lokalnego odliczania
+    var lastEveFetchMapName = null; // fetch przy każdym przejściu przez mapę
 
     function createEveWindow() {
         if (eveWindowEl) return eveWindowEl;
         eveWindowEl = document.createElement('div');
         eveWindowEl.id = 'map-timer-eve-window';
-        eveWindowEl.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:100003;min-width:280px;max-width:360px;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.5);font-family:Arial,sans-serif;overflow:hidden;';
+        eveWindowEl.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:5003;min-width:280px;max-width:360px;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.5);font-family:Arial,sans-serif;overflow:hidden;';
         eveWindowEl.innerHTML =
             '<div class="map-timer-eve-title" style="background:#16213e;padding:10px 36px 10px 12px;font-weight:bold;font-size:14px;border-bottom:1px solid #2a2a4a;color:#fff;cursor:move;user-select:none;">Heros eventowy</div>' +
             '<div class="map-timer-eve-buttons" style="padding:12px;display:flex;flex-direction:column;gap:8px;">' +
@@ -1518,7 +1575,7 @@
         var panel = document.createElement('div');
         panel.setAttribute('data-eve-key', eveKey);
         panel.className = 'map-timer-eve-list-panel';
-        panel.style.cssText = 'position:fixed;z-index:100004;min-width:260px;max-width:520px;width:280px;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.5);font-family:Arial,sans-serif;overflow:visible;display:flex;flex-direction:column;';
+        panel.style.cssText = 'position:fixed;z-index:5004;min-width:260px;max-width:520px;width:280px;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.5);font-family:Arial,sans-serif;overflow:visible;display:flex;flex-direction:column;';
         var count = Object.keys(eveMapListPanelsByKey).length;
         var offLeft = (document.documentElement.clientWidth || 800) - 320 - (count * 20);
         var offTop = Math.max(60, ((document.documentElement.clientHeight || 600) - 320) / 2) + (count * 24);
@@ -1636,7 +1693,7 @@
         if (eveMapPopupEl) return eveMapPopupEl;
         eveMapPopupEl = document.createElement('div');
         eveMapPopupEl.id = 'map-timer-eve-map-popup';
-        eveMapPopupEl.style.cssText = 'position:fixed;z-index:100005;min-width:220px;max-width:360px;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.5);font-family:Arial,sans-serif;overflow:hidden;display:none;';
+        eveMapPopupEl.style.cssText = 'position:fixed;z-index:5005;min-width:220px;max-width:360px;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.5);font-family:Arial,sans-serif;overflow:hidden;display:none;';
         eveMapPopupEl.innerHTML =
             '<div style="background:#16213e;padding:10px 32px 10px 12px;font-weight:bold;font-size:13px;border-bottom:1px solid #2a2a4a;color:#fff;">Mapa</div>' +
             '<div class="map-timer-eve-map-popup-body" style="padding:12px;font-size:13px;color:#eee;"></div>' +
@@ -1671,7 +1728,7 @@
         e.stopPropagation();
         if (eveContextMenuEl && eveContextMenuEl.parentNode) eveContextMenuEl.parentNode.removeChild(eveContextMenuEl);
         eveContextMenuEl = document.createElement('div');
-        eveContextMenuEl.style.cssText = 'position:fixed;z-index:100020;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5);padding:4px 0;min-width:160px;';
+        eveContextMenuEl.style.cssText = 'position:fixed;z-index:5020;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5);padding:4px 0;min-width:160px;';
         eveContextMenuEl.style.left = e.clientX + 'px';
         eveContextMenuEl.style.top = e.clientY + 'px';
 
@@ -1741,13 +1798,12 @@
             if (data) callback(eveKey, data);
         }).catch(function () {});
     }
-    /** Aplikuje odpowiedź dashboardu do panelu (bez sync XHR — nie blokuje). Wykrywa wyjścia i POSTuje lastLeft w tle. */
-    function applyEveDashboardToPanel(eveKey, data) {
+    /** Rysuje listę map i tytuł z danych (data + now). Odliczanie lokalne — now się zmienia co sekundę. */
+    function renderEveListAndTitle(eveKey, data, now) {
         var rec = eveMapListPanelsByKey[eveKey];
         if (!rec || !rec.panel || !rec.listEl) return;
         var listEl = rec.listEl;
         var maps = EVE_MAPS[eveKey] || [];
-        var currentMap = getCurrentMapName() || '';
         var myNick = getCurrentHeroName();
         var reservations = data.reservations || [];
         var presence = data.presence || [];
@@ -1760,27 +1816,6 @@
             if (!presenceByMap[key]) presenceByMap[key] = [];
             presenceByMap[key].push(p.nick || '');
         });
-        if (!eveMapLastLeftAt[eveKey]) eveMapLastLeftAt[eveKey] = {};
-        if (!evePrevPresenceByMap[eveKey]) evePrevPresenceByMap[eveKey] = {};
-        var prev = evePrevPresenceByMap[eveKey];
-        var now = Date.now();
-        maps.forEach(function (mapName) {
-            var mapKey = String(mapName).trim();
-            var onMapNicks = presenceByMap[mapKey] || [];
-            var hadSomeone = (prev[mapKey] && prev[mapKey].length > 0);
-            if (hadSomeone && onMapNicks.length === 0) {
-                eveMapLastLeftAt[eveKey][mapKey] = now;
-                fetch(CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-last-left', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eveKey: eveKey, mapName: mapKey }) }).catch(function () {});
-            }
-            prev[mapKey] = onMapNicks.slice();
-        });
-        if (data.respawnTimer != null) {
-            if (!eveRespawnCache) eveRespawnCache = { timers: {}, ts: 0 };
-            if (!eveRespawnCache.timers) eveRespawnCache.timers = {};
-            eveRespawnCache.timers[eveKey] = data.respawnTimer;
-            eveRespawnCache.ts = now;
-        }
-
         listEl.innerHTML = '';
         if (maps.length === 0) {
             listEl.innerHTML = '<div style="color:#8892b0;font-size:12px;padding:8px 0;">Brak map (lista do uzupełnienia w skrypcie).</div>';
@@ -1814,6 +1849,52 @@
             listEl.appendChild(row);
         });
         applyEvePanelTitleFromData(eveKey, data.respawnTimer);
+    }
+    /** Odświeża wyświetlanie z cache — tylko przelicza czasy (odliczanie lokalne co 1 s). */
+    function refreshEvePanelDisplayFromCache(eveKey) {
+        var data = eveDashboardCache[eveKey];
+        if (!data) return;
+        renderEveListAndTitle(eveKey, data, Date.now());
+    }
+    /** Aplikuje odpowiedź dashboardu: wykrywa wyjścia (POST), zapisuje do cache, rysuje. Fetch tylko przy wejściu na mapę / odświeżeniu. */
+    function applyEveDashboardToPanel(eveKey, data) {
+        var rec = eveMapListPanelsByKey[eveKey];
+        if (!rec || !rec.panel || !rec.listEl) return;
+        var listEl = rec.listEl;
+        var maps = EVE_MAPS[eveKey] || [];
+        var currentMap = getCurrentMapName() || '';
+        var myNick = getCurrentHeroName();
+        var reservations = data.reservations || [];
+        var presence = data.presence || [];
+        var apiLastLeft = data.lastLeft || {};
+        var presenceByMap = {};
+        presence.forEach(function (p) {
+            var key = String(p.mapName).trim();
+            if (!presenceByMap[key]) presenceByMap[key] = [];
+            presenceByMap[key].push(p.nick || '');
+        });
+        if (!eveMapLastLeftAt[eveKey]) eveMapLastLeftAt[eveKey] = {};
+        if (!evePrevPresenceByMap[eveKey]) evePrevPresenceByMap[eveKey] = {};
+        var prev = evePrevPresenceByMap[eveKey];
+        var now = Date.now();
+        maps.forEach(function (mapName) {
+            var mapKey = String(mapName).trim();
+            var onMapNicks = presenceByMap[mapKey] || [];
+            var hadSomeone = (prev[mapKey] && prev[mapKey].length > 0);
+            if (hadSomeone && onMapNicks.length === 0) {
+                eveMapLastLeftAt[eveKey][mapKey] = now;
+                fetch(CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-last-left', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eveKey: eveKey, mapName: mapKey }) }).catch(function () {});
+            }
+            prev[mapKey] = onMapNicks.slice();
+        });
+        if (data.respawnTimer != null) {
+            if (!eveRespawnCache) eveRespawnCache = { timers: {}, ts: 0 };
+            if (!eveRespawnCache.timers) eveRespawnCache.timers = {};
+            eveRespawnCache.timers[eveKey] = data.respawnTimer;
+            eveRespawnCache.ts = now;
+        }
+        eveDashboardCache[eveKey] = { reservations: data.reservations || [], presence: data.presence || [], lastLeft: data.lastLeft || {}, respawnTimer: data.respawnTimer };
+        renderEveListAndTitle(eveKey, eveDashboardCache[eveKey], now);
     }
     function applyEvePanelTitleFromData(eveKey, respawnTimerMs) {
         var rec = eveMapListPanelsByKey[eveKey];
@@ -1904,14 +1985,14 @@
         selectedEveKey = null;
     }
 
-    // Odświeżanie EVE z backendu co 8 s — jeden request (dashboard) zamiast 3, async = zero lagu
+    // Odliczanie czasów lokalnie co 1 s (bez uderzania w backend — czasy płyną)
     setInterval(function () {
         if (!eveWindowOpen) return;
         [63, 143, 300].forEach(function (k) {
             var rec = eveMapListPanelsByKey[k];
-            if (rec && rec.panel && rec.panel.style.display !== 'none') fetchEveDashboardAsync(k, applyEveDashboardToPanel);
+            if (rec && rec.panel && rec.panel.style.display !== 'none') refreshEvePanelDisplayFromCache(k);
         });
-    }, 8000);
+    }, 1000);
     // Kolejki — dane z API co 5 s async (bez blokowania głównego wątku)
     setInterval(refreshKolejkiAsync, 5000);
 
