@@ -41,7 +41,7 @@
             { map: 'Ice Throne Room', monster: 'Tanroth' },
         ],
 
-        CHECK_INTERVAL: 1000,
+        CHECK_INTERVAL: 2000,
         MIN_TIME_TO_SEND: 5,
         DEBUG: true,
     };
@@ -65,6 +65,7 @@
     let sessionFinalized = false;
     let reservationsCache = { monster: null, data: null, ts: 0 };
     let phaseLeaderboardCache = { monster: null, data: null, ts: 0 };
+    var kolejkiAsyncCache = { monster: null, reservations: [], timeByNick: {}, ts: 0 };
     const RESERVATIONS_CACHE_TTL_MS = 2 * 60 * 1000;
     const LEADERBOARD_CACHE_TTL_MS = 2 * 60 * 1000;
     const PRIORITY_COLORS = { 1: '#C8F527', 2: '#27F584', 3: '#2768F5' };
@@ -583,6 +584,21 @@
             });
         } catch (e) { /* ignore */ }
     }
+    /** Async — nie blokuje głównego wątku (mniej lagu). */
+    function fetchAndShowHeroLevelNotificationsAsync() {
+        if (!CONFIG.BACKEND_URL) return;
+        var url = CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/hero-level-notifications?since=' + lastSeenHeroNotificationTs;
+        fetch(url).then(function (r) { return r.ok ? r.json() : null; }).then(function (json) {
+            if (!json || !json.notifications) return;
+            var list = json.notifications || [];
+            list.forEach(function (n) {
+                if (n.createdAt && n.createdAt > lastSeenHeroNotificationTs) lastSeenHeroNotificationTs = n.createdAt;
+                if (!shouldShowHeroLevelNotification(n.id, n.level, n.nick)) return;
+                markHeroLevelNotificationShown(n.id, n.level, n.nick);
+                showHeroLevelPopup({ level: n.level, nick: n.nick, mapName: n.mapName, x: n.x, y: n.y, lvl: n.lvl, heroImageUrl: n.heroImageUrl });
+            });
+        }).catch(function () {});
+    }
 
     function sendHeroAlertToDiscord() {
         if (!lastHeroAlertData) return;
@@ -866,6 +882,7 @@
         heroOutfitUrl = info?.outfitUrl ?? null;
 
         log(`✅ Na mapie: "${target.map}" — tracking ${target.monster} jako ${heroName}${heroOutfitUrl ? ' (outfit: ' + heroOutfitUrl + ')' : ''}`);
+        refreshKolejkiAsync();
     }
 
     function finalizeSession(reason, useUnloadSend = false) {
@@ -883,9 +900,12 @@
     }
 
     let lastLoggedMapName = null;
+    var lastConfigRefreshTs = 0;
     function tick() {
-        refreshConfigFromStorage();
+        var now = Date.now();
+        if (now - lastConfigRefreshTs >= 10000) { refreshConfigFromStorage(); lastConfigRefreshTs = now; }
         const mapName = getCurrentMapName();
+        var nowTick = now;
         const target = mapName ? findTarget(mapName) : null;
 
         if (mapName && !target && mapName !== lastLoggedMapName) {
@@ -905,10 +925,9 @@
         }
         checkHerosOnMapAndNotify();
         sendEveMapPresenceIfNeeded();
-        var now = Date.now();
-        if (now - lastFetchedHeroNotifTs >= 8000) {
-            lastFetchedHeroNotifTs = now;
-            fetchAndShowHeroLevelNotifications();
+        if (nowTick - lastFetchedHeroNotifTs >= 10000) {
+            lastFetchedHeroNotifTs = nowTick;
+            fetchAndShowHeroLevelNotificationsAsync();
         }
         if (!target) {
             if (currentTarget) {
@@ -917,13 +936,6 @@
             hideTimerUI();
         }
         if (kolejkiListContent) updateKolejkiListUI();
-        Object.keys(eveMapListPanelsByKey).forEach(function (k) {
-            var rec = eveMapListPanelsByKey[k];
-            if (rec && rec.panel && rec.panel.style.display !== 'none') {
-                updateEveMapListForPanel(parseInt(k, 10));
-                updateEvePanelTitle(parseInt(k, 10));
-            }
-        });
     }
 
     /** Pobiera rezerwacje dla potwora (cache 2 min). */
@@ -1010,14 +1022,8 @@
     var lastEvePresenceSent = {}; // eveKey -> timestamp
     var lastEveMapPresence = {};  // eveKey -> mapName (ostatnia mapa, na której zgłosiliśmy obecność)
     function deleteEveMapPresence(eveKey, mapName, nick) {
-        var xhr = new XMLHttpRequest();
-        xhr.open('DELETE', CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-presence?eveKey=' + encodeURIComponent(eveKey) + '&mapName=' + encodeURIComponent(mapName) + '&nick=' + encodeURIComponent(nick), false);
-        xhr.setRequestHeader('X-API-Key', CONFIG.API_KEY || '');
-        try {
-            xhr.send();
-            if (xhr.status === 200) { eveMapReservationsCache[eveKey] = null; return true; }
-        } catch (e) { /* ignore */ }
-        return false;
+        var url = CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-presence?eveKey=' + encodeURIComponent(eveKey) + '&mapName=' + encodeURIComponent(mapName) + '&nick=' + encodeURIComponent(nick);
+        fetch(url, { method: 'DELETE', headers: { 'X-API-Key': CONFIG.API_KEY || '' } }).then(function (r) { if (r.ok) eveMapReservationsCache[eveKey] = null; }).catch(function () {});
     }
     function sendEveMapPresenceIfNeeded() {
         if (!CONFIG.API_KEY) return;
@@ -1036,14 +1042,11 @@
                 if (lastEvePresenceSent[eveKey] && (now - lastEvePresenceSent[eveKey]) < 10000) return;
                 lastEvePresenceSent[eveKey] = now;
                 lastEveMapPresence[eveKey] = currentMap;
-                var xhr = new XMLHttpRequest();
-                xhr.open('POST', CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-presence', false);
-                xhr.setRequestHeader('Content-Type', 'application/json');
-                xhr.setRequestHeader('X-API-Key', CONFIG.API_KEY);
-                try {
-                    xhr.send(JSON.stringify({ eveKey: eveKey, mapName: currentMap, nick: nick }));
-                    if (xhr.status === 200) eveMapReservationsCache[eveKey] = null;
-                } catch (e) { /* ignore */ }
+                fetch(CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-presence', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-API-Key': CONFIG.API_KEY },
+                    body: JSON.stringify({ eveKey: eveKey, mapName: currentMap, nick: nick })
+                }).then(function (r) { if (r.ok) eveMapReservationsCache[eveKey] = null; }).catch(function () {});
             } else {
                 if (lastMap) {
                     deleteEveMapPresence(eveKey, lastMap, nick);
@@ -1113,6 +1116,29 @@
             if (CONFIG.DEBUG) log('fetchPhaseLeaderboard error:', e);
         }
         return out;
+    }
+    /** Async — uzupełnia kolejkiAsyncCache, potem wywołuje updateKolejkiListUI (bez blokowania). */
+    function refreshKolejkiAsync() {
+        if (!currentTarget || !currentTarget.monster || !CONFIG.BACKEND_URL) return;
+        var monster = currentTarget.monster;
+        var base = CONFIG.BACKEND_URL.replace(/\/$/, '');
+        var resUrl = base + '/api/timer/reservations?monster=' + encodeURIComponent(monster);
+        var rankUrl = base + '/api/leaderboard/ranking?monster=' + encodeURIComponent(monster);
+        var headers = CONFIG.API_KEY ? { 'X-API-Key': CONFIG.API_KEY } : {};
+        Promise.all([
+            fetch(resUrl, { headers: headers }).then(function (r) { return r.ok ? r.json() : { reservations: [] }; }).then(function (j) { return j.reservations || []; }),
+            fetch(rankUrl, { headers: headers }).then(function (r) { return r.ok ? r.json() : { leaderboard: [] }; }).then(function (j) {
+                var out = {};
+                (j.leaderboard || []).forEach(function (e) {
+                    var name = (e.heroName || e.nick || '').trim();
+                    if (name) out[name.toLowerCase()] = e.totalTime || 0;
+                });
+                return out;
+            })
+        ]).then(function (arr) {
+            kolejkiAsyncCache = { monster: monster, reservations: arr[0], timeByNick: arr[1], ts: Date.now() };
+            if (kolejkiListContent) updateKolejkiListUI();
+        }).catch(function () {});
     }
 
     // ================================================================
@@ -1309,13 +1335,19 @@
         if (!kolejkiListContent) return;
         const players = getPlayersOnMap();
         const target = findTarget(getCurrentMapName());
-        const reservations = (target && target.monster) ? fetchReservationsForMonster(target.monster) : [];
+        var reservations = [];
+        var timeByNick = {};
+        if (target && target.monster) {
+            if (kolejkiAsyncCache.monster === target.monster) {
+                reservations = kolejkiAsyncCache.reservations || [];
+                timeByNick = kolejkiAsyncCache.timeByNick || {};
+            }
+        }
         const byNick = {};
         reservations.forEach(function (r) {
             const n = (r.nick || '').trim().toLowerCase();
             if (n) byNick[n] = r;
         });
-        const timeByNick = (target && target.monster) ? fetchPhaseLeaderboard(target.monster) : {};
         // Sort: 1) suma czasu w fazie (malejąco), 2) ma rezerwację przed brakiem, 3) alfabetycznie
         const sortedPlayers = players.slice().filter(function (p) { return (p && p.nick) && String(p.nick).trim(); }).sort(function (a, b) {
             const na = String(a.nick).trim();
@@ -1521,7 +1553,7 @@
             e.preventDefault();
             if (!CONFIG.API_KEY) { showToast('Ustaw API Key, żeby zapisać timer respu', 'error'); return; }
             if (setEveRespawnKilled(eveKey)) {
-                updateEvePanelTitle(eveKey);
+                fetchEveDashboardAsync(eveKey, applyEveDashboardToPanel);
                 showToast('Hero zabity — timer respu zapisany (wszyscy widzą)');
             } else {
                 showToast('Błąd zapisu timera respu', 'error');
@@ -1701,17 +1733,25 @@
         if (sec <= 120) return '#FF0000';
         return '#8B0000';
     }
-    function updateEveMapListForPanel(eveKey) {
+    /** Jedno żądanie zamiast 3 — mniej lagu. Async: callback(data). */
+    function fetchEveDashboardAsync(eveKey, callback) {
+        if (!CONFIG.BACKEND_URL || typeof callback !== 'function') return;
+        var url = CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-dashboard?eveKey=' + eveKey;
+        fetch(url).then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
+            if (data) callback(eveKey, data);
+        }).catch(function () {});
+    }
+    /** Aplikuje odpowiedź dashboardu do panelu (bez sync XHR — nie blokuje). Wykrywa wyjścia i POSTuje lastLeft w tle. */
+    function applyEveDashboardToPanel(eveKey, data) {
         var rec = eveMapListPanelsByKey[eveKey];
         if (!rec || !rec.panel || !rec.listEl) return;
         var listEl = rec.listEl;
         var maps = EVE_MAPS[eveKey] || [];
         var currentMap = getCurrentMapName() || '';
         var myNick = getCurrentHeroName();
-        var data = fetchEveMapReservationsAndPresence(eveKey);
         var reservations = data.reservations || [];
         var presence = data.presence || [];
-        var apiLastLeft = fetchEveMapLastLeft(eveKey); // czasy z bazy — wspólne dla wszystkich, przetrwają odświeżenie
+        var apiLastLeft = data.lastLeft || {};
         var reservedByMap = {};
         reservations.forEach(function (r) { reservedByMap[String(r.mapName).trim()] = r.nick || ''; });
         var presenceByMap = {};
@@ -1729,15 +1769,22 @@
             var onMapNicks = presenceByMap[mapKey] || [];
             var hadSomeone = (prev[mapKey] && prev[mapKey].length > 0);
             if (hadSomeone && onMapNicks.length === 0) {
-                setEveMapLastLeft(eveKey, mapKey);
                 eveMapLastLeftAt[eveKey][mapKey] = now;
+                fetch(CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-last-left', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eveKey: eveKey, mapName: mapKey }) }).catch(function () {});
             }
             prev[mapKey] = onMapNicks.slice();
         });
+        if (data.respawnTimer != null) {
+            if (!eveRespawnCache) eveRespawnCache = { timers: {}, ts: 0 };
+            if (!eveRespawnCache.timers) eveRespawnCache.timers = {};
+            eveRespawnCache.timers[eveKey] = data.respawnTimer;
+            eveRespawnCache.ts = now;
+        }
 
         listEl.innerHTML = '';
         if (maps.length === 0) {
             listEl.innerHTML = '<div style="color:#8892b0;font-size:12px;padding:8px 0;">Brak map (lista do uzupełnienia w skrypcie).</div>';
+            applyEvePanelTitleFromData(eveKey, data.respawnTimer);
             return;
         }
         maps.forEach(function (mapName) {
@@ -1766,7 +1813,29 @@
             row.addEventListener('contextmenu', function (ev) { showEveReserveContextMenu(ev, eveKey, mapName, isReserved); });
             listEl.appendChild(row);
         });
-        updateEvePanelTitle(eveKey);
+        applyEvePanelTitleFromData(eveKey, data.respawnTimer);
+    }
+    function applyEvePanelTitleFromData(eveKey, respawnTimerMs) {
+        var rec = eveMapListPanelsByKey[eveKey];
+        if (!rec || !rec.panel) return;
+        var titleEl = rec.panel.querySelector('.map-timer-eve-list-panel-title');
+        if (!titleEl) return;
+        var text = 'Mapy';
+        var secLeft = null;
+        if (respawnTimerMs != null && typeof respawnTimerMs === 'number' && respawnTimerMs > 0) {
+            var duration = EVE_RESPAWN_SECONDS[eveKey] || 30 * 60;
+            var elapsed = (Date.now() - respawnTimerMs) / 1000;
+            if (elapsed < duration) { secLeft = Math.floor(duration - elapsed); text = 'Respawn: ' + formatTimeSince(secLeft); }
+        }
+        titleEl.textContent = text;
+        if (secLeft != null) {
+            if (secLeft <= 60) titleEl.style.color = '#2ecc71';
+            else if (secLeft <= 120) titleEl.style.color = '#f1c40f';
+            else titleEl.style.color = '#fff';
+        } else { titleEl.style.color = '#fff'; }
+    }
+    function updateEveMapListForPanel(eveKey) {
+        fetchEveDashboardAsync(eveKey, function (k, data) { applyEveDashboardToPanel(k, data); });
     }
     function fetchEveRespawnTimers() {
         var now = Date.now();
@@ -1835,11 +1904,16 @@
         selectedEveKey = null;
     }
 
-    // Odświeżanie czasów respu z bazy co 6 s (żeby wszyscy widzieli to samo po zapisie przez innego gracza)
+    // Odświeżanie EVE z backendu co 8 s — jeden request (dashboard) zamiast 3, async = zero lagu
     setInterval(function () {
         if (!eveWindowOpen) return;
-        [63, 143, 300].forEach(function (k) { updateEvePanelTitle(k); });
-    }, 6000);
+        [63, 143, 300].forEach(function (k) {
+            var rec = eveMapListPanelsByKey[k];
+            if (rec && rec.panel && rec.panel.style.display !== 'none') fetchEveDashboardAsync(k, applyEveDashboardToPanel);
+        });
+    }, 8000);
+    // Kolejki — dane z API co 5 s async (bez blokowania głównego wątku)
+    setInterval(refreshKolejkiAsync, 5000);
 
     // ================================================================
     //  UI — Toast notifications
