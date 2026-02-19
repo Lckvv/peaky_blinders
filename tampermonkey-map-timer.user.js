@@ -1342,6 +1342,8 @@
     ];
     var EVE_HERO_NAMES = { 63: 'Seeker of Creation', 143: 'Harbinger of Elancia', 300: 'Thunder-Wielding Barbarian' };
     var EVE_RESPAWN_SECONDS = { 63: 30 * 60, 143: 30 * 60, 300: 30 * 60 }; // domyślnie 30 min, można zmienić
+    var eveRespawnCache = null;
+    var EVE_RESPAWN_CACHE_TTL_MS = 5 * 1000;
 
     function createEveWindow() {
         if (eveWindowEl) return eveWindowEl;
@@ -1452,13 +1454,13 @@
         var listTitleBar = panel.querySelector('.map-timer-eve-list-panel-title');
         listTitleBar.addEventListener('contextmenu', function (e) {
             e.preventDefault();
-            try {
-                if (typeof GM_setValue === 'function') {
-                    GM_setValue('eve_respawn_' + eveKey, String(Date.now()));
-                    updateEvePanelTitle(eveKey);
-                    showToast('Hero zabity — timer respu uruchomiony');
-                }
-            } catch (err) { /* ignore */ }
+            if (!CONFIG.API_KEY) { showToast('Ustaw API Key, żeby zapisać timer respu', 'error'); return; }
+            if (setEveRespawnKilled(eveKey)) {
+                updateEvePanelTitle(eveKey);
+                showToast('Hero zabity — timer respu zapisany (wszyscy widzą)');
+            } else {
+                showToast('Błąd zapisu timera respu', 'error');
+            }
         });
         var listDrag = { active: false, startX: 0, startY: 0, startLeft: 0, startTop: 0 };
         listTitleBar.addEventListener('mousedown', function (e) {
@@ -1699,11 +1701,43 @@
         });
         updateEvePanelTitle(eveKey);
     }
+    function fetchEveRespawnTimers() {
+        var now = Date.now();
+        if (eveRespawnCache && (now - eveRespawnCache.ts) < EVE_RESPAWN_CACHE_TTL_MS) {
+            return eveRespawnCache.timers || {};
+        }
+        var out = {};
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-respawn', false);
+        try {
+            xhr.send();
+            if (xhr.status === 200) {
+                var json = JSON.parse(xhr.responseText);
+                out = json.timers || {};
+                eveRespawnCache = { timers: out, ts: now };
+            }
+        } catch (e) { /* ignore */ }
+        return out;
+    }
+    function setEveRespawnKilled(eveKey) {
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-respawn', false);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.setRequestHeader('X-API-Key', CONFIG.API_KEY || '');
+        try {
+            xhr.send(JSON.stringify({ eveKey: eveKey }));
+            if (xhr.status === 200) {
+                eveRespawnCache = null;
+                return true;
+            }
+        } catch (e) { /* ignore */ }
+        return false;
+    }
     function getEveRespawnText(eveKey) {
         try {
-            var raw = typeof GM_getValue === 'function' ? GM_getValue('eve_respawn_' + eveKey, null) : null;
-            var ts = raw != null ? parseInt(raw, 10) : NaN;
-            if (!Number.isInteger(ts) || ts <= 0) return { text: null, secLeft: null };
+            var timers = fetchEveRespawnTimers();
+            var ts = timers[eveKey];
+            if (ts == null || typeof ts !== 'number' || ts <= 0) return { text: null, secLeft: null };
             var duration = EVE_RESPAWN_SECONDS[eveKey] || 30 * 60;
             var elapsed = (Date.now() - ts) / 1000;
             if (elapsed >= duration) return { text: null, secLeft: null };

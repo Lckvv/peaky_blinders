@@ -154,6 +154,15 @@ model EveMapPresence {
   @@index([eveKey, mapName])
 }
 
+// Czasy respu herosów EVE (63, 143, 300) — kiedy ostatnio zabito, wspólne dla wszystkich graczy
+model EveRespawnTimer {
+  id        String   @id @default(cuid())
+  eveKey    Int      @unique // 63 | 143 | 300
+  killedAt  DateTime @default(now())
+
+  @@index([eveKey])
+}
+
 // Powiadomienia w grze: level (64,83,114,144,217,300), gracze ze skryptem odbierają i widzą popup z grafiką herosa
 model HeroLevelNotification {
   id            String   @id @default(cuid())
