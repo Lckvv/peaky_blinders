@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     });
 
     const list = await prisma.heroLevelNotification.findMany({
-      where: { createdAt: { gte: new Date(since) } },
+      where: { createdAt: { gt: new Date(since) } },
       orderBy: { createdAt: 'asc' },
     });
 

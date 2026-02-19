@@ -458,6 +458,33 @@
 
     var lastSeenHeroNotificationTs = 0;
     var lastFetchedHeroNotifTs = 0;
+    var shownHeroNotificationIds = {}; // id -> true, żeby ten sam rekord nie pokazał się dwa razy
+    var HERO_LEVEL_SHOWN_KEYS_MAX = 300;
+    function getHeroLevelShownKeys() {
+        try {
+            if (typeof GM_getValue !== 'function') return [];
+            var raw = GM_getValue('hero_level_shown_keys', '[]');
+            var arr = JSON.parse(raw || '[]');
+            return Array.isArray(arr) ? arr : [];
+        } catch (e) { return []; }
+    }
+    function addHeroLevelShownKey(key) {
+        var arr = getHeroLevelShownKeys();
+        if (arr.indexOf(key) >= 0) return;
+        arr.push(key);
+        if (arr.length > HERO_LEVEL_SHOWN_KEYS_MAX) arr = arr.slice(-HERO_LEVEL_SHOWN_KEYS_MAX);
+        try { if (typeof GM_setValue === 'function') GM_setValue('hero_level_shown_keys', JSON.stringify(arr)); } catch (e) { /* ignore */ }
+    }
+    function shouldShowHeroLevelNotification(id, level, nick) {
+        if (shownHeroNotificationIds[id]) return false;
+        var key = (level || '') + ':' + String(nick || '').trim().toLowerCase();
+        return getHeroLevelShownKeys().indexOf(key) < 0;
+    }
+    function markHeroLevelNotificationShown(id, level, nick) {
+        shownHeroNotificationIds[id] = true;
+        var key = (level || '') + ':' + String(nick || '').trim().toLowerCase();
+        addHeroLevelShownKey(key);
+    }
     function sendHeroLevelNotification(level) {
         if (!lastHeroAlertData) return;
         var lvlStr = lastHeroAlertData.lvl != null ? lastHeroAlertData.lvl + 'm' : '?';
@@ -483,6 +510,7 @@
         try {
             xhr.send(JSON.stringify(payload));
             if (xhr.status === 200) {
+                markHeroLevelNotificationShown('sent-' + Date.now(), level, lastHeroAlertData.nick);
                 showHeroLevelPopup({
                     level: level,
                     nick: lastHeroAlertData.nick,
@@ -549,6 +577,8 @@
             var list = json.notifications || [];
             list.forEach(function (n) {
                 if (n.createdAt && n.createdAt > lastSeenHeroNotificationTs) lastSeenHeroNotificationTs = n.createdAt;
+                if (!shouldShowHeroLevelNotification(n.id, n.level, n.nick)) return;
+                markHeroLevelNotificationShown(n.id, n.level, n.nick);
                 showHeroLevelPopup({ level: n.level, nick: n.nick, mapName: n.mapName, x: n.x, y: n.y, lvl: n.lvl, heroImageUrl: n.heroImageUrl });
             });
         } catch (e) { /* ignore */ }
