@@ -1026,6 +1026,11 @@
     let lastLoggedMapName = null;
     var lastConfigRefreshTs = 0;
     function tick() {
+        if (!getEngine()) return;
+        if (!kolejkiWrap) {
+            createKolejkiBox();
+            flushPending();
+        }
         var now = Date.now();
         if (now - lastConfigRefreshTs >= 10000) { refreshConfigFromStorage(); lastConfigRefreshTs = now; }
         const mapName = getCurrentMapName();
@@ -2220,24 +2225,20 @@
             if (document.visibilityState === 'visible') pollHeroLevelNotificationsOnce();
         });
 
+        setInterval(tick, CONFIG.CHECK_INTERVAL);
+        setTimeout(function () { tick(); }, 800);
+
         const waitForEngine = setInterval(function () {
             if (getEngine()) {
                 clearInterval(waitForEngine);
                 log('Engine znaleziony ✅');
-                createKolejkiBox();
-                flushPending();
-                setInterval(tick, CONFIG.CHECK_INTERVAL);
-                tick();
+                if (!kolejkiWrap) {
+                    createKolejkiBox();
+                    flushPending();
+                }
                 pollHeroLevelNotificationsOnce();
             }
         }, 500);
-
-        setTimeout(() => {
-            if (!getEngine()) {
-                clearInterval(waitForEngine);
-                log('⚠️ Engine nie znaleziony po 30s');
-            }
-        }, 30000);
     }
 
     init();
