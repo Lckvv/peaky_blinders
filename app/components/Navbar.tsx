@@ -70,6 +70,7 @@ const navStyles: Record<string, React.CSSProperties> = {
     justifyContent: 'space-between',
     width: '100%',
     padding: '12px 20px',
+    gap: 12,
     background: 'none',
     border: 'none',
     color: '#b8c5d6',
@@ -117,6 +118,7 @@ const navStyles: Record<string, React.CSSProperties> = {
   chevron: {
     fontSize: 10,
     transition: 'transform 0.2s',
+    flexShrink: 0,
   },
   adminLink: {
     display: 'block',
@@ -261,7 +263,7 @@ export default function Navbar() {
               </button>
               {year2026Open && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                  <Link href="/2026/20urodziny" style={{ ...navStyles.sublink2, ...(pathname === '/2026/20urodziny' ? navStyles.sublink2Active : {}) }}>20 urodziny</Link>
+                  <Link href="/2026/20urodziny" style={{ ...navStyles.sublink2, fontWeight: 600, color: '#a0aec0', marginBottom: 2, ...(pathname === '/2026/20urodziny' ? navStyles.sublink2Active : {}) }}>20 urodziny</Link>
                   <Link href="/2026/20urodziny/seeker-of-creation" style={{ ...navStyles.sublink2, ...(pathname === '/2026/20urodziny/seeker-of-creation' ? navStyles.sublink2Active : {}) }}>63 - Seeker of Creation</Link>
                   <Link href="/2026/20urodziny/harbinger-of-elancia" style={{ ...navStyles.sublink2, ...(pathname === '/2026/20urodziny/harbinger-of-elancia' ? navStyles.sublink2Active : {}) }}>143 - Harbinger of Elancia</Link>
                   <Link href="/2026/20urodziny/thunder-wielding-barbarian" style={{ ...navStyles.sublink2, ...(pathname === '/2026/20urodziny/thunder-wielding-barbarian' ? navStyles.sublink2Active : {}) }}>300 - Thunder-Wielding Barbarian</Link>

@@ -99,23 +99,30 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Herosy (20 urodziny): bez faz — zliczamy cały czas, phaseId = null
-    const HERO_MONSTERS = ['Seeker of Creation', 'Harbinger of Elancia', 'Thunder-Wielding Barbarian'];
-    const isHeroMonster = HERO_MONSTERS.includes(monster);
-
-    let phaseId: string | null = null;
-    if (!isHeroMonster) {
-      const activePhase = await prisma.phase.findFirst({
-        where: { monsterId: monsterRecord.id, isActive: true },
+    // Herosy eventowe 63, 143, 300 — nie zapisujemy sesji (usunięte ze zliczania)
+    const HERO_MONSTERS_NO_COUNT = ['Seeker of Creation', 'Harbinger of Elancia', 'Thunder-Wielding Barbarian'];
+    if (HERO_MONSTERS_NO_COUNT.includes(monster)) {
+      return NextResponse.json({
+        success: true,
+        sessionId: null,
+        sessionTime: time,
+        totalTime: 0,
+        totalSessions: 0,
+        totalTimeFormatted: '0h 0m 0s',
+        skipped: true,
       });
-      if (!activePhase) {
-        return NextResponse.json(
-          { error: 'No active phase for this monster. Session ignored.' },
-          { status: 409 }
-        );
-      }
-      phaseId = activePhase.id;
     }
+
+    const activePhase = await prisma.phase.findFirst({
+      where: { monsterId: (await prisma.monster.findUnique({ where: { name: monster } }))?.id ?? '', isActive: true },
+    });
+    if (!activePhase) {
+      return NextResponse.json(
+        { error: 'No active phase for this monster. Session ignored.' },
+        { status: 409 }
+      );
+    }
+    const phaseId = activePhase.id;
 
     // Calculate session start time
     const endedAt = timestamp ? new Date(timestamp) : new Date();

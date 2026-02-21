@@ -21,12 +21,14 @@ export const MAP_NAME_TO_MONSTER: Record<string, string> = {
   'Ice Throne Room': 'Tanroth',
 
   // Heros 63 - Seeker of Creation (20 urodziny 2026)
+  'Dripping Honey Mine - 1st Level - 2nd Chamber': 'Seeker of Creation',
   'Dripping Honey Mine - 2nd Level - 1st Chamber': 'Seeker of Creation',
   'Dripping Honey Mine - 3rd Level': 'Seeker of Creation',
   'Dripping Honey Mine - 2nd Level - 2nd Chamber': 'Seeker of Creation',
   'Dripping Honey Mine - Vestibule': 'Seeker of Creation',
   'Gnoll Settlement': 'Seeker of Creation',
   'Cheerful Glade': 'Seeker of Creation',
+  'Forest Ford': 'Seeker of Creation',
   'Cave of Gnoll Shamans - 2nd Level': 'Seeker of Creation',
   'Cave of Gnoll Shamans - 1st Level': 'Seeker of Creation',
   'Cave of Gnoll Shamans - 3rd Level': 'Seeker of Creation',
