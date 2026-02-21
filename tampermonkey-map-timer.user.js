@@ -72,6 +72,7 @@
             { map: 'Small Fortress - East Walls', monster: 'Harbinger of Elancia' },
             { map: 'Small Fortress - Western Corridor', monster: 'Harbinger of Elancia' },
             { map: 'Small Fortress - West Walls', monster: 'Harbinger of Elancia' },
+            { map: 'Small Fortress - Storehouse', monster: 'Harbinger of Elancia' },
             { map: 'Forsaken Fastness', monster: 'Harbinger of Elancia' },
             { map: 'Fiendish Quagmire', monster: 'Harbinger of Elancia' },
             { map: 'Ancestral Vault', monster: 'Harbinger of Elancia' },
@@ -182,6 +183,7 @@
             'Small Fortress - East Walls',
             'Small Fortress - Western Corridor',
             'Small Fortress - West Walls',
+            'Small Fortress - Storehouse',
             'Forsaken Fastness',
             'Fiendish Quagmire',
             'Ancestral Vault',
@@ -1068,8 +1070,11 @@
         if (target) {
             if (!currentTarget) {
                 onEnteredTargetMap(target);
+            } else if (currentTarget.map !== target.map || currentTarget.monster !== target.monster) {
+                finalizeSession('map_change');
+                onEnteredTargetMap(target);
             }
-            if (sessionStartTime) {
+            if (sessionStartTime && currentTarget) {
                 var elapsed = Math.floor((Date.now() - sessionStartTime) / 1000);
                 if (HERO_AFK_MONSTERS.indexOf(currentTarget.monster) >= 0) {
                     if (heroAfkCapped) {

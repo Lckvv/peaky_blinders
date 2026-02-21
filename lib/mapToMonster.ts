@@ -56,6 +56,7 @@ export const MAP_NAME_TO_MONSTER: Record<string, string> = {
   'Small Fortress - East Walls': 'Harbinger of Elancia',
   'Small Fortress - Western Corridor': 'Harbinger of Elancia',
   'Small Fortress - West Walls': 'Harbinger of Elancia',
+  'Small Fortress - Storehouse': 'Harbinger of Elancia',
   'Forsaken Fastness': 'Harbinger of Elancia',
   'Fiendish Quagmire': 'Harbinger of Elancia',
   'Ancestral Vault': 'Harbinger of Elancia',
