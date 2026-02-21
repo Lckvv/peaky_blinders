@@ -46,15 +46,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Monster not found' }, { status: 404 });
     }
 
-    const HERO_MONSTERS_NO_COUNT = ['Seeker of Creation', 'Harbinger of Elancia', 'Thunder-Wielding Barbarian'];
-    if (HERO_MONSTERS_NO_COUNT.includes(monster.name)) {
-      return NextResponse.json({
-        monster: { id: monster.id, name: monster.name, mapName: monster.mapName },
-        phases: [],
-        leaderboard: [],
-      });
-    }
-
     const activePhase = await prisma.phase.findFirst({
       where: { monsterId: monster.id, isActive: true },
     });

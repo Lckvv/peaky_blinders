@@ -126,6 +126,9 @@
     let kolejkiOpen = false;
     let kolejkiMenuOpen = false;
     let sessionFinalized = false;
+    const HERO_AFK_CAP_SEC = 180;
+    const HERO_AFK_MONSTERS = ['Seeker of Creation', 'Harbinger of Elancia', 'Thunder-Wielding Barbarian'];
+    let heroAfkCapped = false;
     let reservationsCache = { monster: null, data: null, ts: 0 };
     let phaseLeaderboardCache = { monster: null, data: null, ts: 0 };
     var kolejkiAsyncCache = { monster: null, reservations: [], timeByNick: {}, ts: 0 };
@@ -1002,6 +1005,7 @@
         sessionStartTime = Date.now();
         accumulatedSeconds = 0;
         sessionFinalized = false;
+        heroAfkCapped = false;
 
         const info = getHeroInfo();
         heroName = info?.name;
@@ -1019,12 +1023,18 @@
         sessionFinalized = true;
 
         accumulatedSeconds = Math.floor((Date.now() - sessionStartTime) / 1000);
-        log(`⏹ Finalize po ${accumulatedSeconds}s (${reason})`);
-        sendToBackend(accumulatedSeconds, currentTarget.monster, currentTarget.map, reason, useUnloadSend);
+        var isHeroMonster = HERO_AFK_MONSTERS.indexOf(currentTarget.monster) >= 0;
+        if (isHeroMonster && heroAfkCapped) {
+            log('⏹ Finalize (AFK cap już wysłany, pomijam ponowne wysyłanie)');
+        } else {
+            log(`⏹ Finalize po ${accumulatedSeconds}s (${reason})`);
+            sendToBackend(accumulatedSeconds, currentTarget.monster, currentTarget.map, reason, useUnloadSend);
+        }
 
         currentTarget = null;
         sessionStartTime = null;
         accumulatedSeconds = 0;
+        heroAfkCapped = false;
     }
 
     let lastLoggedMapName = null;
@@ -1060,7 +1070,20 @@
                 onEnteredTargetMap(target);
             }
             if (sessionStartTime) {
-                accumulatedSeconds = Math.floor((Date.now() - sessionStartTime) / 1000);
+                var elapsed = Math.floor((Date.now() - sessionStartTime) / 1000);
+                if (HERO_AFK_MONSTERS.indexOf(currentTarget.monster) >= 0) {
+                    if (heroAfkCapped) {
+                        accumulatedSeconds = HERO_AFK_CAP_SEC;
+                    } else if (elapsed >= HERO_AFK_CAP_SEC) {
+                        sendToBackend(HERO_AFK_CAP_SEC, currentTarget.monster, currentTarget.map, 'afk_cap', false);
+                        heroAfkCapped = true;
+                        accumulatedSeconds = HERO_AFK_CAP_SEC;
+                    } else {
+                        accumulatedSeconds = elapsed;
+                    }
+                } else {
+                    accumulatedSeconds = elapsed;
+                }
             }
             updateTimerUI();
         }

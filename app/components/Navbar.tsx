@@ -115,6 +115,21 @@ const navStyles: Record<string, React.CSSProperties> = {
     background: 'rgba(52, 152, 219, 0.12)',
     color: '#3498db',
   },
+  sublink3: {
+    display: 'block',
+    padding: '8px 20px 8px 60px',
+    color: '#8892b0',
+    textDecoration: 'none',
+    fontSize: 13,
+    borderRadius: 6,
+    marginLeft: 8,
+    marginBottom: 2,
+    transition: 'background 0.15s, color 0.15s',
+  },
+  sublink3Active: {
+    background: 'rgba(52, 152, 219, 0.12)',
+    color: '#3498db',
+  },
   chevron: {
     fontSize: 10,
     transition: 'transform 0.2s',
@@ -151,6 +166,9 @@ export default function Navbar() {
   );
   const [year2026Open, setYear2026Open] = useState(() =>
     pathname.startsWith('/2026')
+  );
+  const [urodziny20Open, setUrodziny20Open] = useState(() =>
+    pathname.startsWith('/2026/20urodziny')
   );
 
   const isHome = pathname === '/';
@@ -263,10 +281,27 @@ export default function Navbar() {
               </button>
               {year2026Open && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                  <Link href="/2026/20urodziny" style={{ ...navStyles.sublink2, fontWeight: 600, color: '#a0aec0', marginBottom: 2, ...(pathname === '/2026/20urodziny' ? navStyles.sublink2Active : {}) }}>20 urodziny</Link>
-                  <Link href="/2026/20urodziny/seeker-of-creation" style={{ ...navStyles.sublink2, ...(pathname === '/2026/20urodziny/seeker-of-creation' ? navStyles.sublink2Active : {}) }}>63 - Seeker of Creation</Link>
-                  <Link href="/2026/20urodziny/harbinger-of-elancia" style={{ ...navStyles.sublink2, ...(pathname === '/2026/20urodziny/harbinger-of-elancia' ? navStyles.sublink2Active : {}) }}>143 - Harbinger of Elancia</Link>
-                  <Link href="/2026/20urodziny/thunder-wielding-barbarian" style={{ ...navStyles.sublink2, ...(pathname === '/2026/20urodziny/thunder-wielding-barbarian' ? navStyles.sublink2Active : {}) }}>300 - Thunder-Wielding Barbarian</Link>
+                  <button
+                    type="button"
+                    style={{
+                      ...navStyles.dropdownTrigger,
+                      ...navStyles.sublink,
+                      padding: '10px 20px 10px 36px',
+                      ...(urodziny20Open ? navStyles.dropdownTriggerOpen : {}),
+                    }}
+                    onClick={() => setUrodziny20Open((o) => !o)}
+                  >
+                    <span>20 urodziny</span>
+                    <span style={{ ...navStyles.chevron, transform: urodziny20Open ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
+                  </button>
+                  {urodziny20Open && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                      <Link href="/2026/20urodziny" style={{ ...navStyles.sublink3, ...(pathname === '/2026/20urodziny' ? navStyles.sublink3Active : {}) }}>Strona główna</Link>
+                      <Link href="/2026/20urodziny/seeker-of-creation" style={{ ...navStyles.sublink3, ...(pathname === '/2026/20urodziny/seeker-of-creation' ? navStyles.sublink3Active : {}) }}>63 - Seeker of Creation</Link>
+                      <Link href="/2026/20urodziny/harbinger-of-elancia" style={{ ...navStyles.sublink3, ...(pathname === '/2026/20urodziny/harbinger-of-elancia' ? navStyles.sublink3Active : {}) }}>143 - Harbinger of Elancia</Link>
+                      <Link href="/2026/20urodziny/thunder-wielding-barbarian" style={{ ...navStyles.sublink3, ...(pathname === '/2026/20urodziny/thunder-wielding-barbarian' ? navStyles.sublink3Active : {}) }}>300 - Thunder-Wielding Barbarian</Link>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
