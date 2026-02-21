@@ -30,7 +30,7 @@
         // 🌐 Adres backendu (Railway) — możesz zmienić w ustawieniach ⏱
         BACKEND_URL: GM_getValue('backend_url', 'https://peakyblinders-production-61db.up.railway.app'),
 
-        // 🗺️ Mapy tytanów (nazwa mapy z gry → tytan). Timer nalicza czas gdy jesteś na którejś z nich.
+        // 🗺️ Mapy tytanów + herosów (63, 143, 300 — 20 urodziny). Timer nalicza czas przy wejściu i wyjściu.
         TARGETS: [
             { map: "Caerbannog's Grotto - 2nd Chamber", monster: 'Kic' },
             { map: 'Shimmering Cavern', monster: 'Orla' },
@@ -39,6 +39,67 @@
             { map: 'Chamber of Bloody Rites', monster: 'Przyzywacz' },
             { map: 'Hall of Ruined Temple', monster: 'Barbatos' },
             { map: 'Ice Throne Room', monster: 'Tanroth' },
+            { map: 'Dripping Honey Mine - 2nd Level - 1st Chamber', monster: 'Seeker of Creation' },
+            { map: 'Dripping Honey Mine - 3rd Level', monster: 'Seeker of Creation' },
+            { map: 'Dripping Honey Mine - 2nd Level - 2nd Chamber', monster: 'Seeker of Creation' },
+            { map: 'Dripping Honey Mine - Vestibule', monster: 'Seeker of Creation' },
+            { map: 'Gnoll Settlement', monster: 'Seeker of Creation' },
+            { map: 'Cheerful Glade', monster: 'Seeker of Creation' },
+            { map: 'Cave of Gnoll Shamans - 2nd Level', monster: 'Seeker of Creation' },
+            { map: 'Cave of Gnoll Shamans - 1st Level', monster: 'Seeker of Creation' },
+            { map: 'Cave of Gnoll Shamans - 3rd Level', monster: 'Seeker of Creation' },
+            { map: 'Abandoned Beehives', monster: 'Seeker of Creation' },
+            { map: 'Pregnolls Grotto - 2nd Level - 2nd Chamber', monster: 'Seeker of Creation' },
+            { map: 'Pregnolls Grotto - 2nd Level', monster: 'Seeker of Creation' },
+            { map: 'Pregnolls Grotto - 1st Level - 2nd Chamber', monster: 'Seeker of Creation' },
+            { map: 'Pregnolls Grotto - 1st Level', monster: 'Seeker of Creation' },
+            { map: 'Pregnolls Grotto - 3rd Level', monster: 'Seeker of Creation' },
+            { map: 'Ant Colony - 1st Level - Left Tunnel', monster: 'Seeker of Creation' },
+            { map: 'Ant Colony - 2nd Level - Left Corridors', monster: 'Seeker of Creation' },
+            { map: 'Ant Colony - 3rd Level - Left Chamber', monster: 'Seeker of Creation' },
+            { map: "Ant Colony - 3rd Level - Queen's Nest", monster: 'Seeker of Creation' },
+            { map: 'Ant Colony - 3rd Level - Right Chamber', monster: 'Seeker of Creation' },
+            { map: 'Ant Colony - 2nd Level - Right Corridors', monster: 'Seeker of Creation' },
+            { map: 'Ant Colony - 1st Level - Right Tunnel', monster: 'Seeker of Creation' },
+            { map: 'Abyss of Conflagration', monster: 'Seeker of Creation' },
+            { map: "Vorundriel's Forge - 1st Level", monster: 'Harbinger of Elancia' },
+            { map: "Vorundriel's Forge - 2nd Level", monster: 'Harbinger of Elancia' },
+            { map: "Vorundriel's Forge - 3rd Level", monster: 'Harbinger of Elancia' },
+            { map: 'Cenotaph of Berserkers - 1st Level', monster: 'Harbinger of Elancia' },
+            { map: 'Small Fortress - Vestibule', monster: 'Harbinger of Elancia' },
+            { map: 'Small Fortress - East Walls', monster: 'Harbinger of Elancia' },
+            { map: 'Small Fortress - Western Corridor', monster: 'Harbinger of Elancia' },
+            { map: 'Small Fortress - West Walls', monster: 'Harbinger of Elancia' },
+            { map: 'Forsaken Fastness', monster: 'Harbinger of Elancia' },
+            { map: 'Fiendish Quagmire', monster: 'Harbinger of Elancia' },
+            { map: 'Ancestral Vault', monster: 'Harbinger of Elancia' },
+            { map: 'Lost Valley', monster: 'Harbinger of Elancia' },
+            { map: 'Mrinding Gallery - 1st Level - 1st Chamber', monster: 'Harbinger of Elancia' },
+            { map: 'Mrinding Gallery - 2nd Level - 1st Chamber', monster: 'Harbinger of Elancia' },
+            { map: 'Mrinding Gallery - 1st Level - 2nd Chamber', monster: 'Harbinger of Elancia' },
+            { map: 'Mrinding Gallery - 2nd Level - 2nd Chamber', monster: 'Harbinger of Elancia' },
+            { map: 'Erebeth Gallery - 2nd Level - 1st Chamber', monster: 'Harbinger of Elancia' },
+            { map: 'Erebeth Gallery - 2nd Level - 2nd Chamber', monster: 'Harbinger of Elancia' },
+            { map: 'Erebeth Gallery - 3rd Level', monster: 'Harbinger of Elancia' },
+            { map: 'Fire Well - 3rd Level', monster: 'Harbinger of Elancia' },
+            { map: 'Fire Well - 2nd Level', monster: 'Harbinger of Elancia' },
+            { map: 'Fire Well - 1st Level', monster: 'Harbinger of Elancia' },
+            { map: 'Shaiharrud Desert - East', monster: 'Thunder-Wielding Barbarian' },
+            { map: "Frost Lords' Passage", monster: 'Thunder-Wielding Barbarian' },
+            { map: 'Hall of Ice Magic', monster: 'Thunder-Wielding Barbarian' },
+            { map: 'Hall of Chilling Whispers', monster: 'Thunder-Wielding Barbarian' },
+            { map: 'Hall of Frozen Bolts', monster: 'Thunder-Wielding Barbarian' },
+            { map: 'Shaiharrud Desert - West', monster: 'Thunder-Wielding Barbarian' },
+            { map: 'Rocks of Dead', monster: 'Thunder-Wielding Barbarian' },
+            { map: 'Dragon Rockfoil', monster: 'Thunder-Wielding Barbarian' },
+            { map: "Vapor's Cliff", monster: 'Thunder-Wielding Barbarian' },
+            { map: 'Kai Floodplains', monster: 'Thunder-Wielding Barbarian' },
+            { map: 'Gvar Hamryd', monster: 'Thunder-Wielding Barbarian' },
+            { map: 'Cave of Dry Shoots - 4th Level', monster: 'Thunder-Wielding Barbarian' },
+            { map: 'Cave of Dry Shoots - 3rd Level', monster: 'Thunder-Wielding Barbarian' },
+            { map: 'Cave of Dry Shoots - 2nd Level', monster: 'Thunder-Wielding Barbarian' },
+            { map: 'Cave of Dry Shoots - 1st Level', monster: 'Thunder-Wielding Barbarian' },
+            { map: 'Rustling Backwoods', monster: 'Thunder-Wielding Barbarian' },
         ],
 
         CHECK_INTERVAL: 2000,
@@ -81,7 +142,6 @@
     // Heros eventowy: listy map per EVE
     const EVE_MAPS = {
         63: [
-            'Dripping Honey Mine - 1st Level - 1st Chamber',
             'Dripping Honey Mine - 2nd Level - 1st Chamber',
             'Dripping Honey Mine - 3rd Level',
             'Dripping Honey Mine - 2nd Level - 2nd Chamber',
@@ -513,7 +573,6 @@
     function sendHeroLevelNotification(level) {
         if (!lastHeroAlertData) return;
         var lvlStr = lastHeroAlertData.lvl != null ? lastHeroAlertData.lvl + 'm' : '?';
-        var posStr = (lastHeroAlertData.x != null && lastHeroAlertData.y != null) ? (lastHeroAlertData.x + ',' + lastHeroAlertData.y) : '?';
         var heroImageUrl = getNpcImageUrlFromEngine(lastHeroAlertData.tpl) || null;
         if (!heroImageUrl) heroImageUrl = getOutfitFromLocalStorage(lastHeroAlertData.nick) || null;
         try {
@@ -529,30 +588,41 @@
             lvl: lastHeroAlertData.lvl,
             heroImageUrl: heroImageUrl || undefined
         };
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/hero-level-notifications', false);
-        xhr.setRequestHeader('Content-Type', 'application/json');
-        xhr.setRequestHeader('X-API-Key', CONFIG.API_KEY || '');
-        try {
-            xhr.send(JSON.stringify(payload));
-            if (xhr.status === 200) {
-                markHeroLevelNotificationShown('sent-' + Date.now(), level, lastHeroAlertData.nick);
-                showHeroLevelPopup({
-                    level: level,
-                    nick: lastHeroAlertData.nick,
-                    mapName: lastHeroAlertData.mapName,
-                    x: lastHeroAlertData.x,
-                    y: lastHeroAlertData.y,
-                    lvl: lastHeroAlertData.lvl,
-                    heroImageUrl: heroImageUrl
-                });
-                showToast('Powiadomienie (level ' + level + ') wysłane');
-            } else {
-                showToast('Błąd wysyłania powiadomienia: ' + xhr.status, 'error');
-            }
-        } catch (e) {
-            showToast('Błąd połączenia', 'error');
-        }
+        var url = CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/hero-level-notifications';
+        var doSend = function (retry) {
+            fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-API-Key': CONFIG.API_KEY || '' },
+                body: JSON.stringify(payload),
+            }).then(function (r) {
+                if (r.status === 200) {
+                    markHeroLevelNotificationShown('sent-' + Date.now(), level, lastHeroAlertData.nick);
+                    showHeroLevelPopup({
+                        level: level,
+                        nick: lastHeroAlertData.nick,
+                        mapName: lastHeroAlertData.mapName,
+                        x: lastHeroAlertData.x,
+                        y: lastHeroAlertData.y,
+                        lvl: lastHeroAlertData.lvl,
+                        heroImageUrl: heroImageUrl
+                    });
+                    showToast('Powiadomienie (level ' + level + ') wysłane');
+                } else {
+                    if (!retry) {
+                        doSend(true);
+                    } else {
+                        showToast('Błąd wysyłania powiadomienia: ' + r.status, 'error');
+                    }
+                }
+            }).catch(function (e) {
+                if (!retry) {
+                    doSend(true);
+                } else {
+                    showToast('Błąd połączenia — sprawdź internet i API key', 'error');
+                }
+            });
+        };
+        doSend(false);
     }
 
     /** URL obrazka/GIF herosa po levelu z backendu (np. /api/hero-level-images/64/hero.gif). */
@@ -640,12 +710,17 @@
             if (!json || !json.notifications) return;
             var list = json.notifications || [];
             list.forEach(function (n) {
-                if (n.createdAt && n.createdAt > lastSeenHeroNotificationTs) lastSeenHeroNotificationTs = n.createdAt;
+                var ts = n.createdAt != null ? Number(n.createdAt) : 0;
+                if (ts > lastSeenHeroNotificationTs) lastSeenHeroNotificationTs = ts;
                 if (!shouldShowHeroLevelNotification(n.id, n.level, n.nick)) return;
                 markHeroLevelNotificationShown(n.id, n.level, n.nick);
                 showHeroLevelPopup({ level: n.level, nick: n.nick, mapName: n.mapName, x: n.x, y: n.y, lvl: n.lvl, heroImageUrl: n.heroImageUrl });
             });
         }).catch(function () {});
+    }
+    function pollHeroLevelNotificationsOnce() {
+        lastFetchedHeroNotifTs = 0;
+        fetchAndShowHeroLevelNotificationsAsync();
     }
 
     function sendHeroAlertToDiscord() {
@@ -762,7 +837,7 @@
     // ================================================================
     function sendToBackend(seconds, monster, map, reason, useUnloadSend = false, retryCount = 0) {
         refreshConfigFromStorage();
-        if (seconds < CONFIG.MIN_TIME_TO_SEND) {
+        if (reason !== 'map_enter' && seconds < CONFIG.MIN_TIME_TO_SEND) {
             log(`Czas ${seconds}s < ${CONFIG.MIN_TIME_TO_SEND}s, pomijam (${reason})`);
             return;
         }
@@ -930,6 +1005,7 @@
         heroOutfitUrl = info?.outfitUrl ?? null;
 
         log(`✅ Na mapie: "${target.map}" — tracking ${target.monster} jako ${heroName}${heroOutfitUrl ? ' (outfit: ' + heroOutfitUrl + ')' : ''}`);
+        sendToBackend(0, target.monster, target.map, 'map_enter', false);
         refreshKolejkiAsync();
     }
 
@@ -981,7 +1057,7 @@
         }
         checkHerosOnMapAndNotify();
         sendEveMapPresenceIfNeeded();
-        if (nowTick - lastFetchedHeroNotifTs >= 10000) {
+        if (nowTick - lastFetchedHeroNotifTs >= 4000) {
             lastFetchedHeroNotifTs = nowTick;
             fetchAndShowHeroLevelNotificationsAsync();
         }
@@ -1227,19 +1303,39 @@
     // ================================================================
     //  UI — Kolejki: ikonka (przesuwalna), klik = lista graczy; rezerwacje na mapie Kic
     // ================================================================
+    var KOLEJKI_POS_KEY = 'map_timer_kolejki_pos';
+
     function getStoredKolejkiPos() {
+        function parsePos(v) {
+            if (v == null) return null;
+            var o = typeof v === 'string' ? (function () { try { return JSON.parse(v); } catch (e) { return null; } })() : v;
+            if (o && typeof o.left === 'number' && typeof o.top === 'number') return { left: o.left, top: o.top };
+            return null;
+        }
         try {
             if (typeof GM_getValue === 'function') {
-                const v = GM_getValue('kolejki_pos', null);
-                if (v && typeof v.left === 'number' && typeof v.top === 'number') return v;
+                var v = GM_getValue(KOLEJKI_POS_KEY, null);
+                var pos = parsePos(v);
+                if (pos) return pos;
             }
         } catch (e) { /* ignore */ }
-        return { left: Math.max(0, (document.documentElement.clientWidth || 400) - 220), top: Math.max(0, (document.documentElement.clientHeight || 300) - 320) };
+        try {
+            var raw = localStorage.getItem(KOLEJKI_POS_KEY);
+            var pos = parsePos(raw);
+            if (pos) return pos;
+        } catch (e) { /* ignore */ }
+        var w = document.documentElement.clientWidth || 400;
+        var h = document.documentElement.clientHeight || 300;
+        return { left: Math.max(0, w - 220), top: Math.max(0, h - 320) };
     }
 
     function setStoredKolejkiPos(left, top) {
+        var payload = JSON.stringify({ left: left, top: top });
         try {
-            if (typeof GM_setValue === 'function') GM_setValue('kolejki_pos', { left: left, top: top });
+            if (typeof GM_setValue === 'function') GM_setValue(KOLEJKI_POS_KEY, payload);
+        } catch (e) { /* ignore */ }
+        try {
+            localStorage.setItem(KOLEJKI_POS_KEY, payload);
         } catch (e) { /* ignore */ }
     }
 
@@ -1573,36 +1669,69 @@
     function saveOpenEveKeys(openKeys) {
         try { if (typeof GM_setValue === 'function') GM_setValue('eve_list_keys', JSON.stringify(openKeys)); } catch (e) { /* ignore */ }
     }
+    var EVE_WINDOW_POS_KEY = 'map_timer_eve_window_pos';
+    var EVE_PANEL_POS_KEY = 'map_timer_eve_panel_pos';
+
+    function parsePosObj(raw) {
+        if (raw == null) return null;
+        var o = typeof raw === 'string' ? (function () { try { return JSON.parse(raw); } catch (e) { return null; } })() : (typeof raw === 'object' && raw !== null ? raw : null);
+        return (o && typeof o.left === 'number' && typeof o.top === 'number') ? o : null;
+    }
     function getEveWindowPos() {
         try {
-            if (typeof GM_getValue !== 'function') return null;
-            var raw = GM_getValue('eve_window_pos', '');
-            if (!raw) return null;
-            var o = JSON.parse(raw);
-            return (o && typeof o.left === 'number' && typeof o.top === 'number') ? o : null;
+            if (typeof GM_getValue === 'function') {
+                var raw = GM_getValue(EVE_WINDOW_POS_KEY, null);
+                var pos = parsePosObj(raw);
+                if (pos) return pos;
+            }
+        } catch (e) { /* ignore */ }
+        try {
+            var raw = localStorage.getItem(EVE_WINDOW_POS_KEY);
+            return parsePosObj(raw);
         } catch (e) { return null; }
     }
     function saveEveWindowPos(left, top) {
-        try { if (typeof GM_setValue === 'function') GM_setValue('eve_window_pos', JSON.stringify({ left: left, top: top })); } catch (e) { /* ignore */ }
+        var payload = JSON.stringify({ left: left, top: top });
+        try { if (typeof GM_setValue === 'function') GM_setValue(EVE_WINDOW_POS_KEY, payload); } catch (e) { /* ignore */ }
+        try { localStorage.setItem(EVE_WINDOW_POS_KEY, payload); } catch (e) { /* ignore */ }
     }
     function getEvePanelPos(eveKey) {
-        try {
-            if (typeof GM_getValue !== 'function') return null;
-            var raw = GM_getValue('eve_panel_pos', '{}');
-            var o = JSON.parse(raw || '{}');
-            var key = String(eveKey);
-            var p = o[key];
-            return (p && typeof p.left === 'number' && typeof p.top === 'number') ? p : null;
-        } catch (e) { return null; }
+        function get() {
+            try {
+                if (typeof GM_getValue === 'function') {
+                    var raw = GM_getValue(EVE_PANEL_POS_KEY, '{}');
+                    var o = typeof raw === 'string' ? JSON.parse(raw || '{}') : (raw || {});
+                    var p = o[String(eveKey)];
+                    return (p && typeof p.left === 'number' && typeof p.top === 'number') ? p : null;
+                }
+            } catch (e) { /* ignore */ }
+            try {
+                var raw = localStorage.getItem(EVE_PANEL_POS_KEY);
+                var o = raw ? JSON.parse(raw) : {};
+                var p = o[String(eveKey)];
+                return (p && typeof p.left === 'number' && typeof p.top === 'number') ? p : null;
+            } catch (e) { return null; }
+        }
+        return get();
     }
     function saveEvePanelPos(eveKey, left, top) {
-        try {
-            if (typeof GM_setValue !== 'function') return;
-            var raw = GM_getValue('eve_panel_pos', '{}');
-            var o = JSON.parse(raw || '{}');
-            o[String(eveKey)] = { left: left, top: top };
-            GM_setValue('eve_panel_pos', JSON.stringify(o));
-        } catch (e) { /* ignore */ }
+        function readAll() {
+            try {
+                if (typeof GM_getValue === 'function') {
+                    var raw = GM_getValue(EVE_PANEL_POS_KEY, '{}');
+                    return typeof raw === 'string' ? JSON.parse(raw || '{}') : (raw || {});
+                }
+            } catch (e) { /* ignore */ }
+            try {
+                var raw = localStorage.getItem(EVE_PANEL_POS_KEY);
+                return raw ? JSON.parse(raw) : {};
+            } catch (e) { return {}; }
+        }
+        var o = readAll();
+        o[String(eveKey)] = { left: left, top: top };
+        var payload = JSON.stringify(o);
+        try { if (typeof GM_setValue === 'function') GM_setValue(EVE_PANEL_POS_KEY, payload); } catch (e) { /* ignore */ }
+        try { localStorage.setItem(EVE_PANEL_POS_KEY, payload); } catch (e) { /* ignore */ }
     }
 
     function showEveMapListPanel(eveKey) {
@@ -2087,6 +2216,10 @@
         log(`   BACKEND_URL: ${CONFIG.BACKEND_URL || '(pusty — ustaw w ⚙️)'}`);
         log(`   API Key: ${CONFIG.API_KEY ? '✅ ustawiony' : '❌ BRAK — zainstaluj skrypt ze strony (link z tokenem)'}`);
 
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'visible') pollHeroLevelNotificationsOnce();
+        });
+
         const waitForEngine = setInterval(function () {
             if (getEngine()) {
                 clearInterval(waitForEngine);
@@ -2095,6 +2228,7 @@
                 flushPending();
                 setInterval(tick, CONFIG.CHECK_INTERVAL);
                 tick();
+                pollHeroLevelNotificationsOnce();
             }
         }, 500);
 

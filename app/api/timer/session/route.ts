@@ -22,9 +22,16 @@ export async function POST(request: NextRequest) {
 
     const { time, monster: bodyMonster, map: mapName, hero, world, reason, timestamp, profileUrl, avatarUrl, outfitUrl } = body;
 
-    if (!time || typeof time !== 'number' || time < 1) {
+    const isMapEnter = reason === 'map_enter';
+    if (typeof time !== 'number' || time < 0) {
       return NextResponse.json(
-        { error: 'Invalid "time" — must be a positive number (seconds)' },
+        { error: 'Invalid "time" — must be a non-negative number (seconds)' },
+        { status: 400 }
+      );
+    }
+    if (time < 1 && !isMapEnter) {
+      return NextResponse.json(
+        { error: 'Invalid "time" — must be at least 1 second unless reason is map_enter' },
         { status: 400 }
       );
     }
@@ -92,16 +99,22 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Przypisz do aktywnej fazy, jeśli jest uruchomiona
-    const activePhase = await prisma.phase.findFirst({
-      where: { monsterId: monsterRecord.id, isActive: true },
-    });
-    if (!activePhase) {
-      // Nie zapisujemy sesji, jeśli faza nie jest aktywna (żeby nie nabić czasu poza eventem).
-      return NextResponse.json(
-        { error: 'No active phase for this monster. Session ignored.' },
-        { status: 409 }
-      );
+    // Herosy (20 urodziny): bez faz — zliczamy cały czas, phaseId = null
+    const HERO_MONSTERS = ['Seeker of Creation', 'Harbinger of Elancia', 'Thunder-Wielding Barbarian'];
+    const isHeroMonster = HERO_MONSTERS.includes(monster);
+
+    let phaseId: string | null = null;
+    if (!isHeroMonster) {
+      const activePhase = await prisma.phase.findFirst({
+        where: { monsterId: monsterRecord.id, isActive: true },
+      });
+      if (!activePhase) {
+        return NextResponse.json(
+          { error: 'No active phase for this monster. Session ignored.' },
+          { status: 409 }
+        );
+      }
+      phaseId = activePhase.id;
     }
 
     // Calculate session start time
@@ -114,7 +127,7 @@ export async function POST(request: NextRequest) {
       where: {
         userId: user.id,
         monsterId: monsterRecord.id,
-        phaseId: activePhase.id,
+        phaseId: phaseId,
         heroName: String(hero ?? 'Unknown'),
         duration: time,
         reason: String(reason ?? 'unknown'),
@@ -152,7 +165,7 @@ export async function POST(request: NextRequest) {
       data: {
         userId: user.id,
         monsterId: monsterRecord.id,
-        phaseId: activePhase.id,
+        phaseId: phaseId,
         heroName: String(hero ?? 'Unknown'),
         heroOutfitUrl: outfitUrlValue || null,
         world: String(world ?? 'Unknown'),

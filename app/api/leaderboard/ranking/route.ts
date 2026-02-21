@@ -169,8 +169,50 @@ export async function GET(request: NextRequest) {
           totalSessions: r.totalSessions,
         }));
       }
+    } else if (monster.phases.length === 0) {
+      // Herosy (20 urodziny): brak faz — sumujemy wszystkie sesje dla tego potwora
+      const sessions = await prisma.mapSession.findMany({
+        where: { monsterId: monster.id },
+        select: { userId: true, duration: true, heroName: true, heroOutfitUrl: true },
+        orderBy: { endedAt: 'desc' },
+      });
+      const userIds = [...new Set(sessions.map((s) => s.userId))];
+      const users = await prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, username: true, nick: true, profileUrl: true, avatarUrl: true },
+      });
+      const userMap = Object.fromEntries(users.map((u) => [u.id, u]));
+      const byUser: Record<string, { totalTime: number; totalSessions: number }> = {};
+      const heroByUser: Record<string, string> = {};
+      const outfitByUser: Record<string, string | null> = {};
+      const seen = new Set<string>();
+      for (const s of sessions) {
+        if (!byUser[s.userId]) byUser[s.userId] = { totalTime: 0, totalSessions: 0 };
+        byUser[s.userId].totalTime += s.duration;
+        byUser[s.userId].totalSessions += 1;
+        if (!seen.has(s.userId)) {
+          heroByUser[s.userId] = s.heroName;
+          outfitByUser[s.userId] = s.heroOutfitUrl ?? null;
+          seen.add(s.userId);
+        }
+      }
+      const sorted = Object.entries(byUser)
+        .map(([userId, data]) => ({ userId, ...data, user: userMap[userId]! }))
+        .filter((e) => e.user)
+        .sort((a, b) => b.totalTime - a.totalTime);
+      leaderboard = sorted.map((item, idx) => ({
+        rank: idx + 1,
+        userId: item.userId,
+        username: item.user.username,
+        nick: item.user.nick,
+        profileUrl: item.user.profileUrl,
+        avatarUrl: outfitByUser[item.userId] ?? item.user.avatarUrl ?? null,
+        heroName: heroByUser[item.userId] ?? '-',
+        totalTime: item.totalTime,
+        totalTimeFormatted: formatTime(item.totalTime),
+        totalSessions: item.totalSessions,
+      }));
     } else {
-      const allPhaseIds = monster.phases.map((p) => p.id);
       const activePhaseId = activePhase?.id ?? null;
 
       const combinedByUser: Record<

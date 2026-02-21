@@ -129,6 +129,9 @@ export default function Navbar() {
   const [tytaniOpen, setTytaniOpen] = useState(() =>
     pathname.startsWith('/tytani')
   );
+  const [urodzinyOpen, setUrodzinyOpen] = useState(() =>
+    pathname.startsWith('/2026')
+  );
 
   const isHome = pathname === '/';
   const isAdmin = pathname.startsWith('/admin');
@@ -211,15 +214,27 @@ export default function Navbar() {
         >
           Sprzedam
         </Link>
-        <Link
-          href="/event"
-          style={{
-            ...navStyles.link,
-            ...(pathname === '/event' ? navStyles.linkActive : {}),
-          }}
-        >
-          Event
-        </Link>
+        <div>
+          <button
+            type="button"
+            style={{
+              ...navStyles.dropdownTrigger,
+              ...(urodzinyOpen ? navStyles.dropdownTriggerOpen : {}),
+            }}
+            onClick={() => setUrodzinyOpen((o) => !o)}
+          >
+            <span>2026</span>
+            <span style={{ ...navStyles.chevron, transform: urodzinyOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
+          </button>
+          {urodzinyOpen && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+              <Link href="/2026/20urodziny" style={{ ...navStyles.sublink, ...(pathname === '/2026/20urodziny' ? navStyles.sublinkActive : {}) }}>20 urodziny</Link>
+              <Link href="/2026/20urodziny/seeker-of-creation" style={{ ...navStyles.sublink, ...(pathname === '/2026/20urodziny/seeker-of-creation' ? navStyles.sublinkActive : {}) }}>63 - Seeker of Creation</Link>
+              <Link href="/2026/20urodziny/harbinger-of-elancia" style={{ ...navStyles.sublink, ...(pathname === '/2026/20urodziny/harbinger-of-elancia' ? navStyles.sublinkActive : {}) }}>143 - Harbinger of Elancia</Link>
+              <Link href="/2026/20urodziny/thunder-wielding-barbarian" style={{ ...navStyles.sublink, ...(pathname === '/2026/20urodziny/thunder-wielding-barbarian' ? navStyles.sublinkActive : {}) }}>300 - Thunder-Wielding Barbarian</Link>
+            </div>
+          )}
+        </div>
       </div>
 
       <div style={navStyles.navSection}>
