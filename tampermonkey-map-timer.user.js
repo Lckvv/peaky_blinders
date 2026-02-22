@@ -130,6 +130,7 @@
     let sessionFinalized = false;
     const HERO_AFK_CAP_SEC = 180;
     const HERO_AFK_MONSTERS = ['Seeker of Creation', 'Harbinger of Elancia', 'Thunder-Wielding Barbarian'];
+    var EVE_HERO_NICK_TO_KEY = { 'Seeker of Creation': 63, 'Harbinger of Elancia': 143, 'Thunder-Wielding Barbarian': 300 };
     let heroAfkCapped = false;
     let reservationsCache = { monster: null, data: null, ts: 0 };
     let phaseLeaderboardCache = { monster: null, data: null, ts: 0 };
@@ -514,6 +515,21 @@
             mapName: mapName,
             tpl: heroNpc.tpl,
         };
+        var nameTrim = (name || '').trim();
+        var eveKey = EVE_HERO_NICK_TO_KEY[nameTrim];
+        if (eveKey == null && nameTrim) {
+            var match = Object.keys(EVE_HERO_NICK_TO_KEY).filter(function (n) { return n.toLowerCase() === nameTrim.toLowerCase(); })[0];
+            if (match) eveKey = EVE_HERO_NICK_TO_KEY[match];
+        }
+        if (eveKey != null && CONFIG.API_KEY) {
+            fetch(CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-hunter-found', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-API-Key': CONFIG.API_KEY },
+                body: JSON.stringify({ eveKey: eveKey })
+            }).then(function (r) {
+                if (r.status === 200) showToast('+1 pkt Łowcy herosa');
+            }).catch(function () {});
+        }
         showHeroAlertPanel();
         log('Heros/Tytan na mapie:', name, '(wt:', heroNpc.wt + ')');
     }
