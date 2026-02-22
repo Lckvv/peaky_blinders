@@ -5,7 +5,7 @@ import { authFromApiKey } from '@/lib/auth';
 const NOTIFICATION_MAX_AGE_MS = 10 * 60 * 1000; // 10 min
 const ALLOWED_LEVELS = [64, 83, 114, 144, 217, 300];
 
-// GET /api/timer/hero-level-notifications?since=timestamp — lista powiadomień (dla skryptu, do pokazania popupu w grze)
+// GET /api/timer/hero-level-notifications?since=timestamp — lista powiadomień globalna (wszystkie wysłane przez użytkowników); skrypt pokazuje popup każdemu
 export async function GET(request: NextRequest) {
   try {
     const sinceStr = request.nextUrl.searchParams.get('since');

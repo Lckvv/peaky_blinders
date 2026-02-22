@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Margonem Map Timer
 // @namespace    http://tampermonkey.net/
-// @version      2.5
-// @description  Tracks time spent on target maps and syncs with backend. Supports API key auth for multi-user leaderboards.
+// @version      2.6
+// @description  Śledzenie czasu na mapach, timery respu 63/143/300, łowca herosów (konto), powiadomienia levelu (globalne).
 // @author       Lucek
 // @match        https://*.margonem.com/*
 // @grant        GM_xmlhttpRequest
@@ -146,6 +146,8 @@
     const HEROS_WT_MAX = 89;
     const TITAN_WT_MIN = 100;
     let lastHerosNotifiedMapName = null;
+    // Heros eventowy (63, 143, 300): wejście/wyjście wysyłane przez session (map_enter / leave).
+    // Punkty łowcy są przypisane do KONTA (userId z API key), nie do postaci — wiele postaci = jedno konto.
     // Heros eventowy: listy map per EVE
     const EVE_MAPS = {
         63: [
@@ -733,7 +735,7 @@
             });
         } catch (e) { /* ignore */ }
     }
-    /** Async — nie blokuje głównego wątku (mniej lagu). */
+    /** Async — pobiera globalne powiadomienia (wysłane przez dowolnego użytkownika) i pokazuje popup wszystkim z otwartym skryptem. */
     function fetchAndShowHeroLevelNotificationsAsync() {
         if (!CONFIG.BACKEND_URL) return;
         var url = CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/hero-level-notifications?since=' + lastSeenHeroNotificationTs;
@@ -1117,7 +1119,11 @@
         }
         checkHerosOnMapAndNotify();
         sendEveMapPresenceIfNeeded();
-        if (nowTick - lastFetchedHeroNotifTs >= 4000) {
+        if (target && HERO_AFK_MONSTERS.indexOf(target.monster) >= 0 && (nowTick - lastEveRespawnSyncTs) >= EVE_RESPAWN_SYNC_INTERVAL_MS) {
+            lastEveRespawnSyncTs = nowTick;
+            eveRespawnCache = null;
+        }
+        if (nowTick - lastFetchedHeroNotifTs >= 3000) {
             lastFetchedHeroNotifTs = nowTick;
             fetchAndShowHeroLevelNotificationsAsync();
         }
@@ -1668,10 +1674,13 @@
         { key: 300, label: 'EVE 300 - Thunder-Wielding Barbarian' },
     ];
     var EVE_HERO_NAMES = { 63: 'Seeker of Creation', 143: 'Harbinger of Elancia', 300: 'Thunder-Wielding Barbarian' };
-    var EVE_RESPAWN_SECONDS = { 63: 30 * 60, 143: 30 * 60, 300: 30 * 60 }; // domyślnie 30 min, można zmienić
+    // Minimalny czas respu (od zabicia/zniknięcia) — odliczanie w oknie: 63: 17min, 143: 32min, 300: 40min
+    var EVE_RESPAWN_SECONDS = { 63: 17 * 60, 143: 32 * 60, 300: 40 * 60 };
     var eveRespawnCache = null;
     var eveDashboardCache = {};  // eveKey -> { reservations, presence, lastLeft, respawnTimer } — do lokalnego odliczania
     var lastEveFetchMapName = null; // fetch przy każdym przejściu przez mapę
+    var lastEveRespawnSyncTs = 0;   // gdy stoimy na mapie EVE: co 60s pobieramy globalne czasy (GET) i odświeżamy odliczanie
+    const EVE_RESPAWN_SYNC_INTERVAL_MS = 60 * 1000; // 60 s — optymalnie: nie co sekundę, gra płynna
 
     function createEveWindow() {
         if (eveWindowEl) return eveWindowEl;
@@ -2153,7 +2162,7 @@
         var text = 'Mapy';
         var secLeft = null;
         if (respawnTimerMs != null && typeof respawnTimerMs === 'number' && respawnTimerMs > 0) {
-            var duration = EVE_RESPAWN_SECONDS[eveKey] || 30 * 60;
+            var duration = EVE_RESPAWN_SECONDS[eveKey] || 17 * 60;
             var elapsed = (Date.now() - respawnTimerMs) / 1000;
             if (elapsed < duration) { secLeft = Math.floor(duration - elapsed); text = 'Respawn: ' + formatTimeSince(secLeft); }
         }
@@ -2204,7 +2213,7 @@
             var timers = fetchEveRespawnTimers();
             var ts = timers[eveKey];
             if (ts == null || typeof ts !== 'number' || ts <= 0) return { text: null, secLeft: null };
-            var duration = EVE_RESPAWN_SECONDS[eveKey] || 30 * 60;
+            var duration = EVE_RESPAWN_SECONDS[eveKey] || 17 * 60;
             var elapsed = (Date.now() - ts) / 1000;
             if (elapsed >= duration) return { text: null, secLeft: null };
             var left = Math.floor(duration - elapsed);
