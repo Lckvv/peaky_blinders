@@ -246,28 +246,32 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 2) Wejście na mapę (pierwszy który zobaczy herosa po respie): +1 pkt łowcy (timer już ustawiony przy zejściu zabójcy)
+    // 2) Wejście na mapę (pierwszy który zobaczy herosa po respie): +1 pkt łowcy. Tylko „świeże” wejście (max 2 min) — nie z kolejki zaległych.
+    const HUNTER_MAP_ENTER_MAX_AGE_MS = 2 * 60 * 1000;
     if (isHeroMonster && reason === 'map_enter') {
-      const eveKey = HERO_TO_EVE_KEY[monster];
-      if (eveKey != null) {
-        const cooldownMin = EVE_HUNTER_COOLDOWN_MIN[eveKey] ?? 60;
-        const cooldownMs = cooldownMin * 60 * 1000;
-        await prisma.$transaction(async (tx) => {
-          await tx.$executeRawUnsafe(
-            'SELECT pg_advisory_xact_lock($1)',
-            eveKey + 1e9
-          );
-          const existing = await tx.eveRespawnTimer.findUnique({
-            where: { eveKey },
+      const now = Date.now();
+      const requestAgeMs = now - endedAt.getTime();
+      if (requestAgeMs <= HUNTER_MAP_ENTER_MAX_AGE_MS && requestAgeMs >= -10000) {
+        const eveKey = HERO_TO_EVE_KEY[monster];
+        if (eveKey != null) {
+          const cooldownMin = EVE_HUNTER_COOLDOWN_MIN[eveKey] ?? 60;
+          const cooldownMs = cooldownMin * 60 * 1000;
+          await prisma.$transaction(async (tx) => {
+            await tx.$executeRawUnsafe(
+              'SELECT pg_advisory_xact_lock($1)',
+              eveKey + 1e9
+            );
+            const existing = await tx.eveRespawnTimer.findUnique({
+              where: { eveKey },
+            });
+            const minRespawnPassed =
+              !existing || now - existing.killedAt.getTime() >= cooldownMs;
+            if (!minRespawnPassed) return;
+            await tx.eveHunterKill.create({
+              data: { eveKey, userId: user.id },
+            });
           });
-          const now = Date.now();
-          const minRespawnPassed =
-            !existing || now - existing.killedAt.getTime() >= cooldownMs;
-          if (!minRespawnPassed) return;
-          await tx.eveHunterKill.create({
-            data: { eveKey, userId: user.id },
-          });
-        });
+        }
       }
     }
 

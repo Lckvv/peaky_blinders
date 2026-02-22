@@ -983,6 +983,7 @@
     }
 
     function saveLocally(payload) {
+        if (payload && payload.reason === 'map_enter') return;
         try {
             const pending = JSON.parse(localStorage.getItem('maptimer_pending') || '[]');
             pending.push(payload);
@@ -996,12 +997,13 @@
 
         try {
             const pending = JSON.parse(localStorage.getItem('maptimer_pending') || '[]');
-            if (pending.length === 0) return;
-
-            log(`📤 Wysyłam ${pending.length} zaległych sesji...`);
-
-            const toSend = [...pending];
+            const toSend = pending.filter(function (p) { return p.reason !== 'map_enter'; });
+            if (toSend.length === 0) {
+                if (pending.length > 0) localStorage.setItem('maptimer_pending', '[]');
+                return;
+            }
             localStorage.setItem('maptimer_pending', '[]');
+            log(`📤 Wysyłam ${toSend.length} zaległych sesji...`);
 
             toSend.forEach((payload) => {
                 GM_xmlhttpRequest({
