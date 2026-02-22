@@ -904,6 +904,7 @@
                 var d = typeof data === 'string' ? JSON.parse(data) : data;
                 log('✅ Zapisano! Total:', d.totalTimeFormatted, '(', d.totalSessions, 'sesji)');
                 showToast('✅ Zapisano ' + formatTime(seconds) + ' — łącznie: ' + d.totalTimeFormatted);
+                if (reason !== 'map_enter' && HERO_AFK_MONSTERS.indexOf(monster) !== -1) eveRespawnCache = null;
             } catch (e) { log('✅ Zapisano'); }
         }
         function onFail(msg) {

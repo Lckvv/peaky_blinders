@@ -219,14 +219,40 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Automatyczne przyznanie punktu Łowcy: tylko pierwszy gracz, który wejdzie na mapę (zobaczy herosa) po upływie minimalnego respu, dostaje +1 pkt (atomowo)
+    // 1) Zejście z mapy (hero zabity / zniknął): ustaw timer respawnu (killedAt = now), żeby odliczanie i freeze działały
+    if (isHeroMonster && reason !== 'map_enter') {
+      const eveKey = HERO_TO_EVE_KEY[monster];
+      if (eveKey != null) {
+        const cooldownMin = EVE_HUNTER_COOLDOWN_MIN[eveKey] ?? 60;
+        const cooldownMs = cooldownMin * 60 * 1000;
+        await prisma.$transaction(async (tx) => {
+          await tx.$executeRawUnsafe(
+            'SELECT pg_advisory_xact_lock($1)',
+            eveKey + 1e9
+          );
+          const existing = await tx.eveRespawnTimer.findUnique({
+            where: { eveKey },
+          });
+          const now = Date.now();
+          const canStartNewWindow =
+            !existing || now - existing.killedAt.getTime() >= cooldownMs;
+          if (!canStartNewWindow) return;
+          await tx.eveRespawnTimer.upsert({
+            where: { eveKey },
+            create: { eveKey },
+            update: { killedAt: new Date() },
+          });
+        });
+      }
+    }
+
+    // 2) Wejście na mapę (pierwszy który zobaczy herosa po respie): +1 pkt łowcy (timer już ustawiony przy zejściu zabójcy)
     if (isHeroMonster && reason === 'map_enter') {
       const eveKey = HERO_TO_EVE_KEY[monster];
       if (eveKey != null) {
         const cooldownMin = EVE_HUNTER_COOLDOWN_MIN[eveKey] ?? 60;
         const cooldownMs = cooldownMin * 60 * 1000;
         await prisma.$transaction(async (tx) => {
-          // Blokada per eveKey — tylko jedna request na raz może przyznać punkt dla tego herosa
           await tx.$executeRawUnsafe(
             'SELECT pg_advisory_xact_lock($1)',
             eveKey + 1e9
@@ -238,11 +264,6 @@ export async function POST(request: NextRequest) {
           const minRespawnPassed =
             !existing || now - existing.killedAt.getTime() >= cooldownMs;
           if (!minRespawnPassed) return;
-          await tx.eveRespawnTimer.upsert({
-            where: { eveKey },
-            create: { eveKey },
-            update: { killedAt: new Date() },
-          });
           await tx.eveHunterKill.create({
             data: { eveKey, userId: user.id },
           });
