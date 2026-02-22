@@ -356,8 +356,8 @@ export default function HeroRankingPage() {
             <h2 style={{ ...s.title, fontSize: 22, marginBottom: 16 }}>
               Ranking Łowcy herosa {monster.name}
             </h2>
-            <p style={{ color: '#8892b0', fontSize: 13, marginBottom: 16 }}>
-              Jeden punkt za pierwsze zgłoszenie zabójstwa herosa (w oknie respawnu). Przerwa między zgłoszeniami: ok. 35–60 min w zależności od herosa.
+            <p style={{ color: '#8892b0', fontSize: 13, marginBottom: 16, textAlign: 'center' }}>
+              Who is the real tracker?
             </p>
             {hunterLeaderboard.length > 0 && (
               <>
@@ -448,9 +448,7 @@ export default function HeroRankingPage() {
                 </table>
               </>
             )}
-            {hunterLeaderboard.length === 0 && (
-              <p style={s.placeholder}>Brak zgłoszeń zabójstw. Zgłoś zabójstwo w skrypcie (Heros eventowy → wybierz herosa → Zabiłem tego herosa).</p>
-            )}
+            {hunterLeaderboard.length === 0 && <div style={{ minHeight: 24 }} />}
           </div>
         </div>
       </div>
