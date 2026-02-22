@@ -19,9 +19,10 @@ model User {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  apiKeys     ApiKey[]
-  mapSessions MapSession[]
-  phaseResults PhaseResult[]
+  apiKeys       ApiKey[]
+  mapSessions   MapSession[]
+  phaseResults  PhaseResult[]
+  eveHunterKills EveHunterKill[]
   invitationCodeUsed InvitationCode?
 }
 
@@ -172,6 +173,18 @@ model EveRespawnTimer {
   killedAt  DateTime @default(now())
 
   @@index([eveKey])
+}
+
+// Ranking Łowcy herosa: 1 punkt dla pierwszego który zgłosi zabójstwo (w oknie respawnu)
+model EveHunterKill {
+  id        String   @id @default(cuid())
+  eveKey    Int      // 63 | 143 | 300
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  killedAt  DateTime @default(now())
+
+  @@index([eveKey])
+  @@index([eveKey, userId])
 }
 
 // Powiadomienia w grze: level (64,83,114,144,217,300), gracze ze skryptem odbierają i widzą popup z grafiką herosa

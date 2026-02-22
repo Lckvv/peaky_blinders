@@ -120,6 +120,8 @@
     let worldName = null;
     let heroOutfitUrl = null;  // URL obrazka stroju z Garmory CDN (do rankingu)
     let uiElement = null;
+    var centerTimerEl = null;
+    var CENTER_TIMER_VISIBLE_KEY = 'map_timer_center_timer_visible';
     let kolejkiWrap = null;
     let kolejkiListPanel = null;
     let kolejkiListContent = null;
@@ -205,6 +207,7 @@
             'Hall of Ice Magic',
             'Hall of Chilling Whispers',
             'Hall of Frozen Bolts',
+            'Hallway of Shattered Dreams',
             'Shaiharrud Desert - West',
             'Rocks of Dead',
             'Dragon Rockfoil',
@@ -588,6 +591,10 @@
             var charlist = typeof window.Margonem !== 'undefined' && window.Margonem.charlist ? window.Margonem.charlist : (typeof window.g !== 'undefined' && window.g && window.g.charlist ? window.g.charlist : null);
             if (!heroImageUrl && charlist) heroImageUrl = findOutfitInCharlist(charlist, lastHeroAlertData.nick) || null;
         } catch (e) { /* ignore */ }
+        var heroImgForApi = heroImageUrl || undefined;
+        if (heroImgForApi && typeof heroImgForApi === 'string' && heroImgForApi.trim().charAt(0) === '/' && CONFIG.BACKEND_URL) {
+            heroImgForApi = CONFIG.BACKEND_URL.replace(/\/$/, '') + heroImgForApi.trim();
+        }
         var payload = {
             level: level,
             nick: lastHeroAlertData.nick,
@@ -595,7 +602,7 @@
             x: lastHeroAlertData.x,
             y: lastHeroAlertData.y,
             lvl: lastHeroAlertData.lvl,
-            heroImageUrl: heroImageUrl || undefined
+            heroImageUrl: heroImgForApi || undefined
         };
         var url = CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/hero-level-notifications';
         var doSend = function (retry) {
@@ -639,6 +646,11 @@
         if (!CONFIG.BACKEND_URL || level == null) return null;
         return CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/hero-level-images/' + level + '/hero.' + (ext || 'gif');
     }
+    /** URL dowolnego pliku w folderze level (np. portrait.png, platform.png). */
+    function getHeroLevelImageUrlFile(level, filename) {
+        if (!CONFIG.BACKEND_URL || level == null || !filename) return null;
+        return CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/hero-level-images/' + level + '/' + encodeURIComponent(filename);
+    }
     function showHeroLevelPopup(data) {
         var lvlStr = (data.lvl != null) ? data.lvl + 'm' : '?';
         var posStr = (data.x != null && data.y != null) ? (data.x + ',' + data.y) : '?';
@@ -653,10 +665,21 @@
         img.style.cssText = 'width:100%;height:100%;object-fit:contain;border-radius:8px;';
         var tryOrder = [];
         if (data.level != null) {
-            tryOrder.push(getHeroLevelImageUrl(data.level, 'gif'));
             tryOrder.push(getHeroLevelImageUrl(data.level, 'png'));
+            tryOrder.push(getHeroLevelImageUrl(data.level, 'gif'));
+            tryOrder.push(getHeroLevelImageUrl(data.level, 'webp'));
+            tryOrder.push(getHeroLevelImageUrlFile(data.level, 'portrait.png'));
+            tryOrder.push(getHeroLevelImageUrlFile(data.level, 'portrait.gif'));
+            tryOrder.push(getHeroLevelImageUrlFile(data.level, 'platform.png'));
         }
-        if (data.heroImageUrl) tryOrder.push(data.heroImageUrl);
+        var heroImg = data.heroImageUrl;
+        if (heroImg && typeof heroImg === 'string') {
+            heroImg = heroImg.trim();
+            if (heroImg && heroImg.indexOf('http') !== 0 && heroImg.charAt(0) === '/' && CONFIG.BACKEND_URL) {
+                heroImg = CONFIG.BACKEND_URL.replace(/\/$/, '') + heroImg;
+            }
+            if (heroImg) tryOrder.push(heroImg);
+        }
         var idx = 0;
         function tryNext() {
             if (idx < tryOrder.length && tryOrder[idx]) {
@@ -1092,6 +1115,7 @@
             }
             updateTimerUI();
         }
+        updateCenterTimerUI();
         checkHerosOnMapAndNotify();
         sendEveMapPresenceIfNeeded();
         if (nowTick - lastFetchedHeroNotifTs >= 4000) {
@@ -1337,6 +1361,39 @@
         if (uiElement) uiElement.style.display = 'none';
     }
 
+    function getCenterTimerVisible() {
+        try {
+            if (typeof GM_getValue === 'function') return GM_getValue(CENTER_TIMER_VISIBLE_KEY, false);
+            return localStorage.getItem(CENTER_TIMER_VISIBLE_KEY) === '1';
+        } catch (e) { return false; }
+    }
+    function setCenterTimerVisible(visible) {
+        try {
+            if (typeof GM_setValue === 'function') GM_setValue(CENTER_TIMER_VISIBLE_KEY, !!visible);
+            else localStorage.setItem(CENTER_TIMER_VISIBLE_KEY, visible ? '1' : '0');
+        } catch (e) { /* ignore */ }
+    }
+    function createCenterTimerUI() {
+        if (centerTimerEl) return;
+        centerTimerEl = document.createElement('div');
+        centerTimerEl.id = 'map-timer-center-display';
+        centerTimerEl.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.85);color:#00ff88;padding:12px 24px;border-radius:10px;font-family:Consolas,monospace;font-size:22px;font-weight:bold;z-index:99997;display:none;border:2px solid rgba(0,255,136,0.5);text-shadow:0 0 8px rgba(0,255,136,0.6);pointer-events:none;box-shadow:0 0 20px rgba(0,255,136,0.2);';
+        document.body.appendChild(centerTimerEl);
+    }
+    function updateCenterTimerUI() {
+        if (!getCenterTimerVisible()) {
+            if (centerTimerEl) centerTimerEl.style.display = 'none';
+            return;
+        }
+        if (!centerTimerEl) createCenterTimerUI();
+        if (currentTarget && sessionStartTime != null) {
+            centerTimerEl.style.display = 'block';
+            centerTimerEl.textContent = '⏱ ' + formatTime(accumulatedSeconds);
+        } else {
+            centerTimerEl.style.display = 'none';
+        }
+    }
+
     // ================================================================
     //  UI — Kolejki: ikonka (przesuwalna), klik = lista graczy; rezerwacje na mapie Kic
     // ================================================================
@@ -1387,6 +1444,7 @@
             '<div class="map-timer-kolejki-menu" style="display:none;">' +
             '<div class="map-timer-kolejki-icon-wrap"><span class="map-timer-tooltip">Kolejki</span><button type="button" class="map-timer-kolejki-icon-btn" data-action="kolejki">📋</button></div>' +
             '<div class="map-timer-kolejki-icon-wrap"><span class="map-timer-tooltip">Heros eventowy</span><button type="button" class="map-timer-kolejki-icon-btn" data-action="heros">⭐</button></div>' +
+            '<div class="map-timer-kolejki-icon-wrap"><span class="map-timer-tooltip">Pokaż timer</span><button type="button" class="map-timer-kolejki-icon-btn" data-action="toggle-timer" title="Pokaż/ukryj timer obecności na mapie">⏱</button></div>' +
             '<div class="map-timer-kolejki-icon-wrap"><span class="map-timer-tooltip">Strona Główna</span><a href="' + (CONFIG.BACKEND_URL.replace(/\/$/, '')) + '" target="_blank" rel="noopener" class="map-timer-kolejki-icon-btn map-timer-kolejki-icon-link" title="Strona Główna">↗</a></div>' +
             '</div>' +
             '<div class="map-timer-kolejki-panel" style="display:none;">' +
@@ -1483,6 +1541,12 @@
                         updateKolejkiListUI();
                     } else if (action === 'heros') {
                         openEveWindow();
+                    } else if (action === 'toggle-timer') {
+                        var next = !getCenterTimerVisible();
+                        setCenterTimerVisible(next);
+                        if (!centerTimerEl) createCenterTimerUI();
+                        updateCenterTimerUI();
+                        showToast(next ? 'Timer obecności włączony' : 'Timer obecności ukryty');
                     }
                 });
             });
@@ -1800,6 +1864,9 @@
         var listHeight = 280;
         panel.innerHTML =
             '<div class="map-timer-eve-list-panel-title" style="background:#16213e;padding:10px 36px 10px 12px;font-weight:bold;font-size:14px;border-bottom:1px solid #2a2a4a;color:#fff;cursor:move;user-select:none;">Mapy</div>' +
+            '<div class="map-timer-eve-hunter-row" style="padding:8px 12px;border-bottom:1px solid #2a2a4a;background:#0f1629;">' +
+            '<button type="button" class="map-timer-eve-hunter-btn" style="width:100%;padding:8px 12px;background:#e67e22;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:bold;">Zabiłem tego herosa (+1 pkt)</button>' +
+            '</div>' +
             '<div class="map-timer-eve-list-title" style="font-size:12px;color:#8892b0;padding:8px 12px 0;"></div>' +
             '<div class="map-timer-eve-list" style="padding:8px 12px 12px;overflow-y:auto;overflow-x:hidden;flex:1;min-height:120px;max-height:400px;"></div>' +
             '<div class="map-timer-eve-list-resize" style="height:6px;background:#2a2a4a;cursor:ns-resize;flex-shrink:0;border-radius:0 0 12px 12px;"></div>' +
@@ -1824,14 +1891,10 @@
         var listTitleBar = panel.querySelector('.map-timer-eve-list-panel-title');
         listTitleBar.addEventListener('contextmenu', function (e) {
             e.preventDefault();
-            if (!CONFIG.API_KEY) { showToast('Ustaw API Key, żeby zapisać timer respu', 'error'); return; }
-            if (setEveRespawnKilled(eveKey)) {
-                fetchEveDashboardAsync(eveKey, applyEveDashboardToPanel);
-                showToast('Hero zabity — timer respu zapisany (wszyscy widzą)');
-            } else {
-                showToast('Błąd zapisu timera respu', 'error');
-            }
+            reportEveKillForHunter(eveKey);
         });
+        var hunterBtn = panel.querySelector('.map-timer-eve-hunter-btn');
+        if (hunterBtn) hunterBtn.addEventListener('click', function () { reportEveKillForHunter(eveKey); });
         var listDrag = { active: false, startX: 0, startY: 0, startLeft: 0, startTop: 0 };
         listTitleBar.addEventListener('mousedown', function (e) {
             if (e.button !== 0) return;
@@ -2167,6 +2230,36 @@
             }
         } catch (e) { /* ignore */ }
         return false;
+    }
+    /** Zgłoś zabójstwo herosa (ranking Łowcy). Pokazuje toast, obsługuje cooldown 429. */
+    function reportEveKillForHunter(eveKey) {
+        if (!CONFIG.API_KEY) {
+            showToast('Ustaw API Key (ze strony), żeby zgłaszać zabójstwo', 'error');
+            return;
+        }
+        var url = CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-respawn';
+        fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-API-Key': CONFIG.API_KEY },
+            body: JSON.stringify({ eveKey: eveKey }),
+        }).then(function (r) {
+            return r.json().then(function (body) {
+                if (r.status === 200) {
+                    eveRespawnCache = null;
+                    fetchEveDashboardAsync(eveKey, applyEveDashboardToPanel);
+                    showToast('Zgłoszono zabójstwo herosa (+1 pkt). Timer respu zaktualizowany.');
+                } else if (r.status === 429) {
+                    var wait = body && body.waitMinutes != null ? body.waitMinutes : 0;
+                    showToast('Hero się odradza. Poczekaj ok. ' + wait + ' min przed kolejnym zgłoszeniem.', 'error');
+                } else {
+                    showToast(body && body.error ? body.error : 'Błąd zgłoszenia', 'error');
+                }
+            }).catch(function () {
+                showToast('Błąd połączenia z API', 'error');
+            });
+        }).catch(function () {
+            showToast('Błąd połączenia z API', 'error');
+        });
     }
     function getEveRespawnText(eveKey) {
         try {

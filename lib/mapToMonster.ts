@@ -78,6 +78,7 @@ export const MAP_NAME_TO_MONSTER: Record<string, string> = {
   'Hall of Ice Magic': 'Thunder-Wielding Barbarian',
   'Hall of Chilling Whispers': 'Thunder-Wielding Barbarian',
   'Hall of Frozen Bolts': 'Thunder-Wielding Barbarian',
+  'Hallway of Shattered Dreams': 'Thunder-Wielding Barbarian',
   'Shaiharrud Desert - West': 'Thunder-Wielding Barbarian',
   'Rocks of Dead': 'Thunder-Wielding Barbarian',
   'Dragon Rockfoil': 'Thunder-Wielding Barbarian',

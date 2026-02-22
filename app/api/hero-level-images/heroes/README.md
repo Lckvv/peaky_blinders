@@ -9,4 +9,4 @@ Wrzuć pliki w podfoldery według levelu:
 - `217/`
 - `300/`
 
-Skrypt pobiera: `GET /api/hero-level-images/{level}/hero.gif` (albo `hero.png`). Rozszerzenia: `.gif`, `.png`, `.webp`.
+Skrypt pobiera: `GET /api/hero-level-images/{level}/hero.gif` (albo `hero.png`, `hero.webp`). Dla portretu możesz też użyć plików `portrait.png`, `portrait.gif` lub `platform.png` w danym folderze levelu. Rozszerzenia: `.gif`, `.png`, `.webp`.

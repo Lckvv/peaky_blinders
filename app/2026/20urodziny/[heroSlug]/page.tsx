@@ -9,6 +9,12 @@ const SLUG_TO_NAME: Record<string, string> = {
   'thunder-wielding-barbarian': 'Thunder-Wielding Barbarian',
 };
 
+const SLUG_TO_EVE_KEY: Record<string, number> = {
+  'seeker-of-creation': 63,
+  'harbinger-of-elancia': 143,
+  'thunder-wielding-barbarian': 300,
+};
+
 type Entry = {
   rank: number;
   userId: string;
@@ -20,6 +26,16 @@ type Entry = {
   totalTime: number;
   totalTimeFormatted: string;
   totalSessions: number;
+};
+
+type HunterEntry = {
+  rank: number;
+  userId: string;
+  username: string;
+  nick: string | null;
+  profileUrl: string | null;
+  avatarUrl: string | null;
+  points: number;
 };
 
 const s: Record<string, React.CSSProperties> = {
@@ -151,6 +167,7 @@ export default function HeroRankingPage() {
     phases: unknown[];
     leaderboard: Entry[];
   } | null>(null);
+  const [hunterLeaderboard, setHunterLeaderboard] = useState<HunterEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -160,6 +177,17 @@ export default function HeroRankingPage() {
     }
     loadRanking(monsterName);
   }, [monsterName]);
+
+  useEffect(() => {
+    const eveKey = SLUG_TO_EVE_KEY[slug.toLowerCase()];
+    if (eveKey == null) return;
+    fetch(`/api/leaderboard/eve-hunter?eveKey=${eveKey}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json: { leaderboard?: HunterEntry[] } | null) => {
+        if (json?.leaderboard) setHunterLeaderboard(json.leaderboard);
+      })
+      .catch(() => {});
+  }, [slug]);
 
   async function loadRanking(monster: string) {
     setLoading(true);
@@ -322,6 +350,108 @@ export default function HeroRankingPage() {
               <p style={s.placeholder}>Brak uczestników w tym rankingu.</p>
             </div>
           )}
+
+          {/* Ranking Łowcy herosa */}
+          <div style={{ ...s.card, marginTop: 32 }}>
+            <h2 style={{ ...s.title, fontSize: 22, marginBottom: 16 }}>
+              Ranking Łowcy herosa {monster.name}
+            </h2>
+            <p style={{ color: '#8892b0', fontSize: 13, marginBottom: 16 }}>
+              Jeden punkt za pierwsze zgłoszenie zabójstwa herosa (w oknie respawnu). Przerwa między zgłoszeniami: ok. 35–60 min w zależności od herosa.
+            </p>
+            {hunterLeaderboard.length > 0 && (
+              <>
+                <div style={s.podiumOuter}>
+                  <div style={s.podiumWrap}>
+                    {hunterLeaderboard[2] && (
+                      <div style={{ ...s.podiumBox, ...s.podiumThird }}>
+                        <span style={{ ...s.podiumRank, ...s.podiumRank3 }}>3</span>
+                        <div style={s.podiumBoxContent}>
+                          <span style={s.podiumNick}>{hunterLeaderboard[2].nick || hunterLeaderboard[2].username}</span>
+                          <div style={s.podiumOutfitCenter}>
+                            {hunterLeaderboard[2].avatarUrl ? (
+                              <div style={s.podiumAvatarWrap}>
+                                <img src={hunterLeaderboard[2].avatarUrl} alt="" style={s.podiumAvatarImg} />
+                              </div>
+                            ) : (
+                              <div style={{ ...s.podiumAvatarPlaceholder, transform: 'scale(2)', transformOrigin: 'center' }} />
+                            )}
+                          </div>
+                          <span style={{ ...s.podiumTime, color: '#e67e22' }}>{hunterLeaderboard[2].points} ptk</span>
+                        </div>
+                      </div>
+                    )}
+                    {hunterLeaderboard[0] && (
+                      <div style={{ ...s.podiumBox, ...s.podiumFirst }}>
+                        <span style={{ ...s.podiumRank, ...s.podiumRank1 }}>1</span>
+                        <div style={s.podiumBoxContent}>
+                          <span style={s.podiumNick}>{hunterLeaderboard[0].nick || hunterLeaderboard[0].username}</span>
+                          <div style={s.podiumOutfitCenter}>
+                            {hunterLeaderboard[0].avatarUrl ? (
+                              <div style={s.podiumAvatarWrap}>
+                                <img src={hunterLeaderboard[0].avatarUrl} alt="" style={s.podiumAvatarImg} />
+                              </div>
+                            ) : (
+                              <div style={{ ...s.podiumAvatarPlaceholder, transform: 'scale(2)', transformOrigin: 'center' }} />
+                            )}
+                          </div>
+                          <span style={{ ...s.podiumTime, color: '#e67e22' }}>{hunterLeaderboard[0].points} ptk</span>
+                        </div>
+                      </div>
+                    )}
+                    {hunterLeaderboard[1] && (
+                      <div style={{ ...s.podiumBox, ...s.podiumSecond }}>
+                        <span style={{ ...s.podiumRank, ...s.podiumRank2 }}>2</span>
+                        <div style={s.podiumBoxContent}>
+                          <span style={s.podiumNick}>{hunterLeaderboard[1].nick || hunterLeaderboard[1].username}</span>
+                          <div style={s.podiumOutfitCenter}>
+                            {hunterLeaderboard[1].avatarUrl ? (
+                              <div style={s.podiumAvatarWrap}>
+                                <img src={hunterLeaderboard[1].avatarUrl} alt="" style={s.podiumAvatarImg} />
+                              </div>
+                            ) : (
+                              <div style={{ ...s.podiumAvatarPlaceholder, transform: 'scale(2)', transformOrigin: 'center' }} />
+                            )}
+                          </div>
+                          <span style={{ ...s.podiumTime, color: '#e67e22' }}>{hunterLeaderboard[1].points} ptk</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div style={s.podiumFloor} />
+                </div>
+                <table style={s.table}>
+                  <thead>
+                    <tr>
+                      <th style={s.th}>Pozycja</th>
+                      <th style={s.th}>Nick</th>
+                      <th style={s.th}>Punkty</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {hunterLeaderboard.map((e) => (
+                      <tr key={e.userId}>
+                        <td style={s.td}>{e.rank}</td>
+                        <td style={s.td}>
+                          {e.profileUrl ? (
+                            <a href={e.profileUrl} target="_blank" rel="noopener noreferrer" style={s.link}>
+                              {e.nick || e.username}
+                            </a>
+                          ) : (
+                            <span>{e.nick || e.username}</span>
+                          )}
+                        </td>
+                        <td style={{ ...s.td, color: '#e67e22', fontWeight: 600 }}>{e.points}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
+            {hunterLeaderboard.length === 0 && (
+              <p style={s.placeholder}>Brak zgłoszeń zabójstw. Zgłoś zabójstwo w skrypcie (Heros eventowy → wybierz herosa → Zabiłem tego herosa).</p>
+            )}
+          </div>
         </div>
       </div>
     </div>
