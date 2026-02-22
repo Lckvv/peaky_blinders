@@ -284,9 +284,11 @@ export async function POST(request: NextRequest) {
     const totalTime = totalResult._sum.duration || 0;
     const totalSessions = totalResult._count;
 
-    console.log(
-      `[Timer] ${user.username} (${hero}) → ${monster} on "${mapName}" — ${effectiveDurationSec}s${effectiveDurationSec !== time ? ` (raw ${time}s, freeze odjęty)` : ''} (total: ${totalTime}s, sessions: ${totalSessions})`
-    );
+    if (reason !== 'map_enter' || effectiveDurationSec > 0) {
+      console.log(
+        `[Timer] ${user.username} (${hero}) → ${monster} on "${mapName}" — ${effectiveDurationSec}s${effectiveDurationSec !== time ? ` (raw ${time}s, freeze odjęty)` : ''} (total: ${totalTime}s, sessions: ${totalSessions})`
+      );
+    }
 
     return NextResponse.json({
       success: true,

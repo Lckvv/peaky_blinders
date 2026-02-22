@@ -1223,6 +1223,15 @@
         var url = CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-presence?eveKey=' + encodeURIComponent(eveKey) + '&mapName=' + encodeURIComponent(mapName) + '&nick=' + encodeURIComponent(nick);
         fetch(url, { method: 'DELETE', headers: { 'X-API-Key': CONFIG.API_KEY || '' } }).then(function (r) { if (r.ok) eveMapReservationsCache[eveKey] = null; }).catch(function () {});
     }
+    /** Wysyła obecność na mapie do API (bez throttlingu). Używane przy otwarciu panelu, żeby backend na pewno miał naszą pozycję. */
+    function sendEvePresenceNow(eveKey, mapName, nick) {
+        if (!CONFIG.API_KEY || !mapName || !nick) return;
+        fetch(CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-presence', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-API-Key': CONFIG.API_KEY },
+            body: JSON.stringify({ eveKey: eveKey, mapName: mapName, nick: nick })
+        }).then(function (r) { if (r.ok) { eveMapReservationsCache[eveKey] = null; lastEvePresenceSent[eveKey] = Date.now(); lastEveMapPresence[eveKey] = mapName; } }).catch(function () {});
+    }
     function sendEveMapPresenceIfNeeded() {
         if (!CONFIG.API_KEY) return;
         var currentMap = getCurrentMapName();
@@ -1237,7 +1246,7 @@
                     deleteEveMapPresence(eveKey, lastMap, nick);
                     lastEveMapPresence[eveKey] = null;
                 }
-                if (lastEvePresenceSent[eveKey] && (now - lastEvePresenceSent[eveKey]) < 10000) return;
+                if (lastEvePresenceSent[eveKey] && (now - lastEvePresenceSent[eveKey]) < 8000) return;
                 lastEvePresenceSent[eveKey] = now;
                 lastEveMapPresence[eveKey] = currentMap;
                 fetch(CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-presence', {
@@ -1827,7 +1836,16 @@
             rec.panel.style.display = 'block';
             var openKeys = getOpenEveKeys();
             if (openKeys.indexOf(eveKey) < 0) { openKeys.push(eveKey); saveOpenEveKeys(openKeys); }
-            updateEveMapListForPanel(eveKey);
+            var currentMap = getCurrentMapName();
+            var nick = getCurrentHeroName();
+            var maps = EVE_MAPS[eveKey] || [];
+            var isOnThisEveMap = currentMap && maps.some(function (m) { return String(m).trim().toLowerCase() === currentMap.trim().toLowerCase(); });
+            if (isOnThisEveMap && nick) {
+                sendEvePresenceNow(eveKey, currentMap, nick);
+                setTimeout(function () { updateEveMapListForPanel(eveKey); }, 150);
+            } else {
+                updateEveMapListForPanel(eveKey);
+            }
             return;
         }
         var panel = document.createElement('div');
@@ -1944,7 +1962,16 @@
         eveMapListPanelsByKey[eveKey] = { panel: panel, listEl: listEl, listHeight: listHeight };
         var openKeys = getOpenEveKeys();
         if (openKeys.indexOf(eveKey) < 0) { openKeys.push(eveKey); saveOpenEveKeys(openKeys); }
-        updateEveMapListForPanel(eveKey);
+        var currentMap = getCurrentMapName();
+        var nick = getCurrentHeroName();
+        var maps = EVE_MAPS[eveKey] || [];
+        var isOnThisEveMap = currentMap && maps.some(function (m) { return String(m).trim().toLowerCase() === currentMap.trim().toLowerCase(); });
+        if (isOnThisEveMap && nick) {
+            sendEvePresenceNow(eveKey, currentMap, nick);
+            setTimeout(function () { updateEveMapListForPanel(eveKey); }, 150);
+        } else {
+            updateEveMapListForPanel(eveKey);
+        }
     }
 
     function ensureEveMapPopup() {

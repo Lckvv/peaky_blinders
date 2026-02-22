@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 const EVE_KEYS = [63, 143, 300];
-const EVE_PRESENCE_MAX_AGE_MS = 2 * 60 * 1000;
+const EVE_PRESENCE_MAX_AGE_MS = 5 * 60 * 1000;
 
 // GET /api/timer/eve-dashboard?eveKey=63 — wszystko w jednym: rezerwacje, obecność, lastLeft, respawn (mniej requestów = mniej lagu)
 export async function GET(request: NextRequest) {
