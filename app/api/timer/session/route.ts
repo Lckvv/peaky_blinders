@@ -138,8 +138,8 @@ export async function POST(request: NextRequest) {
     const endedAt = timestamp ? new Date(timestamp) : new Date();
     const startedAt = new Date(endedAt.getTime() - time * 1000);
 
-    // Dla herosów EVE (63, 143, 300): naliczamy tylko czas w oknie respawnu (gdy heros nie żyje / czekamy na resp)
-    // Zgodnie z flow: dodajemy czasy stania na mapach w momencie gdy heros ma okres respawnu (Lootlog-style)
+    // Dla herosów EVE (63, 143, 300): dodajemy czas zawsze (działa w tle, bez otwartego okna). Gdy nie znamy timera respu — liczymy pełny czas.
+    // Odejmujemy tylko okno freeze (X min po zabiciu), gdy wiemy że heros nie żyje — wtedy ten czas nie jest naliczany.
     let effectiveDurationSec = time;
     if (isHeroMonster) {
       const eveKey = HERO_TO_EVE_KEY[monster];
@@ -151,13 +151,13 @@ export async function POST(request: NextRequest) {
         if (respawn) {
           const killedAt = respawn.killedAt.getTime();
           const freezeMs = freezeMin * 60 * 1000;
-          const respawnEnd = killedAt + freezeMs;
+          const freezeEnd = killedAt + freezeMs;
           const startMs = startedAt.getTime();
           const endMs = endedAt.getTime();
           const overlapStart = Math.max(startMs, killedAt);
-          const overlapEnd = Math.min(endMs, respawnEnd);
+          const overlapEnd = Math.min(endMs, freezeEnd);
           const overlapMs = Math.max(0, overlapEnd - overlapStart);
-          effectiveDurationSec = Math.floor(overlapMs / 1000);
+          effectiveDurationSec = Math.max(0, time - Math.floor(overlapMs / 1000));
         }
       }
     }
@@ -202,7 +202,7 @@ export async function POST(request: NextRequest) {
 
     // Save session (world/reason ze skryptu mogą być number — baza wymaga string)
     // heroOutfitUrl = outfit tej konkretnej postaci z tej sesji (Nick ma wiele postaci, każda swój strój)
-    // Dla herosów EVE zapisujemy effectiveDurationSec (tylko czas w oknie respawnu)
+    // Dla herosów EVE zapisujemy effectiveDurationSec (pełny czas minus freeze, gdy znamy timer)
     const session = await prisma.mapSession.create({
       data: {
         userId: user.id,
@@ -264,7 +264,7 @@ export async function POST(request: NextRequest) {
     const totalSessions = totalResult._count;
 
     console.log(
-      `[Timer] ${user.username} (${hero}) → ${monster} on "${mapName}" — ${effectiveDurationSec}s${effectiveDurationSec !== time ? ` (raw ${time}s, respawn window)` : ''} (total: ${totalTime}s, sessions: ${totalSessions})`
+      `[Timer] ${user.username} (${hero}) → ${monster} on "${mapName}" — ${effectiveDurationSec}s${effectiveDurationSec !== time ? ` (raw ${time}s, freeze odjęty)` : ''} (total: ${totalTime}s, sessions: ${totalSessions})`
     );
 
     return NextResponse.json({
