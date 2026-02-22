@@ -138,7 +138,8 @@ export async function POST(request: NextRequest) {
     const endedAt = timestamp ? new Date(timestamp) : new Date();
     const startedAt = new Date(endedAt.getTime() - time * 1000);
 
-    // Dla herosów EVE: odejmij czas w oknie freeze (nie naliczamy czasu przez X min po zabiciu)
+    // Dla herosów EVE (63, 143, 300): naliczamy tylko czas w oknie respawnu (gdy heros nie żyje / czekamy na resp)
+    // Zgodnie z flow: dodajemy czasy stania na mapach w momencie gdy heros ma okres respawnu (Lootlog-style)
     let effectiveDurationSec = time;
     if (isHeroMonster) {
       const eveKey = HERO_TO_EVE_KEY[monster];
@@ -150,13 +151,13 @@ export async function POST(request: NextRequest) {
         if (respawn) {
           const killedAt = respawn.killedAt.getTime();
           const freezeMs = freezeMin * 60 * 1000;
-          const freezeEnd = killedAt + freezeMs;
+          const respawnEnd = killedAt + freezeMs;
           const startMs = startedAt.getTime();
           const endMs = endedAt.getTime();
           const overlapStart = Math.max(startMs, killedAt);
-          const overlapEnd = Math.min(endMs, freezeEnd);
+          const overlapEnd = Math.min(endMs, respawnEnd);
           const overlapMs = Math.max(0, overlapEnd - overlapStart);
-          effectiveDurationSec = Math.max(0, time - Math.floor(overlapMs / 1000));
+          effectiveDurationSec = Math.floor(overlapMs / 1000);
         }
       }
     }
@@ -201,7 +202,7 @@ export async function POST(request: NextRequest) {
 
     // Save session (world/reason ze skryptu mogą być number — baza wymaga string)
     // heroOutfitUrl = outfit tej konkretnej postaci z tej sesji (Nick ma wiele postaci, każda swój strój)
-    // Dla herosów EVE zapisujemy effectiveDurationSec (po odjęciu freeze)
+    // Dla herosów EVE zapisujemy effectiveDurationSec (tylko czas w oknie respawnu)
     const session = await prisma.mapSession.create({
       data: {
         userId: user.id,
@@ -218,8 +219,8 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Automatyczne przyznanie punktu Łowcy: tylko pierwszy gracz, który opuści mapę herosa po upływie minimalnego respu, dostaje +1 pkt (atomowo, bez race condition)
-    if (isHeroMonster && reason !== 'map_enter') {
+    // Automatyczne przyznanie punktu Łowcy: tylko pierwszy gracz, który wejdzie na mapę (zobaczy herosa) po upływie minimalnego respu, dostaje +1 pkt (atomowo)
+    if (isHeroMonster && reason === 'map_enter') {
       const eveKey = HERO_TO_EVE_KEY[monster];
       if (eveKey != null) {
         const cooldownMin = EVE_HUNTER_COOLDOWN_MIN[eveKey] ?? 60;
@@ -263,7 +264,7 @@ export async function POST(request: NextRequest) {
     const totalSessions = totalResult._count;
 
     console.log(
-      `[Timer] ${user.username} (${hero}) → ${monster} on "${mapName}" — ${effectiveDurationSec}s${effectiveDurationSec !== time ? ` (raw ${time}s, freeze applied)` : ''} (total: ${totalTime}s, sessions: ${totalSessions})`
+      `[Timer] ${user.username} (${hero}) → ${monster} on "${mapName}" — ${effectiveDurationSec}s${effectiveDurationSec !== time ? ` (raw ${time}s, respawn window)` : ''} (total: ${totalTime}s, sessions: ${totalSessions})`
     );
 
     return NextResponse.json({
