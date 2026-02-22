@@ -36,7 +36,15 @@ export async function GET(request: NextRequest) {
       createdAt: n.createdAt.getTime(),
     }));
 
-    return NextResponse.json({ notifications });
+    return NextResponse.json(
+      { notifications },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          Pragma: 'no-cache',
+        },
+      }
+    );
   } catch (e) {
     console.error('[GET /api/timer/hero-level-notifications]', e);
     return NextResponse.json({ error: 'Server error' }, { status: 500 });

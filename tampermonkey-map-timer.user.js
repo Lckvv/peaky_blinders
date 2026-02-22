@@ -755,7 +755,7 @@
     function fetchAndShowHeroLevelNotificationsAsync() {
         if (!CONFIG.BACKEND_URL) return;
         var url = CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/hero-level-notifications?since=' + lastSeenHeroNotificationTs;
-        fetch(url).then(function (r) { return r.ok ? r.json() : null; }).then(function (json) {
+        fetch(url, { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (json) {
             if (!json || !json.notifications) return;
             var list = json.notifications || [];
             list.forEach(function (n) {
