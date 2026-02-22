@@ -112,6 +112,12 @@ export async function POST(request: NextRequest) {
       143: 32,
       300: 40,
     };
+    // Cooldown łowcy: minuty po zabiciu, zanim można przyznać kolejny punkt (automatycznie przy wyjściu z mapy)
+    const EVE_HUNTER_COOLDOWN_MIN: Record<number, number> = {
+      63: 35,
+      143: 50,
+      300: 60,
+    };
     const isHeroMonster = HERO_MONSTERS.includes(monster);
 
     let phaseId: string | null = null;
@@ -211,6 +217,37 @@ export async function POST(request: NextRequest) {
         endedAt,
       },
     });
+
+    // Automatyczne przyznanie punktu Łowcy: tylko pierwszy gracz, który opuści mapę herosa po upływie minimalnego respu, dostaje +1 pkt (atomowo, bez race condition)
+    if (isHeroMonster && reason !== 'map_enter') {
+      const eveKey = HERO_TO_EVE_KEY[monster];
+      if (eveKey != null) {
+        const cooldownMin = EVE_HUNTER_COOLDOWN_MIN[eveKey] ?? 60;
+        const cooldownMs = cooldownMin * 60 * 1000;
+        await prisma.$transaction(async (tx) => {
+          // Blokada per eveKey — tylko jedna request na raz może przyznać punkt dla tego herosa
+          await tx.$executeRawUnsafe(
+            'SELECT pg_advisory_xact_lock($1)',
+            eveKey + 1e9
+          );
+          const existing = await tx.eveRespawnTimer.findUnique({
+            where: { eveKey },
+          });
+          const now = Date.now();
+          const minRespawnPassed =
+            !existing || now - existing.killedAt.getTime() >= cooldownMs;
+          if (!minRespawnPassed) return;
+          await tx.eveRespawnTimer.upsert({
+            where: { eveKey },
+            create: { eveKey },
+            update: { killedAt: new Date() },
+          });
+          await tx.eveHunterKill.create({
+            data: { eveKey, userId: user.id },
+          });
+        });
+      }
+    }
 
     // Calculate user's total time for this monster
     const totalResult = await prisma.mapSession.aggregate({

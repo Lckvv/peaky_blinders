@@ -120,8 +120,7 @@
     let worldName = null;
     let heroOutfitUrl = null;  // URL obrazka stroju z Garmory CDN (do rankingu)
     let uiElement = null;
-    var centerTimerEl = null;
-    var CENTER_TIMER_VISIBLE_KEY = 'map_timer_center_timer_visible';
+    var TOP_TIMER_VISIBLE_KEY = 'map_timer_top_timer_visible';
     let kolejkiWrap = null;
     let kolejkiListPanel = null;
     let kolejkiListContent = null;
@@ -1115,7 +1114,6 @@
             }
             updateTimerUI();
         }
-        updateCenterTimerUI();
         checkHerosOnMapAndNotify();
         sendEveMapPresenceIfNeeded();
         if (nowTick - lastFetchedHeroNotifTs >= 4000) {
@@ -1350,48 +1348,27 @@
         document.body.appendChild(uiElement);
     }
 
+    function getTopTimerVisible() {
+        try {
+            if (typeof GM_getValue === 'function') return GM_getValue(TOP_TIMER_VISIBLE_KEY, true);
+            return localStorage.getItem(TOP_TIMER_VISIBLE_KEY) !== '0';
+        } catch (e) { return true; }
+    }
+    function setTopTimerVisible(visible) {
+        try {
+            if (typeof GM_setValue === 'function') GM_setValue(TOP_TIMER_VISIBLE_KEY, !!visible);
+            else localStorage.setItem(TOP_TIMER_VISIBLE_KEY, visible ? '1' : '0');
+        } catch (e) { /* ignore */ }
+    }
     function updateTimerUI() {
         if (!uiElement) createTimerUI();
-        uiElement.style.display = 'block';
         const statusDot = CONFIG.API_KEY ? '🟢' : '🔴';
         uiElement.textContent = `${statusDot} ⏱ ${currentTarget?.monster} — ${formatTime(accumulatedSeconds)}`;
+        uiElement.style.display = (currentTarget && getTopTimerVisible()) ? 'block' : 'none';
     }
 
     function hideTimerUI() {
         if (uiElement) uiElement.style.display = 'none';
-    }
-
-    function getCenterTimerVisible() {
-        try {
-            if (typeof GM_getValue === 'function') return GM_getValue(CENTER_TIMER_VISIBLE_KEY, false);
-            return localStorage.getItem(CENTER_TIMER_VISIBLE_KEY) === '1';
-        } catch (e) { return false; }
-    }
-    function setCenterTimerVisible(visible) {
-        try {
-            if (typeof GM_setValue === 'function') GM_setValue(CENTER_TIMER_VISIBLE_KEY, !!visible);
-            else localStorage.setItem(CENTER_TIMER_VISIBLE_KEY, visible ? '1' : '0');
-        } catch (e) { /* ignore */ }
-    }
-    function createCenterTimerUI() {
-        if (centerTimerEl) return;
-        centerTimerEl = document.createElement('div');
-        centerTimerEl.id = 'map-timer-center-display';
-        centerTimerEl.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.85);color:#00ff88;padding:12px 24px;border-radius:10px;font-family:Consolas,monospace;font-size:22px;font-weight:bold;z-index:99997;display:none;border:2px solid rgba(0,255,136,0.5);text-shadow:0 0 8px rgba(0,255,136,0.6);pointer-events:none;box-shadow:0 0 20px rgba(0,255,136,0.2);';
-        document.body.appendChild(centerTimerEl);
-    }
-    function updateCenterTimerUI() {
-        if (!getCenterTimerVisible()) {
-            if (centerTimerEl) centerTimerEl.style.display = 'none';
-            return;
-        }
-        if (!centerTimerEl) createCenterTimerUI();
-        if (currentTarget && sessionStartTime != null) {
-            centerTimerEl.style.display = 'block';
-            centerTimerEl.textContent = '⏱ ' + formatTime(accumulatedSeconds);
-        } else {
-            centerTimerEl.style.display = 'none';
-        }
     }
 
     // ================================================================
@@ -1542,10 +1519,9 @@
                     } else if (action === 'heros') {
                         openEveWindow();
                     } else if (action === 'toggle-timer') {
-                        var next = !getCenterTimerVisible();
-                        setCenterTimerVisible(next);
-                        if (!centerTimerEl) createCenterTimerUI();
-                        updateCenterTimerUI();
+                        var next = !getTopTimerVisible();
+                        setTopTimerVisible(next);
+                        updateTimerUI();
                         showToast(next ? 'Timer obecności włączony' : 'Timer obecności ukryty');
                     }
                 });
@@ -1864,9 +1840,6 @@
         var listHeight = 280;
         panel.innerHTML =
             '<div class="map-timer-eve-list-panel-title" style="background:#16213e;padding:10px 36px 10px 12px;font-weight:bold;font-size:14px;border-bottom:1px solid #2a2a4a;color:#fff;cursor:move;user-select:none;">Mapy</div>' +
-            '<div class="map-timer-eve-hunter-row" style="padding:8px 12px;border-bottom:1px solid #2a2a4a;background:#0f1629;">' +
-            '<button type="button" class="map-timer-eve-hunter-btn" style="width:100%;padding:8px 12px;background:#e67e22;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:bold;">Zabiłem tego herosa (+1 pkt)</button>' +
-            '</div>' +
             '<div class="map-timer-eve-list-title" style="font-size:12px;color:#8892b0;padding:8px 12px 0;"></div>' +
             '<div class="map-timer-eve-list" style="padding:8px 12px 12px;overflow-y:auto;overflow-x:hidden;flex:1;min-height:120px;max-height:400px;"></div>' +
             '<div class="map-timer-eve-list-resize" style="height:6px;background:#2a2a4a;cursor:ns-resize;flex-shrink:0;border-radius:0 0 12px 12px;"></div>' +
@@ -1889,12 +1862,6 @@
             ev.stopPropagation();
         }, { passive: false });
         var listTitleBar = panel.querySelector('.map-timer-eve-list-panel-title');
-        listTitleBar.addEventListener('contextmenu', function (e) {
-            e.preventDefault();
-            reportEveKillForHunter(eveKey);
-        });
-        var hunterBtn = panel.querySelector('.map-timer-eve-hunter-btn');
-        if (hunterBtn) hunterBtn.addEventListener('click', function () { reportEveKillForHunter(eveKey); });
         var listDrag = { active: false, startX: 0, startY: 0, startLeft: 0, startTop: 0 };
         listTitleBar.addEventListener('mousedown', function (e) {
             if (e.button !== 0) return;
@@ -2230,36 +2197,6 @@
             }
         } catch (e) { /* ignore */ }
         return false;
-    }
-    /** Zgłoś zabójstwo herosa (ranking Łowcy). Pokazuje toast, obsługuje cooldown 429. */
-    function reportEveKillForHunter(eveKey) {
-        if (!CONFIG.API_KEY) {
-            showToast('Ustaw API Key (ze strony), żeby zgłaszać zabójstwo', 'error');
-            return;
-        }
-        var url = CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-respawn';
-        fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-API-Key': CONFIG.API_KEY },
-            body: JSON.stringify({ eveKey: eveKey }),
-        }).then(function (r) {
-            return r.json().then(function (body) {
-                if (r.status === 200) {
-                    eveRespawnCache = null;
-                    fetchEveDashboardAsync(eveKey, applyEveDashboardToPanel);
-                    showToast('Zgłoszono zabójstwo herosa (+1 pkt). Timer respu zaktualizowany.');
-                } else if (r.status === 429) {
-                    var wait = body && body.waitMinutes != null ? body.waitMinutes : 0;
-                    showToast('Hero się odradza. Poczekaj ok. ' + wait + ' min przed kolejnym zgłoszeniem.', 'error');
-                } else {
-                    showToast(body && body.error ? body.error : 'Błąd zgłoszenia', 'error');
-                }
-            }).catch(function () {
-                showToast('Błąd połączenia z API', 'error');
-            });
-        }).catch(function () {
-            showToast('Błąd połączenia z API', 'error');
-        });
     }
     function getEveRespawnText(eveKey) {
         try {
