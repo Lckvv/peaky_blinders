@@ -266,7 +266,7 @@ export default function AdminPage() {
     return (
       <div style={s.container}>
         <div style={s.card}>
-          <p style={s.forbidden}>Brak dostępu. Tylko administrator może zarządzać fazami.</p>
+          <p style={s.forbidden}>Brak dostępu. Tylko administrator lub koordynator może zarządzać fazami.</p>
         </div>
       </div>
     );

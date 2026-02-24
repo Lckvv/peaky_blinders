@@ -4,22 +4,23 @@ import { authFromApiKey } from '@/lib/auth';
 
 const EVE_KEYS = [63, 143, 300];
 
-// Minuty przerwy po zabiciu — w tym czasie nie można zgłosić kolejnego zabójstwa (hero się odradza)
-const EVE_HUNTER_COOLDOWN_MIN: Record<number, number> = {
-  63: 35,
-  143: 50,
-  300: 60,
-};
+// Min 15 min między przyznaniem punktu dla tego samego herosa (tylko pierwszy w oknie dostaje pkt)
+const EVE_HUNTER_COOLDOWN_MIN = 15;
 
-// GET /api/timer/eve-respawn — czasy respu dla 63, 143, 300 (publiczne, dla skryptu)
+// GET /api/timer/eve-respawn — czas „ostatnio opuszczono mapę” per eveKey (max lastLeftAt po mapach).
+// Timer nalicza się gdy stoimy na mapie (brak cooldownu); skrypt pokazuje czas od ostatniego zejścia.
 export async function GET() {
   try {
-    const rows = await prisma.eveRespawnTimer.findMany({
+    const rows = await prisma.eveMapLastLeft.findMany({
       where: { eveKey: { in: EVE_KEYS } },
     });
     const timers: Record<number, number> = {};
-    rows.forEach((r) => {
-      timers[r.eveKey] = r.killedAt.getTime();
+    EVE_KEYS.forEach((eveKey) => {
+      const forKey = rows.filter((r) => r.eveKey === eveKey);
+      if (forKey.length > 0) {
+        const maxTs = Math.max(...forKey.map((r) => r.lastLeftAt.getTime()));
+        timers[eveKey] = maxTs;
+      }
     });
     return NextResponse.json({ timers });
   } catch (e) {
@@ -46,8 +47,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const cooldownMin = EVE_HUNTER_COOLDOWN_MIN[eveKey] ?? 60;
-    const cooldownMs = cooldownMin * 60 * 1000;
+    const cooldownMs = EVE_HUNTER_COOLDOWN_MIN * 60 * 1000;
 
     const existing = await prisma.eveRespawnTimer.findUnique({
       where: { eveKey },

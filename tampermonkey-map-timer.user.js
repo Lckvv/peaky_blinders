@@ -888,13 +888,13 @@
         refreshConfigFromStorage();
         if (reason !== 'map_enter' && seconds < CONFIG.MIN_TIME_TO_SEND) {
             log(`Czas ${seconds}s < ${CONFIG.MIN_TIME_TO_SEND}s, pomijam (${reason})`);
-            return;
+            return Promise.resolve();
         }
 
         if (!CONFIG.API_KEY) {
             log('⚠️ Brak API key! Zainstaluj skrypt ze strony (link z tokenem) — wtedy key będzie ustawiony automatycznie.');
             showToast('⚠️ Brak API key — nie zapisuję sesji.', 'error');
-            return;
+            return Promise.resolve();
         }
 
         const payload = {
@@ -944,15 +944,13 @@
                 if (r.ok) return r.text().then(onSuccess);
                 return r.text().then(function (t) {
                     log('❌', r.status, t);
-                    // Kolejkuj tylko na błędy tymczasowe (sieć/5xx/timeout/limit),
-                    // nie na permanentne (np. brak aktywnej fazy).
                     if (r.status >= 500 || r.status === 408 || r.status === 429) saveLocally(payload);
                 });
             }).catch(function (e) {
                 log('❌ fetch (unload):', e);
                 saveLocally(payload);
             });
-            return;
+            return Promise.resolve();
         }
 
         log(retryCount > 0 ? '📤 Ponowna próba #' + retryCount : '📤 Wysyłam POST (sprawdź zakładkę Network):', url);
@@ -961,7 +959,7 @@
         try { controller = new window.AbortController(); } catch (e) { controller = { signal: {}, abort: function () {} }; }
         var timeoutId = setTimeout(function () { if (controller.abort) controller.abort(); }, 60000);
 
-        fetch(url, {
+        return fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-API-Key': CONFIG.API_KEY },
             body: JSON.stringify(payload),
@@ -973,9 +971,7 @@
                 if (res.ok) onSuccess(text);
                 else if (res.status === 401) {
                     showToast('❌ Nieprawidłowy API key!', 'error');
-                    // Nie kolejkuj permanentnych błędów klucza.
                 } else if (res.status === 409) {
-                    // Np. brak aktywnej fazy — nie kolejkuj.
                     showToast('ℹ️ Faza nieaktywna — pomijam zapis.', 'error');
                 } else {
                     showToast('❌ Błąd ' + res.status, 'error');
@@ -991,8 +987,9 @@
                 var delay = retryCount === 0 ? 12000 : 20000;
                 log('⏳ Timeout — ponowna próba za', delay / 1000, 's');
                 showToast('⏳ Ponawiam za ' + (delay / 1000) + ' s...');
-                setTimeout(function () { sendToBackend(seconds, monster, map, reason, false, retryCount + 1); }, delay);
-                return;
+                return new Promise(function (resolve) {
+                    setTimeout(function () { sendToBackend(seconds, monster, map, reason, false, retryCount + 1).then(resolve); }, delay);
+                });
             }
             onFail('Błąd sieci / timeout.');
         });
@@ -1063,23 +1060,25 @@
     }
 
     function finalizeSession(reason, useUnloadSend = false) {
-        if (!currentTarget || !sessionStartTime) return;
-        if (sessionFinalized) return;
+        if (!currentTarget || !sessionStartTime) return Promise.resolve();
+        if (sessionFinalized) return Promise.resolve();
         sessionFinalized = true;
 
         accumulatedSeconds = Math.floor((Date.now() - sessionStartTime) / 1000);
         var isHeroMonster = HERO_AFK_MONSTERS.indexOf(currentTarget.monster) >= 0;
+        var promise = Promise.resolve();
         if (isHeroMonster && heroAfkCapped) {
             log('⏹ Finalize (AFK cap już wysłany, pomijam ponowne wysyłanie)');
         } else {
-            log(`⏹ Finalize po ${accumulatedSeconds}s (${reason})`);
-            sendToBackend(accumulatedSeconds, currentTarget.monster, currentTarget.map, reason, useUnloadSend);
+            log(`⏹ Finalize po ${accumulatedSeconds}s (${reason}) — wysyłam POST (stara mapa), potem wejście na nową`);
+            promise = sendToBackend(accumulatedSeconds, currentTarget.monster, currentTarget.map, reason, useUnloadSend) || promise;
         }
 
         currentTarget = null;
         sessionStartTime = null;
         accumulatedSeconds = 0;
         heroAfkCapped = false;
+        return promise;
     }
 
     let lastLoggedMapName = null;
@@ -1114,8 +1113,10 @@
             if (!currentTarget) {
                 onEnteredTargetMap(target);
             } else if (currentTarget.map !== target.map || currentTarget.monster !== target.monster) {
-                finalizeSession('map_change');
-                onEnteredTargetMap(target);
+                var nextTarget = target;
+                (finalizeSession('map_change') || Promise.resolve()).then(function () {
+                    onEnteredTargetMap(nextTarget);
+                });
             }
             if (sessionStartTime && currentTarget) {
                 var elapsed = Math.floor((Date.now() - sessionStartTime) / 1000);
@@ -1137,9 +1138,17 @@
         }
         checkHerosOnMapAndNotify();
         sendEveMapPresenceIfNeeded();
-        if (target && HERO_AFK_MONSTERS.indexOf(target.monster) >= 0 && (nowTick - lastEveRespawnSyncTs) >= EVE_RESPAWN_SYNC_INTERVAL_MS) {
-            lastEveRespawnSyncTs = nowTick;
-            eveRespawnCache = null;
+        if (target && HERO_AFK_MONSTERS.indexOf(target.monster) >= 0) {
+            if ((nowTick - lastEveDashboardGetTs) >= EVE_PRESENCE_AND_GET_INTERVAL_MS) {
+                lastEveDashboardGetTs = nowTick;
+                var eveKeyForMap = null;
+                for (var ek in EVE_HERO_NAMES) { if (EVE_HERO_NAMES[ek] === target.monster) { eveKeyForMap = parseInt(ek, 10); break; } }
+                if (eveKeyForMap != null) fetchEveDashboardAsync(eveKeyForMap, applyEveDashboardToPanel);
+            }
+            if ((nowTick - lastEveRespawnSyncTs) >= EVE_RESPAWN_SYNC_INTERVAL_MS) {
+                lastEveRespawnSyncTs = nowTick;
+                eveRespawnCache = null;
+            }
         }
         if (nowTick - lastFetchedHeroNotifTs >= 3000) {
             lastFetchedHeroNotifTs = nowTick;
@@ -1264,7 +1273,7 @@
                     deleteEveMapPresence(eveKey, lastMap, nick);
                     lastEveMapPresence[eveKey] = null;
                 }
-                if (lastEvePresenceSent[eveKey] && (now - lastEvePresenceSent[eveKey]) < 8000) return;
+                if (lastEvePresenceSent[eveKey] && (now - lastEvePresenceSent[eveKey]) < 6000) return;
                 lastEvePresenceSent[eveKey] = now;
                 lastEveMapPresence[eveKey] = currentMap;
                 fetch(CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-presence', {
@@ -1708,6 +1717,8 @@
     var lastEveFetchMapName = null; // fetch przy każdym przejściu przez mapę
     var lastEveRespawnSyncTs = 0;   // gdy stoimy na mapie EVE: co 60s pobieramy globalne czasy (GET) i odświeżamy odliczanie
     const EVE_RESPAWN_SYNC_INTERVAL_MS = 60 * 1000; // 60 s — optymalnie: nie co sekundę, gra płynna
+    var lastEveDashboardGetTs = 0;  // co 6 s GET eve-dashboard gdy na mapie EVE (obecność + timery dla wszystkich)
+    const EVE_PRESENCE_AND_GET_INTERVAL_MS = 6 * 1000; // 6 s — POST presence + GET dashboard
 
     function createEveWindow() {
         if (eveWindowEl) return eveWindowEl;

@@ -321,27 +321,27 @@ export default function Navbar() {
             ⚙ Rezerwacje
           </Link>
         )}
+        {(user?.role === 'admin' || user?.role === 'koordynator') && (
+          <Link
+            href="/admin"
+            style={{
+              ...navStyles.adminLink,
+              ...(pathname === '/admin' ? navStyles.adminLinkActive : {}),
+            }}
+          >
+            ⚙ Fazy
+          </Link>
+        )}
         {user?.role === 'admin' && (
-          <>
-            <Link
-              href="/admin"
-              style={{
-                ...navStyles.adminLink,
-                ...(pathname === '/admin' ? navStyles.adminLinkActive : {}),
-              }}
-            >
-              ⚙ Admin — Fazy
-            </Link>
-            <Link
-              href="/admin/panel"
-              style={{
-                ...navStyles.adminLink,
-                ...(pathname === '/admin/panel' ? navStyles.adminLinkActive : {}),
-              }}
-            >
-              ⚙ Admin Panel
-            </Link>
-          </>
+          <Link
+            href="/admin/panel"
+            style={{
+              ...navStyles.adminLink,
+              ...(pathname === '/admin/panel' ? navStyles.adminLinkActive : {}),
+            }}
+          >
+            ⚙ Admin Panel
+          </Link>
         )}
       </div>
     </nav>

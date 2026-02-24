@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 const EVE_KEYS = [63, 143, 300];
-const EVE_PRESENCE_MAX_AGE_MS = 5 * 60 * 1000;
+const EVE_PRESENCE_MAX_AGE_MS = 15 * 1000; // spójne z eve-map-presence — po kilku sekundach bez POST gracz znika z listy
 
 // GET /api/timer/eve-dashboard?eveKey=63 — wszystko w jednym: rezerwacje, obecność, lastLeft, respawn (mniej requestów = mniej lagu)
 export async function GET(request: NextRequest) {
@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     }
 
     const cutoff = new Date(Date.now() - EVE_PRESENCE_MAX_AGE_MS);
-    const [reservations, presenceRows, lastLeftRows, respawnRow] = await Promise.all([
+    const [reservations, presenceRows, lastLeftRows] = await Promise.all([
       prisma.eveMapReservation.findMany({
         where: { eveKey },
         orderBy: { mapName: 'asc' },
@@ -27,21 +27,22 @@ export async function GET(request: NextRequest) {
         where: { eveKey },
         orderBy: { mapName: 'asc' },
       }),
-      prisma.eveRespawnTimer.findUnique({
-        where: { eveKey },
-      }),
     ]);
 
     const lastLeft: Record<string, number> = {};
     lastLeftRows.forEach((r) => {
       lastLeft[r.mapName] = r.lastLeftAt.getTime();
     });
+    const respawnTimer =
+      lastLeftRows.length > 0
+        ? Math.max(...lastLeftRows.map((r) => r.lastLeftAt.getTime()))
+        : null;
 
     return NextResponse.json({
       reservations: reservations.map((r) => ({ mapName: r.mapName, nick: r.nick })),
       presence: presenceRows.map((p) => ({ mapName: p.mapName, nick: p.nick })),
       lastLeft,
-      respawnTimer: respawnRow ? respawnRow.killedAt.getTime() : null,
+      respawnTimer,
     });
   } catch (e) {
     console.error('[GET /api/timer/eve-dashboard]', e);

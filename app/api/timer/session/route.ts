@@ -106,17 +106,11 @@ export async function POST(request: NextRequest) {
       'Harbinger of Elancia': 143,
       'Thunder-Wielding Barbarian': 300,
     };
-    // Freeze naliczania czasu po zabiciu herosa (minuty)
+    // Freeze naliczania czasu po zabiciu herosa (minuty) — killedAt ustawiane tylko w eve-hunter-found / eve-respawn
     const EVE_FREEZE_MIN: Record<number, number> = {
       63: 17,
       143: 32,
       300: 40,
-    };
-    // Cooldown łowcy: minuty po zabiciu, zanim można przyznać kolejny punkt (automatycznie przy wyjściu z mapy)
-    const EVE_HUNTER_COOLDOWN_MIN: Record<number, number> = {
-      63: 35,
-      143: 50,
-      300: 60,
     };
     const isHeroMonster = HERO_MONSTERS.includes(monster);
 
@@ -219,33 +213,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // 1) Zejście z mapy (hero zabity / zniknął): ustaw timer respawnu (killedAt = now), żeby odliczanie i freeze działały
-    if (isHeroMonster && reason !== 'map_enter') {
-      const eveKey = HERO_TO_EVE_KEY[monster];
-      if (eveKey != null) {
-        const cooldownMin = EVE_HUNTER_COOLDOWN_MIN[eveKey] ?? 60;
-        const cooldownMs = cooldownMin * 60 * 1000;
-        await prisma.$transaction(async (tx) => {
-          await tx.$executeRawUnsafe(
-            'SELECT pg_advisory_xact_lock($1)',
-            eveKey + 1e9
-          );
-          const existing = await tx.eveRespawnTimer.findUnique({
-            where: { eveKey },
-          });
-          const now = Date.now();
-          const canStartNewWindow =
-            !existing || now - existing.killedAt.getTime() >= cooldownMs;
-          if (!canStartNewWindow) return;
-          await tx.eveRespawnTimer.upsert({
-            where: { eveKey },
-            create: { eveKey },
-            update: { killedAt: new Date() },
-          });
-        });
-      }
-    }
-
+    // Timer „ostatnio opuszczono mapę” jest ustawiany przez skrypt (POST /api/timer/eve-map-last-left), nie tutaj.
     // Punkt łowcy (63, 143, 300) jest przyznawany w /api/timer/eve-hunter-found — skrypt wywołuje go w momencie wykrycia herosa na mapie (lista NPC, nick), nie przy map_enter.
 
     // Calculate user's total time for this monster

@@ -17,15 +17,15 @@ const ADMIN_MONSTERS = [
   { key: 'tanro', label: 'Tanro', name: 'Tanroth' },
 ] as const;
 
-// GET /api/admin/phase-status — lista potworów i status faz (tylko admin)
+// GET /api/admin/phase-status — lista potworów i status faz (admin lub koordynator)
 export async function GET() {
   try {
     const user = await authFromCookie();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (user.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden - admin only' }, { status: 403 });
+    if (user.role !== 'admin' && user.role !== 'koordynator') {
+      return NextResponse.json({ error: 'Forbidden - admin or koordynator only' }, { status: 403 });
     }
 
     const result = await Promise.all(

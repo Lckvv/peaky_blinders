@@ -4,16 +4,13 @@ import { authFromApiKey } from '@/lib/auth';
 
 const EVE_KEYS = [63, 143, 300];
 
-const EVE_HUNTER_COOLDOWN_MIN: Record<number, number> = {
-  63: 35,
-  143: 50,
-  300: 60,
-};
+// Min 15 min między punktami dla tego samego herosa — liczy się tylko pierwszy znalazca w oknie
+const EVE_HUNTER_COOLDOWN_MIN_MS = 15 * 60 * 1000;
 
 /**
  * POST /api/timer/eve-hunter-found — zgłoś "znalazłem herosa" (właśnie go widzę na mapie).
  * Skrypt wywołuje to w momencie wykrycia herosa (lista NPC, nick = Seeker of Creation / Harbinger of Elancia / Thunder-Wielding Barbarian).
- * Pierwszy gracz, którego request przejdzie (cooldown minął), dostaje +1 pkt. Nie aktualizujemy timera respu (killedAt).
+ * Pierwszy gracz w oknie 15 min dostaje +1 pkt; po przyznaniu ustawiamy killedAt (EveRespawnTimer), żeby przez 15 min nikt inny nie dostał punktu za tego samego herosa.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -32,21 +29,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const cooldownMin = EVE_HUNTER_COOLDOWN_MIN[eveKey] ?? 60;
-    const cooldownMs = cooldownMin * 60 * 1000;
-
     const existing = await prisma.eveRespawnTimer.findUnique({
       where: { eveKey },
     });
     const now = Date.now();
-    const minRespawnPassed =
-      !existing || now - existing.killedAt.getTime() >= cooldownMs;
-    if (!minRespawnPassed) {
+    const minSinceLastClaim = existing ? (now - existing.killedAt.getTime()) / 60000 : Infinity;
+    const canAwardPoint = minSinceLastClaim >= 15;
+
+    if (!canAwardPoint) {
       const waitMin = existing
-        ? Math.ceil((cooldownMs - (now - existing.killedAt.getTime())) / 60000)
+        ? Math.ceil(15 - minSinceLastClaim)
         : 0;
       return NextResponse.json(
-        { error: 'Cooldown. Poczekaj przed kolejnym zgłoszeniem.', waitMinutes: waitMin },
+        { error: 'Punkt już przyznany za tego herosa. Min. 15 min do kolejnego.', waitMinutes: Math.max(0, waitMin) },
         { status: 429 }
       );
     }
@@ -60,10 +55,15 @@ export async function POST(request: NextRequest) {
         where: { eveKey },
       });
       const passed =
-        !row || now - row.killedAt.getTime() >= cooldownMs;
+        !row || now - row.killedAt.getTime() >= EVE_HUNTER_COOLDOWN_MIN_MS;
       if (!passed) return;
       await tx.eveHunterKill.create({
         data: { eveKey, userId: user.id },
+      });
+      await tx.eveRespawnTimer.upsert({
+        where: { eveKey },
+        create: { eveKey },
+        update: { killedAt: new Date(now) },
       });
     });
 

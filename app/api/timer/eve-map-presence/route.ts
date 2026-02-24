@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authFromApiKey } from '@/lib/auth';
 
-const EVE_PRESENCE_MAX_AGE_MS = 5 * 60 * 1000; // 5 min — żeby przy schowanym oknie / throttlingu taba obecność nie znikała
+const EVE_PRESENCE_MAX_AGE_MS = 15 * 1000; // 15 s — kto nie odświeży obecności (POST co 6 s) w tym czasie jest usuwany z listy
 
 // POST /api/timer/eve-map-presence — zgłoś "jestem na mapie" (X-API-Key, body: eveKey, mapName, nick)
 export async function POST(request: NextRequest) {
