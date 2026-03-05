@@ -77,6 +77,7 @@ model MapSession {
   @@index([monsterId])
   @@index([userId, monsterId])
   @@index([phaseId])
+  @@index([endedAt])
 }
 
 model Phase {

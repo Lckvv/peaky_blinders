@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { authFromCookie } from '@/lib/auth';
 
 // POST /api/admin/clear-timer-data — czyści MapSession i PhaseResult (tylko admin).
-// Opcjonalnie ?phases=1 usuwa też wszystkie Phase.
+// Opcje: ?phases=1 — usuwa też Phase; ?sessionsOnly=1 — usuwa tylko MapSession (zostawia PhaseResult i Phase).
 export async function POST(request: NextRequest) {
   try {
     const user = await authFromCookie();
@@ -15,9 +15,15 @@ export async function POST(request: NextRequest) {
     }
 
     const alsoPhases = request.nextUrl.searchParams.get('phases') === '1';
+    const sessionsOnly = request.nextUrl.searchParams.get('sessionsOnly') === '1';
 
-    const deletedResults = await prisma.phaseResult.deleteMany({});
+    let deletedResults = 0;
     const deletedSessions = await prisma.mapSession.deleteMany({});
+
+    if (!sessionsOnly) {
+      const r = await prisma.phaseResult.deleteMany({});
+      deletedResults = r.count;
+    }
 
     let deletedPhases = 0;
     if (alsoPhases) {
@@ -28,7 +34,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       deleted: {
-        phaseResults: deletedResults.count,
+        phaseResults: deletedResults,
         mapSessions: deletedSessions.count,
         phases: deletedPhases,
       },

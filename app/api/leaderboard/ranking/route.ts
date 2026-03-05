@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 
 function formatTime(totalSeconds: number): string {
@@ -101,30 +102,35 @@ export async function GET(request: NextRequest) {
       let outfitByUser: Record<string, string | null> = {};
 
       if (phase.isActive) {
-        const sessions = await prisma.mapSession.findMany({
-          where: { phaseId: phase.id },
-          select: { userId: true, heroName: true, heroOutfitUrl: true, duration: true },
-          orderBy: { endedAt: 'desc' },
-        });
-        const seen = new Set<string>();
-        for (const s of sessions) {
-          if (!seen.has(s.userId)) {
-            heroByUser[s.userId] = s.heroName;
-            outfitByUser[s.userId] = s.heroOutfitUrl ?? null;
-            seen.add(s.userId);
-          }
+        const [grouped, heroRows] = await Promise.all([
+          prisma.mapSession.groupBy({
+            by: ['userId'],
+            where: { phaseId: phase.id },
+            _sum: { duration: true },
+            _count: true,
+          }),
+          prisma.$queryRaw<Array<{ userId: string; heroName: string; heroOutfitUrl: string | null }>>(
+            Prisma.sql`SELECT DISTINCT ON ("userId") "userId", "heroName", "heroOutfitUrl"
+              FROM "MapSession" WHERE "phaseId" = ${phase.id}
+              ORDER BY "userId", "endedAt" DESC`
+          ),
+        ]);
+        for (const r of heroRows) {
+          heroByUser[r.userId] = r.heroName;
+          outfitByUser[r.userId] = r.heroOutfitUrl ?? null;
         }
         const byUser: Record<string, { totalTime: number; totalSessions: number }> = {};
-        const userIds = [...new Set(sessions.map((s) => s.userId))];
+        const userIds = grouped.map((s) => s.userId);
         const users = await prisma.user.findMany({
           where: { id: { in: userIds } },
           select: { id: true, username: true, nick: true, profileUrl: true, avatarUrl: true },
         });
         const userMap = Object.fromEntries(users.map((u) => [u.id, u]));
-        for (const s of sessions) {
-          if (!byUser[s.userId]) byUser[s.userId] = { totalTime: 0, totalSessions: 0 };
-          byUser[s.userId].totalTime += s.duration;
-          byUser[s.userId].totalSessions += 1;
+        for (const s of grouped) {
+          byUser[s.userId] = {
+            totalTime: s._sum.duration ?? 0,
+            totalSessions: s._count,
+          };
         }
         const sorted = Object.entries(byUser)
           .map(([userId, data]) => ({ userId, ...data, user: userMap[userId]! }))
@@ -143,18 +149,14 @@ export async function GET(request: NextRequest) {
           totalSessions: item.totalSessions,
         }));
       } else {
-        const sessions = await prisma.mapSession.findMany({
-          where: { phaseId: phase.id },
-          select: { userId: true, heroName: true, heroOutfitUrl: true },
-          orderBy: { endedAt: 'desc' },
-        });
-        const seen = new Set<string>();
-        for (const s of sessions) {
-          if (!seen.has(s.userId)) {
-            heroByUser[s.userId] = s.heroName;
-            outfitByUser[s.userId] = s.heroOutfitUrl ?? null;
-            seen.add(s.userId);
-          }
+        const heroRows = await prisma.$queryRaw<Array<{ userId: string; heroName: string; heroOutfitUrl: string | null }>>(
+          Prisma.sql`SELECT DISTINCT ON ("userId") "userId", "heroName", "heroOutfitUrl"
+            FROM "MapSession" WHERE "phaseId" = ${phase.id}
+            ORDER BY "userId", "endedAt" DESC`
+        );
+        for (const r of heroRows) {
+          heroByUser[r.userId] = r.heroName;
+          outfitByUser[r.userId] = r.heroOutfitUrl ?? null;
         }
         leaderboard = phase.phaseResults.map((r, idx) => ({
           rank: idx + 1,
@@ -170,13 +172,21 @@ export async function GET(request: NextRequest) {
         }));
       }
     } else if (monster.phases.length === 0) {
-      // Herosy (20 urodziny): brak faz — sumujemy wszystkie sesje dla tego potwora
-      const sessions = await prisma.mapSession.findMany({
-        where: { monsterId: monster.id },
-        select: { userId: true, duration: true, heroName: true, heroOutfitUrl: true },
-        orderBy: { endedAt: 'desc' },
-      });
-      const userIds = [...new Set(sessions.map((s) => s.userId))];
+      // Herosy (20 urodziny): brak faz — sumujemy wszystkie sesje dla tego potwora (agregacja w DB)
+      const [grouped, heroRows] = await Promise.all([
+        prisma.mapSession.groupBy({
+          by: ['userId'],
+          where: { monsterId: monster.id },
+          _sum: { duration: true },
+          _count: true,
+        }),
+        prisma.$queryRaw<Array<{ userId: string; heroName: string; heroOutfitUrl: string | null }>>(
+          Prisma.sql`SELECT DISTINCT ON ("userId") "userId", "heroName", "heroOutfitUrl"
+            FROM "MapSession" WHERE "monsterId" = ${monster.id}
+            ORDER BY "userId", "endedAt" DESC`
+        ),
+      ]);
+      const userIds = grouped.map((s) => s.userId);
       const users = await prisma.user.findMany({
         where: { id: { in: userIds } },
         select: { id: true, username: true, nick: true, profileUrl: true, avatarUrl: true },
@@ -185,16 +195,12 @@ export async function GET(request: NextRequest) {
       const byUser: Record<string, { totalTime: number; totalSessions: number }> = {};
       const heroByUser: Record<string, string> = {};
       const outfitByUser: Record<string, string | null> = {};
-      const seen = new Set<string>();
-      for (const s of sessions) {
-        if (!byUser[s.userId]) byUser[s.userId] = { totalTime: 0, totalSessions: 0 };
-        byUser[s.userId].totalTime += s.duration;
-        byUser[s.userId].totalSessions += 1;
-        if (!seen.has(s.userId)) {
-          heroByUser[s.userId] = s.heroName;
-          outfitByUser[s.userId] = s.heroOutfitUrl ?? null;
-          seen.add(s.userId);
-        }
+      for (const r of heroRows) {
+        heroByUser[r.userId] = r.heroName;
+        outfitByUser[r.userId] = r.heroOutfitUrl ?? null;
+      }
+      for (const s of grouped) {
+        byUser[s.userId] = { totalTime: s._sum.duration ?? 0, totalSessions: s._count };
       }
       const sorted = Object.entries(byUser)
         .map(([userId, data]) => ({ userId, ...data, user: userMap[userId]! }))
@@ -222,23 +228,26 @@ export async function GET(request: NextRequest) {
 
       for (const phase of monster.phases) {
         if (phase.isActive && activePhaseId) {
-          const sessions = await prisma.mapSession.findMany({
+          const grouped = await prisma.mapSession.groupBy({
+            by: ['userId'],
             where: { monsterId: monster.id, phaseId: activePhaseId },
-            select: { userId: true, duration: true, heroName: true },
+            _sum: { duration: true },
+            _count: true,
           });
+          const userIds = grouped.map((s) => s.userId);
           const users = await prisma.user.findMany({
-            where: { id: { in: [...new Set(sessions.map((s) => s.userId))] } },
+            where: { id: { in: userIds } },
             select: { id: true, username: true, nick: true, profileUrl: true, avatarUrl: true },
           });
           const userMap = Object.fromEntries(users.map((u) => [u.id, u]));
-          for (const s of sessions) {
+          for (const s of grouped) {
             const u = userMap[s.userId];
             if (!u) continue;
             if (!combinedByUser[s.userId]) {
               combinedByUser[s.userId] = { totalTime: 0, totalSessions: 0, user: u };
             }
-            combinedByUser[s.userId].totalTime += s.duration;
-            combinedByUser[s.userId].totalSessions += 1;
+            combinedByUser[s.userId].totalTime += s._sum.duration ?? 0;
+            combinedByUser[s.userId].totalSessions += s._count;
           }
         } else {
           const results = await prisma.phaseResult.findMany({
@@ -264,20 +273,18 @@ export async function GET(request: NextRequest) {
         .sort((a, b) => b.totalTime - a.totalTime);
 
       const userIds = sorted.map((s) => s.userId);
-      const heroSessions = await prisma.mapSession.findMany({
-        where: { monsterId: monster.id, userId: { in: userIds } },
-        select: { userId: true, heroName: true, heroOutfitUrl: true },
-        orderBy: { endedAt: 'desc' },
-      });
+      const heroRows = userIds.length > 0
+        ? await prisma.$queryRaw<Array<{ userId: string; heroName: string; heroOutfitUrl: string | null }>>(
+            Prisma.sql`SELECT DISTINCT ON ("userId") "userId", "heroName", "heroOutfitUrl"
+              FROM "MapSession" WHERE "monsterId" = ${monster.id} AND "userId" = ANY(${userIds}::text[])
+              ORDER BY "userId", "endedAt" DESC`
+          )
+        : [];
       const heroByUser: Record<string, string> = {};
       const outfitByUser: Record<string, string | null> = {};
-      const seen = new Set<string>();
-      for (const s of heroSessions) {
-        if (!seen.has(s.userId)) {
-          heroByUser[s.userId] = s.heroName;
-          outfitByUser[s.userId] = s.heroOutfitUrl ?? null;
-          seen.add(s.userId);
-        }
+      for (const r of heroRows) {
+        heroByUser[r.userId] = r.heroName;
+        outfitByUser[r.userId] = r.heroOutfitUrl ?? null;
       }
 
       leaderboard = sorted.map((item, idx) => ({
