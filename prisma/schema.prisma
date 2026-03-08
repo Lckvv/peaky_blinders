@@ -13,7 +13,7 @@ model User {
   username   String   @unique
   nick       String?  // nazwa w grze (opcjonalna)
   password   String   // bcrypt hash
-  role       String   @default("user") // "user" | "admin" | "koordynator"
+  role       String   @default("user") // "user" | "admin" | "koordynator" | "super_admin"
   profileUrl String?  // zewnętrzny link do profilu (z gry, przekazywany w POST)
   avatarUrl  String?  // stroj/avatar (opcjonalnie z gry)
   createdAt  DateTime @default(now())
@@ -23,6 +23,8 @@ model User {
   mapSessions   MapSession[]
   phaseResults  PhaseResult[]
   eveHunterKills EveHunterKill[]
+  heroAlertLogs  HeroAlertLog[]
+  chatLogs       ChatLog[]
   invitationCodeUsed InvitationCode?
 }
 
@@ -186,6 +188,38 @@ model EveHunterKill {
 
   @@index([eveKey])
   @@index([eveKey, userId])
+}
+
+// Log: kto wysłał powiadomienie „Powiadom klan na Discordzie” (bez treści na Discord — tylko u nas)
+model HeroAlertLog {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  senderNick String   // nick postaci z gry, która wysłała (kto kliknął)
+  heroNick   String   // nazwa herosa na mapie
+  mapName    String
+  lvl        Int?     // poziom herosa (np. 265)
+  x          Int?
+  y          Int?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// Log wiadomości prywatnych z czatu (kto, do kogo, treść, godzina z czatu, data zapisu)
+model ChatLog {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  author      String   // kto wysłał (np. Zara)
+  receiver    String   // do kogo (np. slepek)
+  text        String   @db.Text
+  messageTime String?  // godzina z czatu np. [13:49]
+  createdAt   DateTime @default(now()) // data i czas zapisu
+
+  @@index([userId])
+  @@index([createdAt])
 }
 
 // Powiadomienia w grze: level (64,83,114,144,217,300), gracze ze skryptem odbierają i widzą popup z grafiką herosa

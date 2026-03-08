@@ -135,6 +135,36 @@ const navStyles: Record<string, React.CSSProperties> = {
     transition: 'transform 0.2s',
     flexShrink: 0,
   },
+  overlay: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0,0,0,0.5)',
+    zIndex: 95,
+    opacity: 0,
+    pointerEvents: 'none' as const,
+    transition: 'opacity 0.2s ease',
+  },
+  overlayVisible: {
+    opacity: 1,
+    pointerEvents: 'auto' as const,
+  },
+  closeBtn: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 36,
+    height: 36,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'rgba(255,255,255,0.1)',
+    border: 'none',
+    borderRadius: 8,
+    color: '#fff',
+    fontSize: 20,
+    cursor: 'pointer',
+    lineHeight: 1,
+  },
   adminLink: {
     display: 'block',
     padding: '12px 20px',
@@ -153,9 +183,30 @@ const navStyles: Record<string, React.CSSProperties> = {
     background: 'rgba(230, 126, 34, 0.15)',
     color: '#f39c12',
   },
+  superAdminLink: {
+    display: 'block',
+    padding: '10px 20px 10px 36px',
+    color: '#9b59b6',
+    textDecoration: 'none',
+    fontSize: 13,
+    borderRadius: 6,
+    marginLeft: 8,
+    marginBottom: 2,
+    transition: 'background 0.15s, color 0.15s',
+  },
+  superAdminLinkActive: {
+    background: 'rgba(155, 89, 182, 0.2)',
+    color: '#bb8fce',
+  },
 };
 
-export default function Navbar() {
+type NavbarProps = {
+  isMobile?: boolean;
+  isOpen?: boolean;
+  onClose?: () => void;
+};
+
+export default function Navbar({ isMobile, isOpen, onClose }: NavbarProps = {}) {
   const pathname = usePathname();
   const { user } = useAuth();
   const [tytaniOpen, setTytaniOpen] = useState(() =>
@@ -170,6 +221,7 @@ export default function Navbar() {
   const [urodziny20Open, setUrodziny20Open] = useState(() =>
     pathname.startsWith('/2026/20urodziny')
   );
+  const [logsOpen, setLogsOpen] = useState(() => pathname.startsWith('/admin/logs'));
 
   const isHome = pathname === '/';
   const isAdmin = pathname.startsWith('/admin');
@@ -177,23 +229,73 @@ export default function Navbar() {
     ? pathname.replace('/tytani/', '').split('/')[0]
     : null;
 
+  const sidebarStyle: React.CSSProperties = {
+    ...navStyles.sidebar,
+    ...(isMobile
+      ? {
+          transform: isOpen ? 'translateX(0)' : 'translateX(-100%)',
+          transition: 'transform 0.25s ease-out',
+          top: 80,
+          height: 'calc(100vh - 80px)',
+          zIndex: 96,
+        }
+      : {}),
+  };
+
   return (
-    <nav style={navStyles.sidebar}>
-      <div style={navStyles.navSection}>
-        <div style={navStyles.sectionLabel}>Nawigacja</div>
-        <Link
-          href="/"
+    <>
+      {isMobile && (
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label="Zamknij menu"
           style={{
-            ...navStyles.link,
-            ...(isHome ? navStyles.linkActive : {}),
+            ...navStyles.overlay,
+            ...(isOpen ? navStyles.overlayVisible : {}),
           }}
-        >
-          Home
-        </Link>
+          onClick={onClose}
+          onKeyDown={(e) => e.key === 'Enter' && onClose?.()}
+        />
+      )}
+      <nav style={sidebarStyle} className="nav-sidebar">
+        <style>{`
+          .nav-sidebar .nav-link:hover { background: rgba(52, 152, 219, 0.15); color: #3498db; }
+          .nav-sidebar .nav-dropdown-trigger:hover { background: rgba(52, 152, 219, 0.12); color: #3498db; }
+          .nav-sidebar .nav-sublink:hover { background: rgba(52, 152, 219, 0.1); color: #3498db; }
+          .nav-sidebar .nav-sublink3:hover { background: rgba(52, 152, 219, 0.1); color: #3498db; }
+          .nav-sidebar .nav-admin-link:hover { background: rgba(230, 126, 34, 0.2); color: #f39c12; }
+          .nav-sidebar .nav-super-admin-link:hover { background: rgba(155, 89, 182, 0.25); color: #bb8fce; }
+          .nav-sidebar .nav-close-btn:hover { background: rgba(255,255,255,0.2); }
+        `}</style>
+        {isMobile && (
+          <button
+            type="button"
+            className="nav-close-btn"
+            style={navStyles.closeBtn}
+            onClick={onClose}
+            aria-label="Zamknij menu"
+          >
+            ×
+          </button>
+        )}
+        <div style={{ ...navStyles.navSection, ...(isMobile ? { paddingTop: 48 } : {}) }}>
+          <div style={navStyles.sectionLabel}>Nawigacja</div>
+          <Link
+            href="/"
+            className="nav-link"
+            style={{
+              ...navStyles.link,
+              ...(isHome ? navStyles.linkActive : {}),
+            }}
+            onClick={onClose}
+          >
+            Home
+          </Link>
 
         <div>
           <button
             type="button"
+            className="nav-dropdown-trigger"
             style={{
               ...navStyles.dropdownTrigger,
               ...(tytaniOpen ? navStyles.dropdownTriggerOpen : {}),
@@ -219,10 +321,12 @@ export default function Navbar() {
                   <Link
                     key={slug}
                     href={href}
+                    className="nav-sublink"
                     style={{
                       ...navStyles.sublink,
                       ...(isActive ? navStyles.sublinkActive : {}),
                     }}
+                    onClick={onClose}
                   >
                     {name}
                   </Link>
@@ -236,25 +340,30 @@ export default function Navbar() {
       <div style={navStyles.navSection}>
         <Link
           href="/kupie"
+          className="nav-link"
           style={{
             ...navStyles.link,
             ...(pathname === '/kupie' ? navStyles.linkActive : {}),
           }}
+          onClick={onClose}
         >
           Kupie
         </Link>
         <Link
           href="/sprzedam"
+          className="nav-link"
           style={{
             ...navStyles.link,
             ...(pathname === '/sprzedam' ? navStyles.linkActive : {}),
           }}
+          onClick={onClose}
         >
           Sprzedam
         </Link>
         <div>
           <button
             type="button"
+            className="nav-dropdown-trigger"
             style={{
               ...navStyles.dropdownTrigger,
               ...(eventOpen ? navStyles.dropdownTriggerOpen : {}),
@@ -268,6 +377,7 @@ export default function Navbar() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
               <button
                 type="button"
+                className="nav-dropdown-trigger"
                 style={{
                   ...navStyles.dropdownTrigger,
                   ...navStyles.sublink,
@@ -283,6 +393,7 @@ export default function Navbar() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                   <button
                     type="button"
+                    className="nav-dropdown-trigger"
                     style={{
                       ...navStyles.dropdownTrigger,
                       ...navStyles.sublink,
@@ -296,10 +407,10 @@ export default function Navbar() {
                   </button>
                   {urodziny20Open && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                      <Link href="/2026/20urodziny" style={{ ...navStyles.sublink3, ...(pathname === '/2026/20urodziny' ? navStyles.sublink3Active : {}) }}>Strona główna</Link>
-                      <Link href="/2026/20urodziny/seeker-of-creation" style={{ ...navStyles.sublink3, ...(pathname === '/2026/20urodziny/seeker-of-creation' ? navStyles.sublink3Active : {}) }}>63 - Seeker of Creation</Link>
-                      <Link href="/2026/20urodziny/harbinger-of-elancia" style={{ ...navStyles.sublink3, ...(pathname === '/2026/20urodziny/harbinger-of-elancia' ? navStyles.sublink3Active : {}) }}>143 - Harbinger of Elancia</Link>
-                      <Link href="/2026/20urodziny/thunder-wielding-barbarian" style={{ ...navStyles.sublink3, ...(pathname === '/2026/20urodziny/thunder-wielding-barbarian' ? navStyles.sublink3Active : {}) }}>300 - Thunder-Wielding Barbarian</Link>
+                      <Link href="/2026/20urodziny" className="nav-sublink3" style={{ ...navStyles.sublink3, ...(pathname === '/2026/20urodziny' ? navStyles.sublink3Active : {}) }} onClick={onClose}>Strona główna</Link>
+                      <Link href="/2026/20urodziny/seeker-of-creation" className="nav-sublink3" style={{ ...navStyles.sublink3, ...(pathname === '/2026/20urodziny/seeker-of-creation' ? navStyles.sublink3Active : {}) }} onClick={onClose}>63 - Seeker of Creation</Link>
+                      <Link href="/2026/20urodziny/harbinger-of-elancia" className="nav-sublink3" style={{ ...navStyles.sublink3, ...(pathname === '/2026/20urodziny/harbinger-of-elancia' ? navStyles.sublink3Active : {}) }} onClick={onClose}>143 - Harbinger of Elancia</Link>
+                      <Link href="/2026/20urodziny/thunder-wielding-barbarian" className="nav-sublink3" style={{ ...navStyles.sublink3, ...(pathname === '/2026/20urodziny/thunder-wielding-barbarian' ? navStyles.sublink3Active : {}) }} onClick={onClose}>300 - Thunder-Wielding Barbarian</Link>
                     </div>
                   )}
                 </div>
@@ -313,10 +424,12 @@ export default function Navbar() {
         {(user?.role === 'admin' || user?.role === 'koordynator') && (
           <Link
             href="/admin/rezerwacje"
+            className="nav-admin-link"
             style={{
               ...navStyles.adminLink,
               ...(pathname === '/admin/rezerwacje' ? navStyles.adminLinkActive : {}),
             }}
+            onClick={onClose}
           >
             ⚙ Rezerwacje
           </Link>
@@ -324,10 +437,12 @@ export default function Navbar() {
         {(user?.role === 'admin' || user?.role === 'koordynator') && (
           <Link
             href="/admin"
+            className="nav-admin-link"
             style={{
               ...navStyles.adminLink,
               ...(pathname === '/admin' ? navStyles.adminLinkActive : {}),
             }}
+            onClick={onClose}
           >
             ⚙ Fazy
           </Link>
@@ -335,15 +450,72 @@ export default function Navbar() {
         {user?.role === 'admin' && (
           <Link
             href="/admin/panel"
+            className="nav-admin-link"
             style={{
               ...navStyles.adminLink,
               ...(pathname === '/admin/panel' ? navStyles.adminLinkActive : {}),
             }}
+            onClick={onClose}
           >
             ⚙ Admin Panel
           </Link>
         )}
+        {user?.role === 'super_admin' && (
+          <div>
+            <button
+              type="button"
+              className="nav-dropdown-trigger"
+              style={{
+                ...navStyles.dropdownTrigger,
+                ...(logsOpen ? navStyles.dropdownTriggerOpen : {}),
+                color: '#9b59b6',
+              }}
+              onClick={() => setLogsOpen((o) => !o)}
+            >
+              <span>📋 Logs</span>
+              <span style={{ ...navStyles.chevron, transform: logsOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
+            </button>
+            {logsOpen && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                <Link
+                  href="/admin/logs/discord"
+                  className="nav-super-admin-link"
+                  style={{
+                    ...navStyles.superAdminLink,
+                    ...(pathname === '/admin/logs/discord' ? navStyles.superAdminLinkActive : {}),
+                  }}
+                  onClick={onClose}
+                >
+                  Logs Discord
+                </Link>
+                <Link
+                  href="/admin/logs/margonem"
+                  className="nav-super-admin-link"
+                  style={{
+                    ...navStyles.superAdminLink,
+                    ...(pathname === '/admin/logs/margonem' ? navStyles.superAdminLinkActive : {}),
+                  }}
+                  onClick={onClose}
+                >
+                  Logs Margonem
+                </Link>
+                <Link
+                  href="/admin/logs/chat"
+                  className="nav-super-admin-link"
+                  style={{
+                    ...navStyles.superAdminLink,
+                    ...(pathname === '/admin/logs/chat' ? navStyles.superAdminLinkActive : {}),
+                  }}
+                  onClick={onClose}
+                >
+                  Logs Chat
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </nav>
+    </>
   );
 }

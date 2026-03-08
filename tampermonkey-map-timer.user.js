@@ -780,6 +780,20 @@
         heroAlertSending = true;
         var btn = heroAlertPanelEl && heroAlertPanelEl.querySelector('.map-timer-hero-alert-call');
         if (btn) { btn.disabled = true; btn.textContent = 'Wysyłam…'; }
+        if (CONFIG.API_KEY) {
+            fetch(CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/hero-alert-log', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-API-Key': CONFIG.API_KEY },
+                body: JSON.stringify({
+                    senderNick: getCurrentHeroName(),
+                    heroNick: lastHeroAlertData.nick,
+                    mapName: lastHeroAlertData.mapName,
+                    lvl: lastHeroAlertData.lvl != null ? lastHeroAlertData.lvl : null,
+                    x: lastHeroAlertData.x != null ? lastHeroAlertData.x : null,
+                    y: lastHeroAlertData.y != null ? lastHeroAlertData.y : null
+                })
+            }).catch(function () {});
+        }
         var ping = getHeroPing(lastHeroAlertData.nick);
         var mention = getHeroMentionForContent(lastHeroAlertData.nick);
         var content = mention + ' Hero! ' + lastHeroAlertData.nick + ' (' + lvlStr + '), ' + lastHeroAlertData.mapName + ' (' + posStr + ')';
@@ -2210,24 +2224,13 @@
         eveDashboardCache[eveKey] = { reservations: data.reservations || [], presence: data.presence || [], lastLeft: data.lastLeft || {}, respawnTimer: data.respawnTimer };
         renderEveListAndTitle(eveKey, eveDashboardCache[eveKey], now);
     }
-    function applyEvePanelTitleFromData(eveKey, respawnTimerMs) {
+    function applyEvePanelTitleFromData(eveKey, _respawnTimerMs) {
         var rec = eveMapListPanelsByKey[eveKey];
         if (!rec || !rec.panel) return;
         var titleEl = rec.panel.querySelector('.map-timer-eve-list-panel-title');
         if (!titleEl) return;
-        var text = 'Mapy';
-        var secLeft = null;
-        if (respawnTimerMs != null && typeof respawnTimerMs === 'number' && respawnTimerMs > 0) {
-            var duration = EVE_RESPAWN_SECONDS[eveKey] || 17 * 60;
-            var elapsed = (Date.now() - respawnTimerMs) / 1000;
-            if (elapsed < duration) { secLeft = Math.floor(duration - elapsed); text = 'Respawn: ' + formatTimeSince(secLeft); }
-        }
-        titleEl.textContent = text;
-        if (secLeft != null) {
-            if (secLeft <= 60) titleEl.style.color = '#2ecc71';
-            else if (secLeft <= 120) titleEl.style.color = '#f1c40f';
-            else titleEl.style.color = '#fff';
-        } else { titleEl.style.color = '#fff'; }
+        titleEl.textContent = 'Mapy';
+        titleEl.style.color = '#fff';
     }
     function updateEveMapListForPanel(eveKey) {
         fetchEveDashboardAsync(eveKey, function (k, data) { applyEveDashboardToPanel(k, data); });
@@ -2281,15 +2284,8 @@
         if (!rec || !rec.panel) return;
         var titleEl = rec.panel.querySelector('.map-timer-eve-list-panel-title');
         if (!titleEl) return;
-        var resp = getEveRespawnText(eveKey);
-        titleEl.textContent = resp.text || 'Mapy';
-        if (resp.secLeft != null) {
-            if (resp.secLeft <= 60) titleEl.style.color = '#2ecc71';
-            else if (resp.secLeft <= 120) titleEl.style.color = '#f1c40f';
-            else titleEl.style.color = '#fff';
-        } else {
-            titleEl.style.color = '#fff';
-        }
+        titleEl.textContent = 'Mapy';
+        titleEl.style.color = '#fff';
     }
 
     function openEveWindow() {
@@ -2340,6 +2336,46 @@
     });
 
     // ================================================================
+    //  Logi czatu — wiadomości prywatne do backendu (Logs Chat)
+    // ================================================================
+    var privateChatLogObserverAttached = false;
+    function initPrivateChatLogger() {
+        if (privateChatLogObserverAttached) return;
+        var wrapper = document.querySelector('.PRIVATE-message-wrapper');
+        if (!wrapper) return;
+        privateChatLogObserverAttached = true;
+        var observer = new MutationObserver(function (mutations) {
+            if (!CONFIG.API_KEY || !CONFIG.BACKEND_URL) return;
+            mutations.forEach(function (mutation) {
+                for (var i = 0; i < mutation.addedNodes.length; i++) {
+                    var node = mutation.addedNodes[i];
+                    if (node.nodeType !== 1 || !node.classList || !node.classList.contains('new-chat-message')) continue;
+                    var authorEl = node.querySelector('.author-section');
+                    var receiverEl = node.querySelector('.receiver-section');
+                    var textEl = node.querySelector('.message-section');
+                    var tsEl = node.querySelector('.ts-section');
+                    var author = authorEl ? String(authorEl.innerText || '').replace(':', '').trim() : '';
+                    var receiver = receiverEl ? String(receiverEl.innerText || '').replace(':', '').trim() : '';
+                    var text = textEl ? String(textEl.innerText || '').trim() : '';
+                    var messageTime = tsEl ? String(tsEl.innerText || '').trim() : '';
+                    if (!author || !text) continue;
+                    var url = CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/chat-log';
+                    fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-API-Key': CONFIG.API_KEY },
+                        body: JSON.stringify({ author: author, receiver: receiver, text: text, messageTime: messageTime || null })
+                    }).catch(function () {});
+                }
+            });
+        });
+        observer.observe(wrapper, { childList: true, subtree: true });
+    }
+    function tryAttachPrivateChatLogger() {
+        if (privateChatLogObserverAttached) return;
+        initPrivateChatLogger();
+    }
+
+    // ================================================================
     //  INIT
     // ================================================================
     function init() {
@@ -2355,6 +2391,8 @@
 
         setInterval(tick, CONFIG.CHECK_INTERVAL);
         setTimeout(function () { tick(); }, 800);
+
+        setInterval(tryAttachPrivateChatLogger, 2000);
 
         const waitForEngine = setInterval(function () {
             if (getEngine()) {
