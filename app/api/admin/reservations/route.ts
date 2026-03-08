@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
   try {
     const user = await authFromCookie();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (user.role !== 'admin' && user.role !== 'koordynator') return NextResponse.json({ error: 'Forbidden - admin or koordynator only' }, { status: 403 });
+    if (user.role !== 'admin' && user.role !== 'koordynator' && user.role !== 'super_admin') return NextResponse.json({ error: 'Forbidden - admin or koordynator only' }, { status: 403 });
 
     const { searchParams } = new URL(request.url);
     const titanSlug = searchParams.get('titanSlug');
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
   try {
     const user = await authFromCookie();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (user.role !== 'admin' && user.role !== 'koordynator') return NextResponse.json({ error: 'Forbidden - admin or koordynator only' }, { status: 403 });
+    if (user.role !== 'admin' && user.role !== 'koordynator' && user.role !== 'super_admin') return NextResponse.json({ error: 'Forbidden - admin or koordynator only' }, { status: 403 });
 
     const body = await request.json();
     const { titanSlug, itemKey, nick, priority } = body;

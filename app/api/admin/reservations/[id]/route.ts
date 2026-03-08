@@ -5,7 +5,7 @@ import { authFromCookie } from '@/lib/auth';
 async function requireAdminOrKoordynator() {
   const user = await authFromCookie();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (user.role !== 'admin' && user.role !== 'koordynator') return NextResponse.json({ error: 'Forbidden - admin or koordynator only' }, { status: 403 });
+  if (user.role !== 'admin' && user.role !== 'koordynator' && user.role !== 'super_admin') return NextResponse.json({ error: 'Forbidden - admin or koordynator only' }, { status: 403 });
   return null;
 }
 

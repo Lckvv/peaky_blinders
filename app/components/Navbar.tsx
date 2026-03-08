@@ -421,7 +421,7 @@ export default function Navbar({ isMobile, isOpen, onClose }: NavbarProps = {}) 
       </div>
 
       <div style={navStyles.navSection}>
-        {(user?.role === 'admin' || user?.role === 'koordynator') && (
+        {(user?.role === 'admin' || user?.role === 'koordynator' || user?.role === 'super_admin') && (
           <Link
             href="/admin/rezerwacje"
             className="nav-admin-link"
@@ -434,7 +434,7 @@ export default function Navbar({ isMobile, isOpen, onClose }: NavbarProps = {}) 
             ⚙ Rezerwacje
           </Link>
         )}
-        {(user?.role === 'admin' || user?.role === 'koordynator') && (
+        {(user?.role === 'admin' || user?.role === 'koordynator' || user?.role === 'super_admin') && (
           <Link
             href="/admin"
             className="nav-admin-link"
@@ -447,7 +447,7 @@ export default function Navbar({ isMobile, isOpen, onClose }: NavbarProps = {}) 
             ⚙ Fazy
           </Link>
         )}
-        {user?.role === 'admin' && (
+        {(user?.role === 'admin' || user?.role === 'super_admin') && (
           <Link
             href="/admin/panel"
             className="nav-admin-link"

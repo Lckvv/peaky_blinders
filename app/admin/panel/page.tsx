@@ -149,7 +149,7 @@ export default function AdminPanelPage() {
     );
   }
 
-  if (forbidden || user.role !== 'admin') {
+  if (forbidden || (user.role !== 'admin' && user.role !== 'super_admin')) {
     return (
       <div style={s.container}>
         <div style={s.card}>

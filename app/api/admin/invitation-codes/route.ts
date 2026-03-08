@@ -24,7 +24,7 @@ export async function GET() {
   try {
     const user = await authFromCookie();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (user.role !== 'admin') return NextResponse.json({ error: 'Forbidden - admin only' }, { status: 403 });
+    if (user.role !== 'admin' && user.role !== 'super_admin') return NextResponse.json({ error: 'Forbidden - admin only' }, { status: 403 });
 
     const list = await prisma.invitationCode.findMany({
       orderBy: { createdAt: 'desc' },
@@ -42,7 +42,7 @@ export async function POST() {
   try {
     const user = await authFromCookie();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (user.role !== 'admin') return NextResponse.json({ error: 'Forbidden - admin only' }, { status: 403 });
+    if (user.role !== 'admin' && user.role !== 'super_admin') return NextResponse.json({ error: 'Forbidden - admin only' }, { status: 403 });
 
     let code: string;
     let attempts = 0;
