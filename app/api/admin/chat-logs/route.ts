@@ -50,3 +50,24 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }
+
+/**
+ * DELETE /api/admin/chat-logs — usuń wszystkie logi czatu (tylko super_admin).
+ */
+export async function DELETE() {
+  try {
+    const user = await authFromCookie();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (user.role !== 'super_admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    await prisma.chatLog.deleteMany({});
+    return NextResponse.json({ ok: true, deleted: true });
+  } catch (e) {
+    console.error('[DELETE /api/admin/chat-logs]', e);
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
+  }
+}
