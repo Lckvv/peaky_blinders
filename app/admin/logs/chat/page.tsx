@@ -51,7 +51,35 @@ const s: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     lineHeight: 1,
   },
+  btnDeletePage: {
+    padding: '8px 16px',
+    background: 'rgba(231, 76, 60, 0.15)',
+    color: '#e74c3c',
+    border: '1px solid rgba(231, 76, 60, 0.4)',
+    borderRadius: 8,
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: 'pointer',
+  },
+  pagination: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap' as const,
+    marginTop: 16,
+  },
+  pageBtn: {
+    padding: '6px 12px',
+    background: '#1a1a2e',
+    color: '#b8c5d6',
+    border: '1px solid #2a2a4a',
+    borderRadius: 6,
+    fontSize: 13,
+    cursor: 'pointer',
+  },
 };
+
+const PAGE_SIZE = 50;
 
 function formatDate(iso: string) {
   try {
@@ -64,18 +92,27 @@ function formatDate(iso: string) {
 export default function LogsChatPage() {
   const [logs, setLogs] = useState<LogRow[]>([]);
   const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deletingAll, setDeletingAll] = useState(false);
+  const [deletingPage, setDeletingPage] = useState(false);
 
-  const loadLogs = async () => {
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const loadLogs = async (pageNum: number = page) => {
     setLoading(true);
+    const offset = (pageNum - 1) * PAGE_SIZE;
     try {
-      const res = await fetch('/api/admin/chat-logs?limit=200&offset=0', { credentials: 'include' });
+      const res = await fetch(
+        `/api/admin/chat-logs?limit=${PAGE_SIZE}&offset=${offset}`,
+        { credentials: 'include' }
+      );
       if (!res.ok) return;
       const data = await res.json();
       setLogs(data.logs ?? []);
       setTotal(data.total ?? 0);
+      setPage(pageNum);
     } catch {
       setLogs([]);
     } finally {
@@ -84,17 +121,44 @@ export default function LogsChatPage() {
   };
 
   useEffect(() => {
-    loadLogs();
+    loadLogs(1);
   }, []);
+
+  const goToPage = (p: number) => {
+    const next = Math.max(1, Math.min(p, totalPages));
+    if (next !== page) loadLogs(next);
+  };
 
   const handleDeleteAll = async () => {
     if (!confirm('Usunąć wszystkie logi czatu? Tej operacji nie można cofnąć.')) return;
     setDeletingAll(true);
     try {
       const res = await fetch('/api/admin/chat-logs', { method: 'DELETE', credentials: 'include' });
-      if (res.ok) await loadLogs();
+      if (res.ok) await loadLogs(1);
     } finally {
       setDeletingAll(false);
+    }
+  };
+
+  const handleDeletePage = async () => {
+    if (logs.length === 0) return;
+    if (!confirm(`Usunąć ${logs.length} wpisów z tej strony?`)) return;
+    setDeletingPage(true);
+    try {
+      const res = await fetch('/api/admin/chat-logs/delete-batch', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: logs.map((r) => r.id) }),
+      });
+      if (res.ok) {
+        const newTotal = total - logs.length;
+        const newTotalPages = Math.max(1, Math.ceil(newTotal / PAGE_SIZE));
+        const nextPage = page > newTotalPages ? Math.max(1, newTotalPages) : page;
+        await loadLogs(nextPage);
+      }
+    } finally {
+      setDeletingPage(false);
     }
   };
 
@@ -126,7 +190,17 @@ export default function LogsChatPage() {
         ) : (
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
-              <p style={{ margin: 0, color: '#8892b0', fontSize: 13 }}>Ostatnie {logs.length} z {total}</p>
+              <p style={{ margin: 0, color: '#8892b0', fontSize: 13 }}>
+                Strona {page} z {totalPages} — wpisy {(page - 1) * PAGE_SIZE + 1}–{(page - 1) * PAGE_SIZE + logs.length} z {total}
+              </p>
+              <button
+                type="button"
+                style={s.btnDeletePage}
+                onClick={handleDeletePage}
+                disabled={deletingPage || logs.length === 0}
+              >
+                {deletingPage ? 'Usuwanie…' : 'Usuń tę stronę'}
+              </button>
               <button
                 type="button"
                 style={s.btnDeleteAll}
@@ -174,6 +248,45 @@ export default function LogsChatPage() {
                 ))}
               </tbody>
             </table>
+            {totalPages > 1 && (
+              <div style={s.pagination}>
+                <button
+                  type="button"
+                  style={s.pageBtn}
+                  onClick={() => goToPage(1)}
+                  disabled={page <= 1}
+                >
+                  « Pierwsza
+                </button>
+                <button
+                  type="button"
+                  style={s.pageBtn}
+                  onClick={() => goToPage(page - 1)}
+                  disabled={page <= 1}
+                >
+                  ‹ Poprzednia
+                </button>
+                <span style={{ color: '#8892b0', fontSize: 13 }}>
+                  Strona {page} z {totalPages}
+                </span>
+                <button
+                  type="button"
+                  style={s.pageBtn}
+                  onClick={() => goToPage(page + 1)}
+                  disabled={page >= totalPages}
+                >
+                  Następna ›
+                </button>
+                <button
+                  type="button"
+                  style={s.pageBtn}
+                  onClick={() => goToPage(totalPages)}
+                  disabled={page >= totalPages}
+                >
+                  Ostatnia »
+                </button>
+              </div>
+            )}
           </>
         )}
       </div>
