@@ -20,6 +20,9 @@
     // Uruchamiaj tylko w oknie głównym — w iframe skrypt by się dublował i wysyłał tę samą sesję 2× (pagehide w obu kontekstach).
     if (window !== window.top) return;
 
+    /** Event 20 urodziny (herosy 63, 143, 300) zakończony: ukryty przycisk, brak POSTów. Ustaw false, żeby włączyć ponownie. */
+    const EVE_EVENT_ENDED = true;
+
     // ================================================================
     //  CONFIG — zmień BACKEND_URL i API_KEY po rejestracji na stronie
     // ================================================================
@@ -521,7 +524,7 @@
             var match = Object.keys(EVE_HERO_NICK_TO_KEY).filter(function (n) { return n.toLowerCase() === nameTrim.toLowerCase(); })[0];
             if (match) eveKey = EVE_HERO_NICK_TO_KEY[match];
         }
-        if (eveKey != null && CONFIG.API_KEY) {
+        if (eveKey != null && CONFIG.API_KEY && !EVE_EVENT_ENDED) {
             fetch(CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-hunter-found', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-API-Key': CONFIG.API_KEY },
@@ -904,6 +907,10 @@
             log(`Czas ${seconds}s < ${CONFIG.MIN_TIME_TO_SEND}s, pomijam (${reason})`);
             return Promise.resolve();
         }
+        if (EVE_EVENT_ENDED && (monster === 'Seeker of Creation' || monster === 'Harbinger of Elancia' || monster === 'Thunder-Wielding Barbarian')) {
+            log('Event zakończony — pomijam wysyłkę sesji dla herosa eventowego');
+            return Promise.resolve();
+        }
 
         if (!CONFIG.API_KEY) {
             log('⚠️ Brak API key! Zainstaluj skrypt ze strony (link z tokenem) — wtedy key będzie ustawiony automatycznie.');
@@ -1024,7 +1031,12 @@
 
         try {
             const pending = JSON.parse(localStorage.getItem('maptimer_pending') || '[]');
-            const toSend = pending.filter(function (p) { return p.reason !== 'map_enter'; });
+            const eveHeroNames = ['Seeker of Creation', 'Harbinger of Elancia', 'Thunder-Wielding Barbarian'];
+            const toSend = pending.filter(function (p) {
+                if (p.reason === 'map_enter') return false;
+                if (EVE_EVENT_ENDED && eveHeroNames.indexOf(p.monster) !== -1) return false;
+                return true;
+            });
             if (toSend.length === 0) {
                 if (pending.length > 0) localStorage.setItem('maptimer_pending', '[]');
                 return;
@@ -1246,6 +1258,7 @@
     }
     /** Zapisuje w API że mapa została właśnie opuszczona (wspólne dla wszystkich, przetrwa odświeżenie). */
     function setEveMapLastLeft(eveKey, mapName) {
+        if (EVE_EVENT_ENDED) return false;
         var xhr = new XMLHttpRequest();
         xhr.open('POST', CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-last-left', false);
         xhr.setRequestHeader('Content-Type', 'application/json');
@@ -1266,7 +1279,7 @@
     }
     /** Wysyła obecność na mapie do API (bez throttlingu). Używane przy otwarciu panelu, żeby backend na pewno miał naszą pozycję. */
     function sendEvePresenceNow(eveKey, mapName, nick) {
-        if (!CONFIG.API_KEY || !mapName || !nick) return;
+        if (EVE_EVENT_ENDED || !CONFIG.API_KEY || !mapName || !nick) return;
         fetch(CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-presence', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-API-Key': CONFIG.API_KEY },
@@ -1274,7 +1287,7 @@
         }).then(function (r) { if (r.ok) { eveMapReservationsCache[eveKey] = null; lastEvePresenceSent[eveKey] = Date.now(); lastEveMapPresence[eveKey] = mapName; } }).catch(function () {});
     }
     function sendEveMapPresenceIfNeeded() {
-        if (!CONFIG.API_KEY) return;
+        if (EVE_EVENT_ENDED || !CONFIG.API_KEY) return;
         var currentMap = getCurrentMapName();
         var nick = getCurrentHeroName();
         var now = Date.now();
@@ -1306,6 +1319,7 @@
 
     /** POST: zarezerwuj mapę EVE. Po sukcesie czyści cache dla eveKey. */
     function reserveEveMap(eveKey, mapName, nick) {
+        if (EVE_EVENT_ENDED) return false;
         var xhr = new XMLHttpRequest();
         xhr.open('POST', CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-reservations', false);
         xhr.setRequestHeader('Content-Type', 'application/json');
@@ -1324,6 +1338,7 @@
 
     /** DELETE: usuń rezerwację mapy EVE. */
     function deleteEveMapReservation(eveKey, mapName) {
+        if (EVE_EVENT_ENDED) return false;
         var xhr = new XMLHttpRequest();
         xhr.open('DELETE', CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-reservations?eveKey=' + encodeURIComponent(eveKey) + '&mapName=' + encodeURIComponent(mapName), false);
         xhr.setRequestHeader('X-API-Key', CONFIG.API_KEY || '');
@@ -1498,6 +1513,10 @@
         styleEl.textContent = '.map-timer-kolejki-btn{' + btnStyle + '}.map-timer-kolejki-btn:hover{background:#16213e;}.map-timer-kolejki-menu{' + menuStyle + '}.map-timer-kolejki-icon-wrap{' + iconWrapStyle + '}.map-timer-kolejki-icon-wrap:hover .map-timer-tooltip{opacity:1;visibility:visible;}.map-timer-kolejki-icon-btn{' + iconBtnStyle + '}.map-timer-kolejki-icon-btn:hover{background:#2a2a4a;}.map-timer-kolejki-icon-link{text-decoration:none;color:#eee;}.map-timer-kolejki-icon-link:hover{color:#eee;}.map-timer-tooltip{' + tooltipStyle + '}.map-timer-kolejki-close{' + closeBtnStyle + '}.map-timer-kolejki-close:hover{color:#fff;background:rgba(255,255,255,0.1);}.map-timer-kolejki-panel{' + panelStyle + '}.map-timer-kolejki-title-row{' + titleRowStyle + '}.map-timer-kolejki-title{' + titleStyle + '}.map-timer-kolejki-list-content{' + listStyle + '}.map-timer-kolejki-row{padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06);}.map-timer-kolejki-meta{color:#888;font-size:10px;}.map-timer-kolejki-item-wrap{display:inline-block;vertical-align:middle;margin-left:4px;}.map-timer-kolejki-item-gif{width:20px;height:20px;object-fit:contain;cursor:pointer;}.map-timer-kolejki-png-popup{position:fixed;z-index:100001;background:#1a1a2e;padding:6px;border:1px solid #2a2a4a;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5);pointer-events:none;}.map-timer-kolejki-png-popup img{display:block;width:auto;height:auto;max-width:90vw;max-height:70vh;object-fit:contain;}';
         document.head.appendChild(styleEl);
         document.body.appendChild(kolejkiWrap);
+        if (EVE_EVENT_ENDED) {
+            var herosBtn = kolejkiWrap.querySelector('.map-timer-kolejki-icon-btn[data-action="heros"]');
+            if (herosBtn && herosBtn.parentElement) herosBtn.parentElement.style.display = 'none';
+        }
         kolejkiMenuPanel = kolejkiWrap.querySelector('.map-timer-kolejki-menu');
         kolejkiListPanel = kolejkiWrap.querySelector('.map-timer-kolejki-panel');
         kolejkiListContent = kolejkiWrap.querySelector('.map-timer-kolejki-list-content');
@@ -2211,7 +2230,9 @@
             var hadSomeone = (prev[mapKey] && prev[mapKey].length > 0);
             if (hadSomeone && onMapNicks.length === 0) {
                 eveMapLastLeftAt[eveKey][mapKey] = now;
-                fetch(CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-last-left', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eveKey: eveKey, mapName: mapKey }) }).catch(function () {});
+                if (!EVE_EVENT_ENDED) {
+                    fetch(CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-last-left', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eveKey: eveKey, mapName: mapKey }) }).catch(function () {});
+                }
             }
             prev[mapKey] = onMapNicks.slice();
         });

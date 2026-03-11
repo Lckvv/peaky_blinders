@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authFromApiKey } from '@/lib/auth';
+import { EVE_EVENT_ENDED } from '@/lib/eve-event-ended';
 
 const EVE_PRESENCE_MAX_AGE_MS = 15 * 1000; // 15 s — kto nie odświeży obecności (POST co 6 s) w tym czasie jest usuwany z listy
 
 // POST /api/timer/eve-map-presence — zgłoś "jestem na mapie" (X-API-Key, body: eveKey, mapName, nick)
 export async function POST(request: NextRequest) {
+  if (EVE_EVENT_ENDED) {
+    return NextResponse.json(
+      { error: 'Event zakończony.', event_ended: true },
+      { status: 410 }
+    );
+  }
   try {
     const user = await authFromApiKey(request);
     if (!user) {
@@ -50,6 +57,12 @@ export async function POST(request: NextRequest) {
 
 // DELETE /api/timer/eve-map-presence — usuń obecność "wyszedłem z mapy" (X-API-Key, query: eveKey, mapName, nick)
 export async function DELETE(request: NextRequest) {
+  if (EVE_EVENT_ENDED) {
+    return NextResponse.json(
+      { error: 'Event zakończony.', event_ended: true },
+      { status: 410 }
+    );
+  }
   try {
     const user = await authFromApiKey(request);
     if (!user) {

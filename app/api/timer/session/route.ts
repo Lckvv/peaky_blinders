@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authFromApiKey, validateApiKey } from '@/lib/auth';
 import { getMonsterNameFromMap } from '@/lib/mapToMonster';
+import { EVE_EVENT_ENDED, isEveHeroMonster } from '@/lib/eve-event-ended';
 
 // POST — record a map session (called by Tampermonkey script)
 export async function POST(request: NextRequest) {
@@ -58,6 +59,13 @@ export async function POST(request: NextRequest) {
           error: `Map "${mapName}" is not assigned to any phase. Add it in mapToMonster or send "monster" in payload.`,
         },
         { status: 400 }
+      );
+    }
+
+    if (EVE_EVENT_ENDED && isEveHeroMonster(monster)) {
+      return NextResponse.json(
+        { error: 'Event zakończony. Naliczanie czasu wyłączone.', event_ended: true },
+        { status: 410 }
       );
     }
 

@@ -1,7 +1,4 @@
-'use client';
-
-import { useParams } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { getRankingForMonster, getEveHunterLeaderboard } from '@/lib/leaderboard-server';
 
 const SLUG_TO_NAME: Record<string, string> = {
   'seeker-of-creation': 'Seeker of Creation',
@@ -13,29 +10,6 @@ const SLUG_TO_EVE_KEY: Record<string, number> = {
   'seeker-of-creation': 63,
   'harbinger-of-elancia': 143,
   'thunder-wielding-barbarian': 300,
-};
-
-type Entry = {
-  rank: number;
-  userId: string;
-  username: string;
-  nick: string | null;
-  profileUrl: string | null;
-  avatarUrl: string | null;
-  heroName: string;
-  totalTime: number;
-  totalTimeFormatted: string;
-  totalSessions: number;
-};
-
-type HunterEntry = {
-  rank: number;
-  userId: string;
-  username: string;
-  nick: string | null;
-  profileUrl: string | null;
-  avatarUrl: string | null;
-  points: number;
 };
 
 const s: Record<string, React.CSSProperties> = {
@@ -157,55 +131,13 @@ const s: Record<string, React.CSSProperties> = {
   placeholder: { color: '#888', fontSize: 15, padding: '40px 20px', textAlign: 'center' as const },
 };
 
-export default function HeroRankingPage() {
-  const params = useParams();
-  const slug = typeof params.heroSlug === 'string' ? params.heroSlug : '';
-  const monsterName = SLUG_TO_NAME[slug.toLowerCase()];
+type PageProps = { params: Promise<{ heroSlug: string }> };
 
-  const [data, setData] = useState<{
-    monster: { name: string };
-    phases: unknown[];
-    leaderboard: Entry[];
-  } | null>(null);
-  const [hunterLeaderboard, setHunterLeaderboard] = useState<HunterEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!monsterName) {
-      setLoading(false);
-      return;
-    }
-    loadRanking(monsterName);
-  }, [monsterName]);
-
-  useEffect(() => {
-    const eveKey = SLUG_TO_EVE_KEY[slug.toLowerCase()];
-    if (eveKey == null) return;
-    fetch(`/api/leaderboard/eve-hunter?eveKey=${eveKey}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((json: { leaderboard?: HunterEntry[] } | null) => {
-        if (json?.leaderboard) setHunterLeaderboard(json.leaderboard);
-      })
-      .catch(() => {});
-  }, [slug]);
-
-  async function loadRanking(monster: string) {
-    setLoading(true);
-    try {
-      const url = `/api/leaderboard/ranking?monster=${encodeURIComponent(monster)}`;
-      const res = await fetch(url);
-      if (res.ok) {
-        const result = await res.json();
-        setData(result);
-      } else {
-        setData(null);
-      }
-    } catch {
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  }
+export default async function HeroRankingPage({ params }: PageProps) {
+  const { heroSlug } = await params;
+  const slug = heroSlug?.toLowerCase() ?? '';
+  const monsterName = SLUG_TO_NAME[slug];
+  const eveKey = SLUG_TO_EVE_KEY[slug];
 
   if (!monsterName) {
     return (
@@ -216,13 +148,10 @@ export default function HeroRankingPage() {
     );
   }
 
-  if (loading && !data) {
-    return (
-      <div style={s.wrap}>
-        <p style={{ color: '#888' }}>Ładowanie...</p>
-      </div>
-    );
-  }
+  const [data, hunterLeaderboard] = await Promise.all([
+    getRankingForMonster(monsterName),
+    eveKey != null ? getEveHunterLeaderboard(eveKey) : Promise.resolve([]),
+  ]);
 
   if (!data) {
     return (
@@ -351,7 +280,6 @@ export default function HeroRankingPage() {
             </div>
           )}
 
-          {/* Ranking Łowcy herosa */}
           <div style={{ ...s.card, marginTop: 32 }}>
             <h2 style={{ ...s.title, fontSize: 22, marginBottom: 16 }}>
               Ranking Łowcy herosa {monster.name}

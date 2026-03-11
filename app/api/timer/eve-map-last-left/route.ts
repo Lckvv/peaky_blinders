@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { EVE_EVENT_ENDED } from '@/lib/eve-event-ended';
 
 const EVE_KEYS = [63, 143, 300];
 
@@ -29,6 +30,12 @@ export async function GET(request: NextRequest) {
 
 // POST /api/timer/eve-map-last-left — ustaw "ostatnio opuszczono tę mapę" (body: eveKey, mapName), bez auth
 export async function POST(request: NextRequest) {
+  if (EVE_EVENT_ENDED) {
+    return NextResponse.json(
+      { error: 'Event zakończony.', event_ended: true },
+      { status: 410 }
+    );
+  }
   try {
     const body = await request.json();
     const eveKey = body?.eveKey != null ? parseInt(String(body.eveKey), 10) : NaN;

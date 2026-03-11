@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authFromApiKey } from '@/lib/auth';
+import { EVE_EVENT_ENDED } from '@/lib/eve-event-ended';
 
 const EVE_KEYS = [63, 143, 300];
 
@@ -13,6 +14,12 @@ const EVE_HUNTER_COOLDOWN_MIN_MS = 15 * 60 * 1000;
  * Pierwszy gracz w oknie 15 min dostaje +1 pkt; po przyznaniu ustawiamy killedAt (EveRespawnTimer), żeby przez 15 min nikt inny nie dostał punktu za tego samego herosa.
  */
 export async function POST(request: NextRequest) {
+  if (EVE_EVENT_ENDED) {
+    return NextResponse.json(
+      { error: 'Event zakończony.', event_ended: true },
+      { status: 410 }
+    );
+  }
   try {
     const user = await authFromApiKey(request);
     if (!user) {

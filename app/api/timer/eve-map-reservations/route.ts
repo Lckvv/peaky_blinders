@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authFromApiKey } from '@/lib/auth';
+import { EVE_EVENT_ENDED } from '@/lib/eve-event-ended';
 
 const EVE_PRESENCE_MAX_AGE_MS = 2 * 60 * 1000; // 2 min
 
@@ -38,6 +39,12 @@ export async function GET(request: NextRequest) {
 
 // POST /api/timer/eve-map-reservations — zarezerwuj mapę (X-API-Key, body: eveKey, mapName, nick)
 export async function POST(request: NextRequest) {
+  if (EVE_EVENT_ENDED) {
+    return NextResponse.json(
+      { error: 'Event zakończony.', event_ended: true },
+      { status: 410 }
+    );
+  }
   try {
     const user = await authFromApiKey(request);
     if (!user) {
@@ -76,6 +83,12 @@ export async function POST(request: NextRequest) {
 
 // DELETE /api/timer/eve-map-reservations — usuń rezerwację (X-API-Key, query: eveKey, mapName)
 export async function DELETE(request: NextRequest) {
+  if (EVE_EVENT_ENDED) {
+    return NextResponse.json(
+      { error: 'Event zakończony.', event_ended: true },
+      { status: 410 }
+    );
+  }
   try {
     const user = await authFromApiKey(request);
     if (!user) {

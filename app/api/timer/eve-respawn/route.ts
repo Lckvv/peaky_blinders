@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authFromApiKey } from '@/lib/auth';
+import { EVE_EVENT_ENDED } from '@/lib/eve-event-ended';
 
 const EVE_KEYS = [63, 143, 300];
 
@@ -31,6 +32,12 @@ export async function GET() {
 
 // POST /api/timer/eve-respawn — ustaw "hero zabity" + 1 pkt dla łowcy (X-API-Key, body: eveKey). Cooldown: jeden zgłosiciel na okno respawnu.
 export async function POST(request: NextRequest) {
+  if (EVE_EVENT_ENDED) {
+    return NextResponse.json(
+      { error: 'Event zakończony.', event_ended: true },
+      { status: 410 }
+    );
+  }
   try {
     const user = await authFromApiKey(request);
     if (!user) {
