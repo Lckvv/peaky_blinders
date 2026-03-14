@@ -124,6 +124,11 @@ Możesz też ręcznie uruchomić deploy w dashboardzie.
 - Uruchom: `railway run npx prisma db push`
 - Lub przez Railway Shell: `npx prisma db push`
 
+### Błąd: "503 Backend.max_conn reached"
+- Oznacza, że backend (aplikacja lub baza) osiągnął limit równoczesnych połączeń.
+- **W tym projekcie:** aplikacja w produkcji automatycznie ustawia `connection_limit=5` w połączeniu do bazy (w `lib/prisma.ts`), żeby nie przekraczać limitu Railway.
+- Jeśli błąd nadal występuje: w Railway → Variables możesz ustawić `DATABASE_URL` ręcznie z parametrem, np. `...?connection_limit=3` (na końcu URL bazy).
+
 ### Aplikacja nie startuje
 - Sprawdź logi w Railway dashboard
 - Upewnij się, że `package.json` ma skrypt `start`
