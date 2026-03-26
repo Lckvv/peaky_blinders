@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authFromApiKey } from '@/lib/auth';
-import { EVE_EVENT_ENDED } from '@/lib/eve-event-ended';
-
-const EVE_KEYS = [63, 143, 300];
+import { EVE_EVENT_ENDED, EVE_KEYS } from '@/lib/eve-event-ended';
 
 // Min 15 min między przyznaniem punktu dla tego samego herosa (tylko pierwszy w oknie dostaje pkt)
 const EVE_HUNTER_COOLDOWN_MIN = 15;
@@ -49,7 +47,7 @@ export async function POST(request: NextRequest) {
 
     if (!Number.isInteger(eveKey) || !EVE_KEYS.includes(eveKey)) {
       return NextResponse.json(
-        { error: 'eveKey must be 63, 143 or 300' },
+        { error: 'eveKey must be 41 or 81' },
         { status: 400 }
       );
     }

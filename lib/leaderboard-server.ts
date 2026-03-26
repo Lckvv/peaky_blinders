@@ -98,9 +98,9 @@ export async function getRankingForMonster(monsterName: string): Promise<{
   };
 }
 
-const EVE_KEYS = [63, 143, 300];
+const EVE_KEYS = [41, 81];
 
-/** Ranking łowcy herosa (eveKey 63, 143, 300). Tylko odczyt po stronie serwera. */
+/** Ranking łowcy herosa (eveKey 41, 81). Tylko odczyt po stronie serwera. */
 export async function getEveHunterLeaderboard(eveKey: number): Promise<HunterEntry[]> {
   if (!Number.isInteger(eveKey) || !EVE_KEYS.includes(eveKey)) return [];
 

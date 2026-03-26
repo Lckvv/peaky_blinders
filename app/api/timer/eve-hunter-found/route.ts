@@ -1,16 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authFromApiKey } from '@/lib/auth';
-import { EVE_EVENT_ENDED } from '@/lib/eve-event-ended';
-
-const EVE_KEYS = [63, 143, 300];
+import { EVE_EVENT_ENDED, EVE_KEYS } from '@/lib/eve-event-ended';
 
 // Min 15 min między punktami dla tego samego herosa — liczy się tylko pierwszy znalazca w oknie
 const EVE_HUNTER_COOLDOWN_MIN_MS = 15 * 60 * 1000;
 
 /**
  * POST /api/timer/eve-hunter-found — zgłoś "znalazłem herosa" (właśnie go widzę na mapie).
- * Skrypt wywołuje to w momencie wykrycia herosa (lista NPC, nick = Seeker of Creation / Harbinger of Elancia / Thunder-Wielding Barbarian).
+ * Skrypt wywołuje to w momencie wykrycia herosa (lista NPC, nick = Grim Blackcluck / Hotblood Capon).
  * Pierwszy gracz w oknie 15 min dostaje +1 pkt; po przyznaniu ustawiamy killedAt (EveRespawnTimer), żeby przez 15 min nikt inny nie dostał punktu za tego samego herosa.
  */
 export async function POST(request: NextRequest) {
@@ -31,7 +29,7 @@ export async function POST(request: NextRequest) {
 
     if (!Number.isInteger(eveKey) || !EVE_KEYS.includes(eveKey)) {
       return NextResponse.json(
-        { error: 'eveKey must be 63, 143 or 300' },
+        { error: 'eveKey must be 41 or 81' },
         { status: 400 }
       );
     }

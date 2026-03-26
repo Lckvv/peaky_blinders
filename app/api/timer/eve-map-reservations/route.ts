@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authFromApiKey } from '@/lib/auth';
-import { EVE_EVENT_ENDED } from '@/lib/eve-event-ended';
+import { EVE_EVENT_ENDED, EVE_KEYS } from '@/lib/eve-event-ended';
 
 const EVE_PRESENCE_MAX_AGE_MS = 2 * 60 * 1000; // 2 min
 
@@ -10,8 +10,8 @@ export async function GET(request: NextRequest) {
   try {
     const eveKeyStr = request.nextUrl.searchParams.get('eveKey');
     const eveKey = eveKeyStr ? parseInt(eveKeyStr, 10) : NaN;
-    if (!Number.isInteger(eveKey) || ![63, 143, 300].includes(eveKey)) {
-      return NextResponse.json({ error: 'eveKey must be 63, 143 or 300' }, { status: 400 });
+    if (!Number.isInteger(eveKey) || !EVE_KEYS.includes(eveKey as 41 | 81)) {
+      return NextResponse.json({ error: 'eveKey must be 41 or 81' }, { status: 400 });
     }
 
     const [rows, presenceRows] = await Promise.all([
@@ -56,8 +56,8 @@ export async function POST(request: NextRequest) {
     const mapName = typeof body?.mapName === 'string' ? body.mapName.trim() : '';
     const nick = typeof body?.nick === 'string' ? body.nick.trim() : '';
 
-    if (!Number.isInteger(eveKey) || ![63, 143, 300].includes(eveKey)) {
-      return NextResponse.json({ error: 'eveKey must be 63, 143 or 300' }, { status: 400 });
+    if (!Number.isInteger(eveKey) || !EVE_KEYS.includes(eveKey as 41 | 81)) {
+      return NextResponse.json({ error: 'eveKey must be 41 or 81' }, { status: 400 });
     }
     if (!mapName) {
       return NextResponse.json({ error: 'mapName is required' }, { status: 400 });
@@ -99,8 +99,8 @@ export async function DELETE(request: NextRequest) {
     const eveKey = eveKeyStr ? parseInt(eveKeyStr, 10) : NaN;
     const mapName = request.nextUrl.searchParams.get('mapName')?.trim() ?? '';
 
-    if (!Number.isInteger(eveKey) || ![63, 143, 300].includes(eveKey)) {
-      return NextResponse.json({ error: 'eveKey must be 63, 143 or 300' }, { status: 400 });
+    if (!Number.isInteger(eveKey) || !EVE_KEYS.includes(eveKey as 41 | 81)) {
+      return NextResponse.json({ error: 'eveKey must be 41 or 81' }, { status: 400 });
     }
     if (!mapName) {
       return NextResponse.json({ error: 'mapName is required' }, { status: 400 });

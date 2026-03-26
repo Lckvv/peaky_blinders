@@ -27,12 +27,12 @@ const navStyles: Record<string, React.CSSProperties> = {
     width: 260,
     height: 'calc(100vh - 80px)',
     background: 'linear-gradient(180deg, #16213e 0%, #1a1a2e 100%)',
-    borderRight: '1px solid #2a2a4a',
+    borderRight: '1px solid #2f3758',
     padding: '24px 0',
     display: 'flex',
     flexDirection: 'column',
     gap: 2,
-    boxShadow: '4px 0 24px rgba(0,0,0,0.2)',
+    boxShadow: '8px 0 30px rgba(0,0,0,0.3)',
     overflowY: 'auto',
     zIndex: 90,
   },
@@ -55,13 +55,13 @@ const navStyles: Record<string, React.CSSProperties> = {
     color: '#b8c5d6',
     textDecoration: 'none',
     fontSize: 14,
-    borderRadius: 8,
+    borderRadius: 10,
     marginBottom: 2,
     transition: 'background 0.15s, color 0.15s',
   },
   linkActive: {
-    background: 'rgba(52, 152, 219, 0.2)',
-    color: '#3498db',
+    background: 'linear-gradient(90deg, rgba(52, 152, 219, 0.24), rgba(52, 152, 219, 0.08))',
+    color: '#5ab5f5',
     fontWeight: 600,
   },
   dropdownTrigger: {
@@ -77,12 +77,12 @@ const navStyles: Record<string, React.CSSProperties> = {
     fontSize: 14,
     cursor: 'pointer',
     textAlign: 'left',
-    borderRadius: 8,
+    borderRadius: 10,
     transition: 'background 0.15s, color 0.15s',
   },
   dropdownTriggerOpen: {
-    background: 'rgba(52, 152, 219, 0.15)',
-    color: '#3498db',
+    background: 'linear-gradient(90deg, rgba(52, 152, 219, 0.2), rgba(52, 152, 219, 0.08))',
+    color: '#5ab5f5',
     fontWeight: 600,
   },
   sublink: {
@@ -97,8 +97,8 @@ const navStyles: Record<string, React.CSSProperties> = {
     transition: 'background 0.15s, color 0.15s',
   },
   sublinkActive: {
-    background: 'rgba(52, 152, 219, 0.12)',
-    color: '#3498db',
+    background: 'rgba(52, 152, 219, 0.16)',
+    color: '#5ab5f5',
   },
   sublink2: {
     display: 'block',
@@ -127,8 +127,8 @@ const navStyles: Record<string, React.CSSProperties> = {
     transition: 'background 0.15s, color 0.15s',
   },
   sublink3Active: {
-    background: 'rgba(52, 152, 219, 0.12)',
-    color: '#3498db',
+    background: 'rgba(52, 152, 219, 0.16)',
+    color: '#5ab5f5',
   },
   chevron: {
     fontSize: 10,
@@ -220,6 +220,9 @@ export default function Navbar({ isMobile, isOpen, onClose }: NavbarProps = {}) 
   );
   const [urodziny20Open, setUrodziny20Open] = useState(() =>
     pathname.startsWith('/2026/20urodziny')
+  );
+  const [easterOpen, setEasterOpen] = useState(() =>
+    pathname.startsWith('/2026/easter')
   );
   const [logsOpen, setLogsOpen] = useState(() => pathname.startsWith('/admin/logs'));
 
@@ -411,6 +414,27 @@ export default function Navbar({ isMobile, isOpen, onClose }: NavbarProps = {}) 
                       <Link href="/2026/20urodziny/seeker-of-creation" className="nav-sublink3" style={{ ...navStyles.sublink3, ...(pathname === '/2026/20urodziny/seeker-of-creation' ? navStyles.sublink3Active : {}) }} onClick={onClose}>63 - Seeker of Creation</Link>
                       <Link href="/2026/20urodziny/harbinger-of-elancia" className="nav-sublink3" style={{ ...navStyles.sublink3, ...(pathname === '/2026/20urodziny/harbinger-of-elancia' ? navStyles.sublink3Active : {}) }} onClick={onClose}>143 - Harbinger of Elancia</Link>
                       <Link href="/2026/20urodziny/thunder-wielding-barbarian" className="nav-sublink3" style={{ ...navStyles.sublink3, ...(pathname === '/2026/20urodziny/thunder-wielding-barbarian' ? navStyles.sublink3Active : {}) }} onClick={onClose}>300 - Thunder-Wielding Barbarian</Link>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    className="nav-dropdown-trigger"
+                    style={{
+                      ...navStyles.dropdownTrigger,
+                      ...navStyles.sublink,
+                      padding: '10px 20px 10px 36px',
+                      ...(easterOpen ? navStyles.dropdownTriggerOpen : {}),
+                    }}
+                    onClick={() => setEasterOpen((o) => !o)}
+                  >
+                    <span>Easter</span>
+                    <span style={{ ...navStyles.chevron, transform: easterOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
+                  </button>
+                  {easterOpen && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                      <Link href="/2026/easter" className="nav-sublink3" style={{ ...navStyles.sublink3, ...(pathname === '/2026/easter' ? navStyles.sublink3Active : {}) }} onClick={onClose}>Strona główna</Link>
+                      <Link href="/2026/easter/hotblood-capon" className="nav-sublink3" style={{ ...navStyles.sublink3, ...(pathname === '/2026/easter/hotblood-capon' ? navStyles.sublink3Active : {}) }} onClick={onClose}>81 - Hotblood Capon</Link>
+                      <Link href="/2026/easter/grim-blackcluck" className="nav-sublink3" style={{ ...navStyles.sublink3, ...(pathname === '/2026/easter/grim-blackcluck' ? navStyles.sublink3Active : {}) }} onClick={onClose}>41 - Grim Blackcluck</Link>
                     </div>
                   )}
                 </div>

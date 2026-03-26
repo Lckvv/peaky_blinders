@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Margonem Map Timer
 // @namespace    http://tampermonkey.net/
-// @version      2.6
-// @description  Śledzenie czasu na mapach, timery respu 63/143/300, łowca herosów (konto), powiadomienia levelu (globalne).
+// @version      2.7
+// @description  Śledzenie czasu na mapach, Easter 2026 (41/81), łowca herosów (konto), powiadomienia levelu (globalne).
 // @author       Lucek
 // @match        https://*.margonem.com/*
 // @grant        GM_xmlhttpRequest
@@ -20,8 +20,8 @@
     // Uruchamiaj tylko w oknie głównym — w iframe skrypt by się dublował i wysyłał tę samą sesję 2× (pagehide w obu kontekstach).
     if (window !== window.top) return;
 
-    /** Event 20 urodziny (herosy 63, 143, 300) zakończony: ukryty przycisk, brak POSTów. Ustaw false, żeby włączyć ponownie. */
-    const EVE_EVENT_ENDED = true;
+    /** Event Easter 2026 (herosy 41, 81). */
+    const EVE_EVENT_ENDED = false;
 
     // ================================================================
     //  CONFIG — zmień BACKEND_URL i API_KEY po rejestracji na stronie
@@ -33,7 +33,7 @@
         // 🌐 Adres backendu (Railway) — możesz zmienić w ustawieniach ⏱
         BACKEND_URL: GM_getValue('backend_url', 'https://peakyblinders-production-61db.up.railway.app'),
 
-        // 🗺️ Mapy tytanów + herosów (63, 143, 300 — 20 urodziny). Timer nalicza czas przy wejściu i wyjściu.
+        // 🗺️ Mapy tytanów + Easter 2026 (41, 81). Timer nalicza czas przy wejściu i wyjściu.
         TARGETS: [
             { map: "Caerbannog's Grotto - 2nd Chamber", monster: 'Kic' },
             { map: 'Shimmering Cavern', monster: 'Orla' },
@@ -42,70 +42,25 @@
             { map: 'Chamber of Bloody Rites', monster: 'Przyzywacz' },
             { map: 'Hall of Ruined Temple', monster: 'Barbatos' },
             { map: 'Ice Throne Room', monster: 'Tanroth' },
-            { map: 'Dripping Honey Mine - 1st Level - 2nd Chamber', monster: 'Seeker of Creation' },
-            { map: 'Dripping Honey Mine - 2nd Level - 1st Chamber', monster: 'Seeker of Creation' },
-            { map: 'Dripping Honey Mine - 3rd Level', monster: 'Seeker of Creation' },
-            { map: 'Dripping Honey Mine - 2nd Level - 2nd Chamber', monster: 'Seeker of Creation' },
-            { map: 'Dripping Honey Mine - Vestibule', monster: 'Seeker of Creation' },
-            { map: 'Gnoll Settlement', monster: 'Seeker of Creation' },
-            { map: 'Cheerful Glade', monster: 'Seeker of Creation' },
-            { map: 'Forest Ford', monster: 'Seeker of Creation' },
-            { map: 'Cave of Gnoll Shamans - 2nd Level', monster: 'Seeker of Creation' },
-            { map: 'Cave of Gnoll Shamans - 1st Level', monster: 'Seeker of Creation' },
-            { map: 'Cave of Gnoll Shamans - 3rd Level', monster: 'Seeker of Creation' },
-            { map: 'Abandoned Beehives', monster: 'Seeker of Creation' },
-            { map: 'Pregnolls Grotto - 2nd Level - 2nd Chamber', monster: 'Seeker of Creation' },
-            { map: 'Pregnolls Grotto - 2nd Level', monster: 'Seeker of Creation' },
-            { map: 'Pregnolls Grotto - 1st Level - 2nd Chamber', monster: 'Seeker of Creation' },
-            { map: 'Pregnolls Grotto - 1st Level', monster: 'Seeker of Creation' },
-            { map: 'Pregnolls Grotto - 3rd Level', monster: 'Seeker of Creation' },
-            { map: 'Ant Colony - 1st Level - Left Tunnel', monster: 'Seeker of Creation' },
-            { map: 'Ant Colony - 2nd Level - Left Corridors', monster: 'Seeker of Creation' },
-            { map: 'Ant Colony - 3rd Level - Left Chamber', monster: 'Seeker of Creation' },
-            { map: "Ant Colony - 3rd Level - Queen's Nest", monster: 'Seeker of Creation' },
-            { map: 'Ant Colony - 3rd Level - Right Chamber', monster: 'Seeker of Creation' },
-            { map: 'Ant Colony - 2nd Level - Right Corridors', monster: 'Seeker of Creation' },
-            { map: 'Ant Colony - 1st Level - Right Tunnel', monster: 'Seeker of Creation' },
-            { map: 'Abyss of Conflagration', monster: 'Seeker of Creation' },
-            { map: "Vorundriel's Forge - 1st Level", monster: 'Harbinger of Elancia' },
-            { map: "Vorundriel's Forge - 2nd Level", monster: 'Harbinger of Elancia' },
-            { map: "Vorundriel's Forge - 3rd Level", monster: 'Harbinger of Elancia' },
-            { map: 'Cenotaph of Berserkers - 1st Level', monster: 'Harbinger of Elancia' },
-            { map: 'Small Fortress - Vestibule', monster: 'Harbinger of Elancia' },
-            { map: 'Small Fortress - East Walls', monster: 'Harbinger of Elancia' },
-            { map: 'Small Fortress - Western Corridor', monster: 'Harbinger of Elancia' },
-            { map: 'Small Fortress - West Walls', monster: 'Harbinger of Elancia' },
-            { map: 'Small Fortress - Storehouse', monster: 'Harbinger of Elancia' },
-            { map: 'Forsaken Fastness', monster: 'Harbinger of Elancia' },
-            { map: 'Fiendish Quagmire', monster: 'Harbinger of Elancia' },
-            { map: 'Ancestral Vault', monster: 'Harbinger of Elancia' },
-            { map: 'Lost Valley', monster: 'Harbinger of Elancia' },
-            { map: 'Mrinding Gallery - 1st Level - 1st Chamber', monster: 'Harbinger of Elancia' },
-            { map: 'Mrinding Gallery - 2nd Level - 1st Chamber', monster: 'Harbinger of Elancia' },
-            { map: 'Mrinding Gallery - 1st Level - 2nd Chamber', monster: 'Harbinger of Elancia' },
-            { map: 'Mrinding Gallery - 2nd Level - 2nd Chamber', monster: 'Harbinger of Elancia' },
-            { map: 'Erebeth Gallery - 2nd Level - 1st Chamber', monster: 'Harbinger of Elancia' },
-            { map: 'Erebeth Gallery - 2nd Level - 2nd Chamber', monster: 'Harbinger of Elancia' },
-            { map: 'Erebeth Gallery - 3rd Level', monster: 'Harbinger of Elancia' },
-            { map: 'Fire Well - 3rd Level', monster: 'Harbinger of Elancia' },
-            { map: 'Fire Well - 2nd Level', monster: 'Harbinger of Elancia' },
-            { map: 'Fire Well - 1st Level', monster: 'Harbinger of Elancia' },
-            { map: 'Shaiharrud Desert - East', monster: 'Thunder-Wielding Barbarian' },
-            { map: "Frost Lords' Passage", monster: 'Thunder-Wielding Barbarian' },
-            { map: 'Hall of Ice Magic', monster: 'Thunder-Wielding Barbarian' },
-            { map: 'Hall of Chilling Whispers', monster: 'Thunder-Wielding Barbarian' },
-            { map: 'Hall of Frozen Bolts', monster: 'Thunder-Wielding Barbarian' },
-            { map: 'Shaiharrud Desert - West', monster: 'Thunder-Wielding Barbarian' },
-            { map: 'Rocks of Dead', monster: 'Thunder-Wielding Barbarian' },
-            { map: 'Dragon Rockfoil', monster: 'Thunder-Wielding Barbarian' },
-            { map: "Vapor's Cliff", monster: 'Thunder-Wielding Barbarian' },
-            { map: 'Kai Floodplains', monster: 'Thunder-Wielding Barbarian' },
-            { map: 'Gvar Hamryd', monster: 'Thunder-Wielding Barbarian' },
-            { map: 'Cave of Dry Shoots - 4th Level', monster: 'Thunder-Wielding Barbarian' },
-            { map: 'Cave of Dry Shoots - 3rd Level', monster: 'Thunder-Wielding Barbarian' },
-            { map: 'Cave of Dry Shoots - 2nd Level', monster: 'Thunder-Wielding Barbarian' },
-            { map: 'Cave of Dry Shoots - 1st Level', monster: 'Thunder-Wielding Barbarian' },
-            { map: 'Rustling Backwoods', monster: 'Thunder-Wielding Barbarian' },
+            { map: 'Fort Eder', monster: 'Grim Blackcluck' },
+            { map: 'Goblin Forest', monster: 'Grim Blackcluck' },
+            { map: 'Andarum Ilami', monster: 'Hotblood Capon' },
+            { map: 'Rocks of Cold Songs', monster: 'Hotblood Capon' },
+            { map: 'Ice Crevasse - 1st Level - 1st Chamber', monster: 'Hotblood Capon' },
+            { map: 'Ice Crevasse - 2nd Level - 1st Chamber', monster: 'Hotblood Capon' },
+            { map: 'Ice Crevasse - 2nd Level', monster: 'Hotblood Capon' },
+            { map: 'Icespire Chamber', monster: 'Hotblood Capon' },
+            { map: 'Firn Cave - 2nd Level', monster: 'Hotblood Capon' },
+            { map: 'Firn Cave - 1st Level', monster: 'Hotblood Capon' },
+            { map: 'Hermitage of the Black Sun - 1st Level - North', monster: 'Hotblood Capon' },
+            { map: 'Hermitage of the Black Sun - 2nd Level', monster: 'Hotblood Capon' },
+            { map: 'Hermitage of the Black Sun - 3rd Level', monster: 'Hotblood Capon' },
+            { map: 'Hermitage of the Black Sun - 4th Level - 1st Chamber', monster: 'Hotblood Capon' },
+            { map: 'Hermitage of the Black Sun - 4th Level - 2nd Chamber', monster: 'Hotblood Capon' },
+            { map: 'Hermitage of the Black Sun - 3rd Level - South', monster: 'Hotblood Capon' },
+            { map: 'Andarum Temple - Warehouse 2nd Level', monster: 'Hotblood Capon' },
+            { map: 'Andarum Temple - Armory', monster: 'Hotblood Capon' },
+            { map: 'Andarum Temple - Warehouse 1st Level', monster: 'Hotblood Capon' },
         ],
 
         CHECK_INTERVAL: 2000,
@@ -132,8 +87,8 @@
     let kolejkiMenuOpen = false;
     let sessionFinalized = false;
     const HERO_AFK_CAP_SEC = 180;
-    const HERO_AFK_MONSTERS = ['Seeker of Creation', 'Harbinger of Elancia', 'Thunder-Wielding Barbarian'];
-    var EVE_HERO_NICK_TO_KEY = { 'Seeker of Creation': 63, 'Harbinger of Elancia': 143, 'Thunder-Wielding Barbarian': 300 };
+    const HERO_AFK_MONSTERS = ['Grim Blackcluck', 'Hotblood Capon'];
+    var EVE_HERO_NICK_TO_KEY = { 'Grim Blackcluck': 41, 'Hotblood Capon': 81 };
     let heroAfkCapped = false;
     let reservationsCache = { monster: null, data: null, ts: 0 };
     let phaseLeaderboardCache = { monster: null, data: null, ts: 0 };
@@ -150,80 +105,32 @@
     const HEROS_WT_MAX = 89;
     const TITAN_WT_MIN = 100;
     let lastHerosNotifiedMapName = null;
-    // Heros eventowy (63, 143, 300): wejście/wyjście wysyłane przez session (map_enter / leave).
+    // Heros eventowy (41, 81): wejście/wyjście wysyłane przez session (map_enter / leave).
     // Punkty łowcy są przypisane do KONTA (userId z API key), nie do postaci — wiele postaci = jedno konto.
     // Heros eventowy: listy map per EVE
     const EVE_MAPS = {
-        63: [
-            'Dripping Honey Mine - 1st Level - 2nd Chamber',
-            'Dripping Honey Mine - 2nd Level - 1st Chamber',
-            'Dripping Honey Mine - 3rd Level',
-            'Dripping Honey Mine - 2nd Level - 2nd Chamber',
-            'Dripping Honey Mine - Vestibule',
-            'Gnoll Settlement',
-            'Cheerful Glade',
-            'Forest Ford',
-            'Cave of Gnoll Shamans - 2nd Level',
-            'Cave of Gnoll Shamans - 1st Level',
-            'Cave of Gnoll Shamans - 3rd Level',
-            'Abandoned Beehives',
-            'Pregnolls Grotto - 2nd Level - 2nd Chamber',
-            'Pregnolls Grotto - 2nd Level',
-            'Pregnolls Grotto - 1st Level - 2nd Chamber',
-            'Pregnolls Grotto - 1st Level',
-            'Pregnolls Grotto - 3rd Level',
-            'Ant Colony - 1st Level - Left Tunnel',
-            'Ant Colony - 2nd Level - Left Corridors',
-            'Ant Colony - 3rd Level - Left Chamber',
-            'Ant Colony - 3rd Level - Queen\'s Nest',
-            'Ant Colony - 3rd Level - Right Chamber',
-            'Ant Colony - 2nd Level - Right Corridors',
-            'Ant Colony - 1st Level - Right Tunnel',
-            'Abyss of Conflagration',
+        41: [
+            'Fort Eder',
+            'Goblin Forest',
         ],
-        143: [
-            "Vorundriel's Forge - 1st Level",
-            "Vorundriel's Forge - 2nd Level",
-            "Vorundriel's Forge - 3rd Level",
-            'Cenotaph of Berserkers - 1st Level',
-            'Small Fortress - Vestibule',
-            'Small Fortress - East Walls',
-            'Small Fortress - Western Corridor',
-            'Small Fortress - West Walls',
-            'Small Fortress - Storehouse',
-            'Forsaken Fastness',
-            'Fiendish Quagmire',
-            'Ancestral Vault',
-            'Lost Valley',
-            'Mrinding Gallery - 1st Level - 1st Chamber',
-            'Mrinding Gallery - 2nd Level - 1st Chamber',
-            'Mrinding Gallery - 1st Level - 2nd Chamber',
-            'Mrinding Gallery - 2nd Level - 2nd Chamber',
-            'Erebeth Gallery - 2nd Level - 1st Chamber',
-            'Erebeth Gallery - 2nd Level - 2nd Chamber',
-            'Erebeth Gallery - 3rd Level',
-            'Fire Well - 3rd Level',
-            'Fire Well - 2nd Level',
-            'Fire Well - 1st Level',
-        ],
-        300: [
-            'Shaiharrud Desert - East',
-            'Frost Lords\' Passage',
-            'Hall of Ice Magic',
-            'Hall of Chilling Whispers',
-            'Hall of Frozen Bolts',
-            'Hallway of Shattered Dreams',
-            'Shaiharrud Desert - West',
-            'Rocks of Dead',
-            'Dragon Rockfoil',
-            'Vapor\'s Cliff',
-            'Kai Floodplains',
-            'Gvar Hamryd',
-            'Cave of Dry Shoots - 4th Level',
-            'Cave of Dry Shoots - 3rd Level',
-            'Cave of Dry Shoots - 2nd Level',
-            'Cave of Dry Shoots - 1st Level',
-            'Rustling Backwoods',
+        81: [
+            'Andarum Ilami',
+            'Rocks of Cold Songs',
+            'Ice Crevasse - 1st Level - 1st Chamber',
+            'Ice Crevasse - 2nd Level - 1st Chamber',
+            'Ice Crevasse - 2nd Level',
+            'Icespire Chamber',
+            'Firn Cave - 2nd Level',
+            'Firn Cave - 1st Level',
+            'Hermitage of the Black Sun - 1st Level - North',
+            'Hermitage of the Black Sun - 2nd Level',
+            'Hermitage of the Black Sun - 3rd Level',
+            'Hermitage of the Black Sun - 4th Level - 1st Chamber',
+            'Hermitage of the Black Sun - 4th Level - 2nd Chamber',
+            'Hermitage of the Black Sun - 3rd Level - South',
+            'Andarum Temple - Warehouse 2nd Level',
+            'Andarum Temple - Armory',
+            'Andarum Temple - Warehouse 1st Level',
         ],
     };
     let eveWindowOpen = false;
@@ -907,7 +814,7 @@
             log(`Czas ${seconds}s < ${CONFIG.MIN_TIME_TO_SEND}s, pomijam (${reason})`);
             return Promise.resolve();
         }
-        if (EVE_EVENT_ENDED && (monster === 'Seeker of Creation' || monster === 'Harbinger of Elancia' || monster === 'Thunder-Wielding Barbarian')) {
+        if (EVE_EVENT_ENDED && HERO_AFK_MONSTERS.indexOf(monster) !== -1) {
             log('Event zakończony — pomijam wysyłkę sesji dla herosa eventowego');
             return Promise.resolve();
         }
@@ -1031,10 +938,9 @@
 
         try {
             const pending = JSON.parse(localStorage.getItem('maptimer_pending') || '[]');
-            const eveHeroNames = ['Seeker of Creation', 'Harbinger of Elancia', 'Thunder-Wielding Barbarian'];
             const toSend = pending.filter(function (p) {
                 if (p.reason === 'map_enter') return false;
-                if (EVE_EVENT_ENDED && eveHeroNames.indexOf(p.monster) !== -1) return false;
+                if (EVE_EVENT_ENDED && HERO_AFK_MONSTERS.indexOf(p.monster) !== -1) return false;
                 return true;
             });
             if (toSend.length === 0) {
@@ -1123,7 +1029,7 @@
         var currentMapForEve = mapName || '';
         if (currentMapForEve !== lastEveFetchMapName) {
             lastEveFetchMapName = currentMapForEve;
-            [63, 143, 300].forEach(function (k) {
+            [41, 81].forEach(function (k) {
                 var rec = eveMapListPanelsByKey[k];
                 if (rec && rec.panel && rec.panel.style.display !== 'none') fetchEveDashboardAsync(k, applyEveDashboardToPanel);
             });
@@ -1291,7 +1197,7 @@
         var currentMap = getCurrentMapName();
         var nick = getCurrentHeroName();
         var now = Date.now();
-        [63, 143, 300].forEach(function (eveKey) {
+        [41, 81].forEach(function (eveKey) {
             var maps = EVE_MAPS[eveKey] || [];
             var isOnEveMap = currentMap && maps.some(function (m) { return String(m).trim().toLowerCase() === currentMap.trim().toLowerCase(); });
             var lastMap = lastEveMapPresence[eveKey];
@@ -1738,13 +1644,10 @@
     //  UI — Heros eventowy (EVE): okno z 3 opcjami i listą map
     // ================================================================
     var EVE_OPTIONS = [
-        { key: 63, label: 'EVE 63 - Seeker of Creation' },
-        { key: 143, label: 'EVE 143 - Harbinger of Elancia' },
-        { key: 300, label: 'EVE 300 - Thunder-Wielding Barbarian' },
+        { key: 41, label: 'EVE 41 - Grim Blackcluck' },
+        { key: 81, label: 'EVE 81 - Hotblood Capon' },
     ];
-    var EVE_HERO_NAMES = { 63: 'Seeker of Creation', 143: 'Harbinger of Elancia', 300: 'Thunder-Wielding Barbarian' };
-    // Minimalny czas respu (od zabicia/zniknięcia) — odliczanie w oknie: 63: 17min, 143: 32min, 300: 40min
-    var EVE_RESPAWN_SECONDS = { 63: 17 * 60, 143: 32 * 60, 300: 40 * 60 };
+    var EVE_HERO_NAMES = { 41: 'Grim Blackcluck', 81: 'Hotblood Capon' };
     var eveRespawnCache = null;
     var eveDashboardCache = {};  // eveKey -> { reservations, presence, lastLeft, respawnTimer } — do lokalnego odliczania
     var lastEveFetchMapName = null; // fetch przy każdym przejściu przez mapę
@@ -1821,7 +1724,7 @@
             if (typeof GM_getValue !== 'function') return [];
             var raw = GM_getValue('eve_list_keys', '[]');
             var arr = JSON.parse(raw || '[]');
-            return Array.isArray(arr) ? arr.filter(function (k) { return [63, 143, 300].indexOf(parseInt(k, 10)) >= 0; }) : [];
+            return Array.isArray(arr) ? arr.filter(function (k) { return [41, 81].indexOf(parseInt(k, 10)) >= 0; }) : [];
         } catch (e) { return []; }
     }
     function saveOpenEveKeys(openKeys) {
@@ -2256,59 +2159,6 @@
     function updateEveMapListForPanel(eveKey) {
         fetchEveDashboardAsync(eveKey, function (k, data) { applyEveDashboardToPanel(k, data); });
     }
-    function fetchEveRespawnTimers() {
-        var now = Date.now();
-        if (eveRespawnCache && (now - eveRespawnCache.ts) < EVE_RESPAWN_CACHE_TTL_MS) {
-            return eveRespawnCache.timers || {};
-        }
-        var out = {};
-        var xhr = new XMLHttpRequest();
-        xhr.open('GET', CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-respawn', false);
-        try {
-            xhr.send();
-            if (xhr.status === 200) {
-                var json = JSON.parse(xhr.responseText);
-                out = json.timers || {};
-                eveRespawnCache = { timers: out, ts: now };
-            }
-        } catch (e) { /* ignore */ }
-        return out;
-    }
-    function setEveRespawnKilled(eveKey) {
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-respawn', false);
-        xhr.setRequestHeader('Content-Type', 'application/json');
-        xhr.setRequestHeader('X-API-Key', CONFIG.API_KEY || '');
-        try {
-            xhr.send(JSON.stringify({ eveKey: eveKey }));
-            if (xhr.status === 200) {
-                eveRespawnCache = null;
-                return true;
-            }
-        } catch (e) { /* ignore */ }
-        return false;
-    }
-    function getEveRespawnText(eveKey) {
-        try {
-            var timers = fetchEveRespawnTimers();
-            var ts = timers[eveKey];
-            if (ts == null || typeof ts !== 'number' || ts <= 0) return { text: null, secLeft: null };
-            var duration = EVE_RESPAWN_SECONDS[eveKey] || 17 * 60;
-            var elapsed = (Date.now() - ts) / 1000;
-            if (elapsed >= duration) return { text: null, secLeft: null };
-            var left = Math.floor(duration - elapsed);
-            return { text: 'Respawn: ' + formatTimeSince(left), secLeft: left };
-        } catch (e) { return { text: null, secLeft: null }; }
-    }
-    function updateEvePanelTitle(eveKey) {
-        var rec = eveMapListPanelsByKey[eveKey];
-        if (!rec || !rec.panel) return;
-        var titleEl = rec.panel.querySelector('.map-timer-eve-list-panel-title');
-        if (!titleEl) return;
-        titleEl.textContent = 'Mapy';
-        titleEl.style.color = '#fff';
-    }
-
     function openEveWindow() {
         createEveWindow();
         eveWindowOpen = true;
@@ -2318,7 +2168,7 @@
 
     // Odliczanie sekund lokalnie co 1 s — zero requestów, tylko przeliczanie „X min temu” i „Respawn: MM:SS” z cache
     setInterval(function () {
-        [63, 143, 300].forEach(function (k) {
+        [41, 81].forEach(function (k) {
             var rec = eveMapListPanelsByKey[k];
             if (rec && rec.panel && rec.panel.style.display !== 'none') refreshEvePanelDisplayFromCache(k);
         });

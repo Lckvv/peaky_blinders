@@ -107,20 +107,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Herosy eventowe 63, 143, 300: bez faz, phaseId = null. Tytani: wymagana aktywna faza.
-    const HERO_MONSTERS = ['Seeker of Creation', 'Harbinger of Elancia', 'Thunder-Wielding Barbarian'];
-    const HERO_TO_EVE_KEY: Record<string, number> = {
-      'Seeker of Creation': 63,
-      'Harbinger of Elancia': 143,
-      'Thunder-Wielding Barbarian': 300,
-    };
-    // Freeze naliczania czasu po zabiciu herosa (minuty) — killedAt ustawiane tylko w eve-hunter-found / eve-respawn
-    const EVE_FREEZE_MIN: Record<number, number> = {
-      63: 17,
-      143: 32,
-      300: 40,
-    };
-    const isHeroMonster = HERO_MONSTERS.includes(monster);
+    // Herosy eventowe (Easter 2026): bez faz, phaseId = null. Tytani: wymagana aktywna faza.
+    const isHeroMonster = isEveHeroMonster(monster);
 
     let phaseId: string | null = null;
     if (!isHeroMonster) {
@@ -140,29 +128,8 @@ export async function POST(request: NextRequest) {
     const endedAt = timestamp ? new Date(timestamp) : new Date();
     const startedAt = new Date(endedAt.getTime() - time * 1000);
 
-    // Dla herosów EVE (63, 143, 300): dodajemy czas zawsze (działa w tle, bez otwartego okna). Gdy nie znamy timera respu — liczymy pełny czas.
-    // Odejmujemy tylko okno freeze (X min po zabiciu), gdy wiemy że heros nie żyje — wtedy ten czas nie jest naliczany.
+    // Dla herosów EVE liczymy pełny czas sesji (bez odliczania respawnu po stronie serwera).
     let effectiveDurationSec = time;
-    if (isHeroMonster) {
-      const eveKey = HERO_TO_EVE_KEY[monster];
-      const freezeMin = eveKey != null ? EVE_FREEZE_MIN[eveKey] : 0;
-      if (eveKey != null && freezeMin > 0) {
-        const respawn = await prisma.eveRespawnTimer.findUnique({
-          where: { eveKey },
-        });
-        if (respawn) {
-          const killedAt = respawn.killedAt.getTime();
-          const freezeMs = freezeMin * 60 * 1000;
-          const freezeEnd = killedAt + freezeMs;
-          const startMs = startedAt.getTime();
-          const endMs = endedAt.getTime();
-          const overlapStart = Math.max(startMs, killedAt);
-          const overlapEnd = Math.min(endMs, freezeEnd);
-          const overlapMs = Math.max(0, overlapEnd - overlapStart);
-          effectiveDurationSec = Math.max(0, time - Math.floor(overlapMs / 1000));
-        }
-      }
-    }
 
     // Deduplikacja: ten sam użytkownik może wysłać sesję 2× (np. skrypt w iframe + top). Ignoruj duplikat.
     const duplicateWindowMs = 15000; // 15 s
@@ -204,7 +171,7 @@ export async function POST(request: NextRequest) {
 
     // Save session (world/reason ze skryptu mogą być number — baza wymaga string)
     // heroOutfitUrl = outfit tej konkretnej postaci z tej sesji (Nick ma wiele postaci, każda swój strój)
-    // Dla herosów EVE zapisujemy effectiveDurationSec (pełny czas minus freeze, gdy znamy timer)
+    // Dla herosów EVE zapisujemy effectiveDurationSec (pełny czas sesji)
     const session = await prisma.mapSession.create({
       data: {
         userId: user.id,
