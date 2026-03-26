@@ -18,6 +18,25 @@ const s: Record<string, React.CSSProperties> = {
   table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: 13 },
   th: { textAlign: 'left' as const, padding: '10px 12px', background: '#0f0f23', color: '#8892b0', fontWeight: 600, fontSize: 11 },
   td: { padding: '10px 12px', borderBottom: '1px solid #2a2a4a', color: '#ccc' },
+  avatarWrap: {
+    width: 32,
+    height: 48,
+    overflow: 'hidden' as const,
+    position: 'relative' as const,
+    transform: 'scale(1.4)',
+    transformOrigin: 'left center',
+    borderRadius: 6,
+    background: '#0f0f23',
+    border: '1px solid #2a2a4a',
+  },
+  avatarImg: { position: 'absolute' as const, left: 0, top: 0, display: 'block' },
+  avatarPlaceholder: {
+    width: 32,
+    height: 48,
+    background: '#0f0f23',
+    border: '1px solid #2a2a4a',
+    borderRadius: 6,
+  },
   link: { color: '#3498db', textDecoration: 'none' },
   placeholder: { color: '#888', fontSize: 15, padding: '40px 20px', textAlign: 'center' as const },
 };
@@ -70,6 +89,7 @@ export default async function EasterHeroRankingPage({ params }: PageProps) {
               <tr>
                 <th style={s.th}>Pozycja</th>
                 <th style={s.th}>Nick</th>
+                <th style={s.th}>Grafika</th>
                 <th style={s.th}>Postac</th>
                 <th style={s.th}>Czas</th>
                 <th style={s.th}>Sesje</th>
@@ -86,6 +106,15 @@ export default async function EasterHeroRankingPage({ params }: PageProps) {
                       </a>
                     ) : (
                       <span>{e.nick || e.username}</span>
+                    )}
+                  </td>
+                  <td style={s.td}>
+                    {e.avatarUrl ? (
+                      <div style={s.avatarWrap}>
+                        <img src={e.avatarUrl} alt="" style={s.avatarImg} />
+                      </div>
+                    ) : (
+                      <div style={s.avatarPlaceholder} />
                     )}
                   </td>
                   <td style={s.td}>{e.heroName}</td>

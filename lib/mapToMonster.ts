@@ -23,6 +23,20 @@ export const MAP_NAME_TO_MONSTER: Record<string, string> = {
   // Easter 2026 — heros 41: Grim Blackcluck
   'Fort Eder': 'Grim Blackcluck',
   'Goblin Forest': 'Grim Blackcluck',
+  'Mulberry Passage': 'Grim Blackcluck',
+  'Marshy Valley': 'Grim Blackcluck',
+  'Marshlands': 'Grim Blackcluck',
+  'Brigand Vale': 'Grim Blackcluck',
+  'Stony Hideout': 'Grim Blackcluck',
+  'Desecrated Graveyard': 'Grim Blackcluck',
+  'Defiled Tomb - 1st Level': 'Grim Blackcluck',
+  'Defiled Tomb - 2nd Level': 'Grim Blackcluck',
+  'Defiled Tomb - 3nd Level': 'Grim Blackcluck',
+  'Defiled Tomb - 3rd Level': 'Grim Blackcluck',
+  'Defiled Tomb - 4nd Level': 'Grim Blackcluck',
+  'Defiled Tomb - 4th Level': 'Grim Blackcluck',
+  'Defiled Tomb - 5nd Level': 'Grim Blackcluck',
+  'Defiled Tomb - 5th Level': 'Grim Blackcluck',
 
   // Easter 2026 — heros 81: Hotblood Capon
   'Andarum Ilami': 'Hotblood Capon',
