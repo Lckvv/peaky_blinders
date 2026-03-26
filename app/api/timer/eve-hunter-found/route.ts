@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authFromApiKey } from '@/lib/auth';
-import { EVE_EVENT_ENDED, EVE_KEYS } from '@/lib/eve-event-ended';
+import { EVE_EVENT_ENDED, isEveKey } from '@/lib/eve-event-ended';
 
 // Min 15 min między punktami dla tego samego herosa — liczy się tylko pierwszy znalazca w oknie
 const EVE_HUNTER_COOLDOWN_MIN_MS = 15 * 60 * 1000;
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const eveKey = body?.eveKey != null ? parseInt(String(body.eveKey), 10) : NaN;
 
-    if (!Number.isInteger(eveKey) || !EVE_KEYS.includes(eveKey)) {
+    if (!Number.isInteger(eveKey) || !isEveKey(eveKey)) {
       return NextResponse.json(
         { error: 'eveKey must be 41 or 81' },
         { status: 400 }

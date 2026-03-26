@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { EVE_KEYS } from '@/lib/eve-event-ended';
+import { isEveKey } from '@/lib/eve-event-ended';
 const EVE_PRESENCE_MAX_AGE_MS = 15 * 1000; // spójne z eve-map-presence — po kilku sekundach bez POST gracz znika z listy
 
 // GET /api/timer/eve-dashboard?eveKey=63 — wszystko w jednym: rezerwacje, obecność, lastLeft, respawn (mniej requestów = mniej lagu)
@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
   try {
     const eveKeyStr = request.nextUrl.searchParams.get('eveKey');
     const eveKey = eveKeyStr ? parseInt(eveKeyStr, 10) : NaN;
-    if (!Number.isInteger(eveKey) || !EVE_KEYS.includes(eveKey)) {
+    if (!Number.isInteger(eveKey) || !isEveKey(eveKey)) {
       return NextResponse.json({ error: 'eveKey must be 41 or 81' }, { status: 400 });
     }
 

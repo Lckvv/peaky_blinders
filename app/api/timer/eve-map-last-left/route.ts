@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { EVE_EVENT_ENDED, EVE_KEYS } from '@/lib/eve-event-ended';
+import { EVE_EVENT_ENDED, isEveKey } from '@/lib/eve-event-ended';
 
 // GET /api/timer/eve-map-last-left?eveKey=63 — kiedy ostatnio opuszczono każdą mapę (dla wielu map EVE, wspólne dla wszystkich)
 export async function GET(request: NextRequest) {
   try {
     const eveKeyStr = request.nextUrl.searchParams.get('eveKey');
     const eveKey = eveKeyStr ? parseInt(eveKeyStr, 10) : NaN;
-    if (!Number.isInteger(eveKey) || !EVE_KEYS.includes(eveKey)) {
+    if (!Number.isInteger(eveKey) || !isEveKey(eveKey)) {
       return NextResponse.json({ error: 'eveKey must be 41 or 81' }, { status: 400 });
     }
 
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     const eveKey = body?.eveKey != null ? parseInt(String(body.eveKey), 10) : NaN;
     const mapName = typeof body?.mapName === 'string' ? body.mapName.trim() : '';
 
-    if (!Number.isInteger(eveKey) || !EVE_KEYS.includes(eveKey)) {
+    if (!Number.isInteger(eveKey) || !isEveKey(eveKey)) {
       return NextResponse.json({ error: 'eveKey must be 41 or 81' }, { status: 400 });
     }
     if (!mapName) {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authFromApiKey } from '@/lib/auth';
-import { EVE_EVENT_ENDED, EVE_KEYS } from '@/lib/eve-event-ended';
+import { EVE_EVENT_ENDED, EVE_KEYS, isEveKey } from '@/lib/eve-event-ended';
 
 // Min 15 min między przyznaniem punktu dla tego samego herosa (tylko pierwszy w oknie dostaje pkt)
 const EVE_HUNTER_COOLDOWN_MIN = 15;
@@ -11,7 +11,7 @@ const EVE_HUNTER_COOLDOWN_MIN = 15;
 export async function GET() {
   try {
     const rows = await prisma.eveMapLastLeft.findMany({
-      where: { eveKey: { in: EVE_KEYS } },
+      where: { eveKey: { in: [...EVE_KEYS] } },
     });
     const timers: Record<number, number> = {};
     EVE_KEYS.forEach((eveKey) => {
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const eveKey = body?.eveKey != null ? parseInt(String(body.eveKey), 10) : NaN;
 
-    if (!Number.isInteger(eveKey) || !EVE_KEYS.includes(eveKey)) {
+    if (!Number.isInteger(eveKey) || !isEveKey(eveKey)) {
       return NextResponse.json(
         { error: 'eveKey must be 41 or 81' },
         { status: 400 }
