@@ -1,8 +1,8 @@
 /**
- * Event Easter 2026 (herosy 41, 81).
- * Gdy true: API odrzuca POSTy dla herosów eventowych, skrypt ukrywa przycisk i nie wysyła requestów.
+ * Event Easter 2026 (herosy 41, 81) zakończony — na stronie tylko statystyki (rankingi).
+ * Gdy true: API odrzuca POSTy dla herosów eventowych, skrypt ukrywa przycisk i nie zlicza czasu.
  */
-export const EVE_EVENT_ENDED = false;
+export const EVE_EVENT_ENDED = true;
 
 export const EVE_KEYS = [41, 81] as const;
 export const EVE_HERO_MONSTERS = ['Grim Blackcluck', 'Hotblood Capon'] as const;

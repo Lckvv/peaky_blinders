@@ -427,7 +427,7 @@ export default function Navbar({ isMobile, isOpen, onClose }: NavbarProps = {}) 
                     }}
                     onClick={() => setEasterOpen((o) => !o)}
                   >
-                    <span>Easter</span>
+                    <span>Easter (statystyki)</span>
                     <span style={{ ...navStyles.chevron, transform: easterOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
                   </button>
                   {easterOpen && (

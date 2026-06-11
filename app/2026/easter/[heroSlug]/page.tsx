@@ -1,3 +1,4 @@
+import EventHeroRanking from '@/app/components/EventHeroRanking';
 import { getRankingForMonster, getEveHunterLeaderboard } from '@/lib/leaderboard-server';
 
 const SLUG_TO_NAME: Record<string, string> = {
@@ -15,29 +16,6 @@ const s: Record<string, React.CSSProperties> = {
   headerRow: { display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
   title: { textAlign: 'center' as const, fontSize: 32, fontWeight: 700, color: '#fff', margin: 0 },
   card: { background: '#16213e', borderRadius: 12, padding: 20, marginBottom: 16, border: '1px solid #2a2a4a' },
-  table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: 13 },
-  th: { textAlign: 'left' as const, padding: '10px 12px', background: '#0f0f23', color: '#8892b0', fontWeight: 600, fontSize: 11 },
-  td: { padding: '10px 12px', borderBottom: '1px solid #2a2a4a', color: '#ccc' },
-  avatarWrap: {
-    width: 32,
-    height: 48,
-    overflow: 'hidden' as const,
-    position: 'relative' as const,
-    transform: 'scale(1.4)',
-    transformOrigin: 'left center',
-    borderRadius: 6,
-    background: '#0f0f23',
-    border: '1px solid #2a2a4a',
-  },
-  avatarImg: { position: 'absolute' as const, left: 0, top: 0, display: 'block' },
-  avatarPlaceholder: {
-    width: 32,
-    height: 48,
-    background: '#0f0f23',
-    border: '1px solid #2a2a4a',
-    borderRadius: 6,
-  },
-  link: { color: '#3498db', textDecoration: 'none' },
   placeholder: { color: '#888', fontSize: 15, padding: '40px 20px', textAlign: 'center' as const },
 };
 
@@ -79,89 +57,14 @@ export default async function EasterHeroRankingPage({ params }: PageProps) {
   return (
     <div style={s.wrap}>
       <div style={s.headerRow}>
-        <h1 style={s.title}>Ranking {monster.name}</h1>
+        <h1 style={s.title}>Statystyki — {monster.name}</h1>
       </div>
 
-      <div style={s.card}>
-        {leaderboard.length > 0 ? (
-          <table style={s.table}>
-            <thead>
-              <tr>
-                <th style={s.th}>Pozycja</th>
-                <th style={s.th}>Nick</th>
-                <th style={s.th}>Grafika</th>
-                <th style={s.th}>Postac</th>
-                <th style={s.th}>Czas</th>
-                <th style={s.th}>Sesje</th>
-              </tr>
-            </thead>
-            <tbody>
-              {leaderboard.map((e) => (
-                <tr key={e.userId}>
-                  <td style={s.td}>{e.rank}</td>
-                  <td style={s.td}>
-                    {e.profileUrl ? (
-                      <a href={e.profileUrl} target="_blank" rel="noopener noreferrer" style={s.link}>
-                        {e.nick || e.username}
-                      </a>
-                    ) : (
-                      <span>{e.nick || e.username}</span>
-                    )}
-                  </td>
-                  <td style={s.td}>
-                    {e.avatarUrl ? (
-                      <div style={s.avatarWrap}>
-                        <img src={e.avatarUrl} alt="" style={s.avatarImg} />
-                      </div>
-                    ) : (
-                      <div style={s.avatarPlaceholder} />
-                    )}
-                  </td>
-                  <td style={s.td}>{e.heroName}</td>
-                  <td style={{ ...s.td, fontFamily: 'monospace', color: '#2ecc71' }}>{e.totalTimeFormatted}</td>
-                  <td style={s.td}>{e.totalSessions}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p style={s.placeholder}>Brak uczestnikow w tym rankingu.</p>
-        )}
-      </div>
-
-      <div style={s.card}>
-        <h2 style={{ ...s.title, fontSize: 22, marginBottom: 16 }}>Ranking Lowcy herosa</h2>
-        {hunterLeaderboard.length > 0 ? (
-          <table style={s.table}>
-            <thead>
-              <tr>
-                <th style={s.th}>Pozycja</th>
-                <th style={s.th}>Nick</th>
-                <th style={s.th}>Punkty</th>
-              </tr>
-            </thead>
-            <tbody>
-              {hunterLeaderboard.map((e) => (
-                <tr key={e.userId}>
-                  <td style={s.td}>{e.rank}</td>
-                  <td style={s.td}>
-                    {e.profileUrl ? (
-                      <a href={e.profileUrl} target="_blank" rel="noopener noreferrer" style={s.link}>
-                        {e.nick || e.username}
-                      </a>
-                    ) : (
-                      <span>{e.nick || e.username}</span>
-                    )}
-                  </td>
-                  <td style={{ ...s.td, color: '#e67e22', fontWeight: 600 }}>{e.points}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p style={s.placeholder}>Brak punktow lowcy dla tego herosa.</p>
-        )}
-      </div>
+      <EventHeroRanking
+        monsterName={monster.name}
+        leaderboard={leaderboard}
+        hunterLeaderboard={hunterLeaderboard}
+      />
     </div>
   );
 }

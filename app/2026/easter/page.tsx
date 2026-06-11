@@ -28,8 +28,8 @@ const s: Record<string, React.CSSProperties> = {
 export default function EasterPage() {
   return (
     <div style={s.wrap}>
-      <h1 style={s.title}>Easter 2026</h1>
-      <p style={s.subtitle}>Rankingi czasów na mapach herosów eventowych. Wybierz herosa:</p>
+      <h1 style={s.title}>Easter 2026 — statystyki</h1>
+      <p style={s.subtitle}>Event zakończony. Poniżej archiwalne rankingi czasów — wybierz herosa:</p>
       <div style={s.list}>
         {HEROES.map(({ slug, label }) => (
           <Link key={slug} href={`/2026/easter/${slug}`} style={s.link}>

@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Margonem Map Timer
 // @namespace    http://tampermonkey.net/
-// @version      2.7
-// @description  Śledzenie czasu na mapach, Easter 2026 (41/81), łowca herosów (konto), powiadomienia levelu (globalne).
+// @version      2.8
+// @description  Śledzenie czasu na mapach tytanów, powiadomienia levelu (globalne). Event Easter wyłączony — tylko statystyki na stronie.
 // @author       Lucek
 // @match        https://*.margonem.com/*
 // @grant        GM_xmlhttpRequest
@@ -20,8 +20,8 @@
     // Uruchamiaj tylko w oknie głównym — w iframe skrypt by się dublował i wysyłał tę samą sesję 2× (pagehide w obu kontekstach).
     if (window !== window.top) return;
 
-    /** Event Easter 2026 (herosy 41, 81). */
-    const EVE_EVENT_ENDED = false;
+    /** Event Easter 2026 (41, 81) zakończony — brak zliczania czasu i panelu herosa. Statystyki tylko na stronie. */
+    const EVE_EVENT_ENDED = true;
 
     // ================================================================
     //  CONFIG — zmień BACKEND_URL i API_KEY po rejestracji na stronie
@@ -33,7 +33,7 @@
         // 🌐 Adres backendu (Railway) — możesz zmienić w ustawieniach ⏱
         BACKEND_URL: GM_getValue('backend_url', 'https://peakyblinders-production-61db.up.railway.app'),
 
-        // 🗺️ Mapy tytanów + Easter 2026 (41, 81). Timer nalicza czas przy wejściu i wyjściu.
+        // 🗺️ Mapy tytanów (event Easter wyłączony — bez zliczania czasu na mapach 41/81).
         TARGETS: [
             { map: "Caerbannog's Grotto - 2nd Chamber", monster: 'Kic' },
             { map: 'Shimmering Cavern', monster: 'Orla' },
@@ -42,39 +42,6 @@
             { map: 'Chamber of Bloody Rites', monster: 'Przyzywacz' },
             { map: 'Hall of Ruined Temple', monster: 'Barbatos' },
             { map: 'Ice Throne Room', monster: 'Tanroth' },
-            { map: 'Fort Eder', monster: 'Grim Blackcluck' },
-            { map: 'Goblin Forest', monster: 'Grim Blackcluck' },
-            { map: 'Mulberry Passage', monster: 'Grim Blackcluck' },
-            { map: 'Marshy Valley', monster: 'Grim Blackcluck' },
-            { map: 'Marshlands', monster: 'Grim Blackcluck' },
-            { map: 'Brigand Vale', monster: 'Grim Blackcluck' },
-            { map: 'Stony Hideout', monster: 'Grim Blackcluck' },
-            { map: 'Desecrated Graveyard', monster: 'Grim Blackcluck' },
-            { map: 'Defiled Tomb - 1st Level', monster: 'Grim Blackcluck' },
-            { map: 'Defiled Tomb - 2nd Level', monster: 'Grim Blackcluck' },
-            { map: 'Defiled Tomb - 3nd Level', monster: 'Grim Blackcluck' },
-            { map: 'Defiled Tomb - 3rd Level', monster: 'Grim Blackcluck' },
-            { map: 'Defiled Tomb - 4nd Level', monster: 'Grim Blackcluck' },
-            { map: 'Defiled Tomb - 4th Level', monster: 'Grim Blackcluck' },
-            { map: 'Defiled Tomb - 5nd Level', monster: 'Grim Blackcluck' },
-            { map: 'Defiled Tomb - 5th Level', monster: 'Grim Blackcluck' },
-            { map: 'Andarum Ilami', monster: 'Hotblood Capon' },
-            { map: 'Rocks of Cold Songs', monster: 'Hotblood Capon' },
-            { map: 'Ice Crevasse - 1st Level - 1st Chamber', monster: 'Hotblood Capon' },
-            { map: 'Ice Crevasse - 2nd Level - 1st Chamber', monster: 'Hotblood Capon' },
-            { map: 'Ice Crevasse - 2nd Level', monster: 'Hotblood Capon' },
-            { map: 'Icespire Chamber', monster: 'Hotblood Capon' },
-            { map: 'Firn Cave - 2nd Level', monster: 'Hotblood Capon' },
-            { map: 'Firn Cave - 1st Level', monster: 'Hotblood Capon' },
-            { map: 'Hermitage of the Black Sun - 1st Level - North', monster: 'Hotblood Capon' },
-            { map: 'Hermitage of the Black Sun - 2nd Level', monster: 'Hotblood Capon' },
-            { map: 'Hermitage of the Black Sun - 3rd Level', monster: 'Hotblood Capon' },
-            { map: 'Hermitage of the Black Sun - 4th Level - 1st Chamber', monster: 'Hotblood Capon' },
-            { map: 'Hermitage of the Black Sun - 4th Level - 2nd Chamber', monster: 'Hotblood Capon' },
-            { map: 'Hermitage of the Black Sun - 3rd Level - South', monster: 'Hotblood Capon' },
-            { map: 'Andarum Temple - Warehouse 2nd Level', monster: 'Hotblood Capon' },
-            { map: 'Andarum Temple - Armory', monster: 'Hotblood Capon' },
-            { map: 'Andarum Temple - Warehouse 1st Level', monster: 'Hotblood Capon' },
         ],
 
         CHECK_INTERVAL: 2000,
