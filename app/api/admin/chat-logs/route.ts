@@ -4,7 +4,7 @@ import { authFromCookie } from '@/lib/auth';
 
 /**
  * GET /api/admin/chat-logs — lista logów czatu (tylko super_admin).
- * Query: ?limit=100&offset=0
+ * Query: ?limit=100&offset=0&q=tekst (szuka w koncie, autorze, odbiorcy, treści)
  */
 export async function GET(request: NextRequest) {
   try {
@@ -18,9 +18,22 @@ export async function GET(request: NextRequest) {
 
     const limit = Math.min(parseInt(request.nextUrl.searchParams.get('limit') || '200', 10), 500);
     const offset = Math.max(0, parseInt(request.nextUrl.searchParams.get('offset') || '0', 10));
+    const q = request.nextUrl.searchParams.get('q')?.trim() ?? '';
+
+    const where = q
+      ? {
+          OR: [
+            { author: { contains: q, mode: 'insensitive' as const } },
+            { receiver: { contains: q, mode: 'insensitive' as const } },
+            { text: { contains: q, mode: 'insensitive' as const } },
+            { user: { username: { contains: q, mode: 'insensitive' as const } } },
+          ],
+        }
+      : undefined;
 
     const [logs, total] = await Promise.all([
       prisma.chatLog.findMany({
+        where,
         orderBy: { createdAt: 'desc' },
         take: limit,
         skip: offset,
@@ -28,7 +41,7 @@ export async function GET(request: NextRequest) {
           user: { select: { id: true, username: true } },
         },
       }),
-      prisma.chatLog.count(),
+      prisma.chatLog.count({ where }),
     ]);
 
     return NextResponse.json({

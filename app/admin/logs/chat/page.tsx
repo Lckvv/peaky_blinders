@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 type LogRow = {
   id: string;
@@ -77,6 +77,19 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 13,
     cursor: 'pointer',
   },
+  searchWrap: { marginBottom: 16 },
+  searchInput: {
+    width: '100%',
+    maxWidth: 420,
+    padding: '10px 14px',
+    background: '#0f0f23',
+    border: '1px solid #2a2a4a',
+    borderRadius: 8,
+    color: '#fff',
+    fontSize: 14,
+    boxSizing: 'border-box' as const,
+  },
+  searchHint: { color: '#8892b0', fontSize: 13, marginTop: 8, marginBottom: 0 },
 };
 
 const PAGE_SIZE = 50;
@@ -93,6 +106,8 @@ export default function LogsChatPage() {
   const [logs, setLogs] = useState<LogRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deletingAll, setDeletingAll] = useState(false);
@@ -100,14 +115,16 @@ export default function LogsChatPage() {
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  const loadLogs = async (pageNum: number = page) => {
+  const loadLogs = useCallback(async (pageNum: number, query: string) => {
     setLoading(true);
     const offset = (pageNum - 1) * PAGE_SIZE;
+    const params = new URLSearchParams({
+      limit: String(PAGE_SIZE),
+      offset: String(offset),
+    });
+    if (query.trim()) params.set('q', query.trim());
     try {
-      const res = await fetch(
-        `/api/admin/chat-logs?limit=${PAGE_SIZE}&offset=${offset}`,
-        { credentials: 'include' }
-      );
+      const res = await fetch(`/api/admin/chat-logs?${params.toString()}`, { credentials: 'include' });
       if (!res.ok) return;
       const data = await res.json();
       setLogs(data.logs ?? []);
@@ -118,15 +135,20 @@ export default function LogsChatPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadLogs(1);
-  }, []);
+    const t = setTimeout(() => setSearchQuery(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  useEffect(() => {
+    loadLogs(1, searchQuery);
+  }, [searchQuery, loadLogs]);
 
   const goToPage = (p: number) => {
     const next = Math.max(1, Math.min(p, totalPages));
-    if (next !== page) loadLogs(next);
+    if (next !== page) loadLogs(next, searchQuery);
   };
 
   const handleDeleteAll = async () => {
@@ -134,7 +156,7 @@ export default function LogsChatPage() {
     setDeletingAll(true);
     try {
       const res = await fetch('/api/admin/chat-logs', { method: 'DELETE', credentials: 'include' });
-      if (res.ok) await loadLogs(1);
+      if (res.ok) await loadLogs(1, searchQuery);
     } finally {
       setDeletingAll(false);
     }
@@ -155,7 +177,7 @@ export default function LogsChatPage() {
         const newTotal = total - logs.length;
         const newTotalPages = Math.max(1, Math.ceil(newTotal / PAGE_SIZE));
         const nextPage = page > newTotalPages ? Math.max(1, newTotalPages) : page;
-        await loadLogs(nextPage);
+        await loadLogs(nextPage, searchQuery);
       }
     } finally {
       setDeletingPage(false);
@@ -183,10 +205,27 @@ export default function LogsChatPage() {
         Wiadomości prywatne z czatu (kto wysłał, do kogo, treść, godzina z czatu, data zapisu). Tylko Super Admin.
       </p>
       <div style={s.card}>
+        <div style={s.searchWrap}>
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Szukaj: konto, autor, odbiorca, treść wiadomości…"
+            style={s.searchInput}
+            aria-label="Szukaj w logach czatu"
+          />
+          {searchQuery.trim() ? (
+            <p style={s.searchHint}>
+              Wyniki dla „{searchQuery.trim()}”: {loading ? '…' : `${total} ${total === 1 ? 'wpis' : total < 5 ? 'wpisy' : 'wpisów'}`}
+            </p>
+          ) : !loading ? (
+            <p style={s.searchHint}>Łącznie {total} wpisów. Wpisz frazę, żeby przefiltrować listę.</p>
+          ) : null}
+        </div>
         {loading ? (
           <p style={s.loading}>Ładowanie…</p>
         ) : logs.length === 0 ? (
-          <p style={s.empty}>Brak logów.</p>
+          <p style={s.empty}>{searchQuery.trim() ? `Brak wyników dla „${searchQuery.trim()}”.` : 'Brak logów.'}</p>
         ) : (
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
