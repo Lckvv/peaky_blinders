@@ -48,11 +48,11 @@ const styles: Record<string, React.CSSProperties> = {
         left: '50%',
         transform: 'translateX(-50%)',
         margin: 0,
-        fontSize: 28,
+        fontSize: 22,
         fontWeight: 700,
-        color: '#fff',
-        letterSpacing: '0.08em',
-        textTransform: 'uppercase',
+        color: '#fff8e7',
+        letterSpacing: '0.04em',
+        fontFamily: 'var(--font-cinzel), Georgia, serif',
         textShadow: '0 2px 8px rgba(0,0,0,0.3)',
     },
     logoutBtn: {
@@ -92,7 +92,7 @@ export default function Header({ isMobile, onMenuClick }: HeaderProps) {
             ) : (
                 <div style={styles.headerSpacer} />
             )}
-            <h1 style={styles.title}>Peaky Blinders</h1>
+            <h1 style={{ ...styles.title, fontSize: isMobile ? 16 : 22 }}>Guardians of Souls</h1>
             <button type="button" onClick={logout} style={styles.logoutBtn}>
                 Wyloguj
             </button>

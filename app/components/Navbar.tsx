@@ -484,6 +484,19 @@ export default function Navbar({ isMobile, isOpen, onClose }: NavbarProps = {}) 
             ⚙ Admin Panel
           </Link>
         )}
+        {(user?.role === 'admin' || user?.role === 'super_admin') && (
+          <Link
+            href="/admin/ustawienia"
+            className="nav-admin-link"
+            style={{
+              ...navStyles.adminLink,
+              ...(pathname === '/admin/ustawienia' ? navStyles.adminLinkActive : {}),
+            }}
+            onClick={onClose}
+          >
+            ⚙ Ustawienia poczty
+          </Link>
+        )}
         {user?.role === 'super_admin' && (
           <div>
             <button

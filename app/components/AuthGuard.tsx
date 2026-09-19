@@ -1,15 +1,18 @@
 'use client';
 
 import { ReactNode, useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { useAuth } from './AuthContext';
 import LoginForm from './LoginForm';
 import Header from './Header';
 import Navbar from './Navbar';
 
 const MOBILE_BREAKPOINT = 768;
+const PUBLIC_PATHS = ['/reset-password'];
 
 export default function AuthGuard({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
+  const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
@@ -28,8 +31,9 @@ export default function AuthGuard({ children }: { children: ReactNode }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: '#0f0f23',
-        color: '#888',
+        background: '#07080f',
+        color: '#c4bba8',
+        fontFamily: 'var(--font-outfit), system-ui, sans-serif',
       }}>
         Ładowanie…
       </div>
@@ -37,6 +41,8 @@ export default function AuthGuard({ children }: { children: ReactNode }) {
   }
 
   if (!user) {
+    const isPublic = PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+    if (isPublic) return <>{children}</>;
     return <LoginForm />;
   }
 

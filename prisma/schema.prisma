@@ -26,6 +26,7 @@ model User {
   heroAlertLogs  HeroAlertLog[]
   chatLogs       ChatLog[]
   invitationCodeUsed InvitationCode?
+  passwordResetTokens PasswordResetToken[]
 }
 
 model ApiKey {
@@ -235,6 +236,34 @@ model HeroLevelNotification {
   createdAt     DateTime @default(now())
 
   @@index([createdAt])
+}
+
+// Tokeny resetu hasła (jednorazowe, wygasają po 1h)
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// Konfiguracja SMTP do przypomnienia hasła (edytowana w panelu admina)
+model EmailSettings {
+  id           String   @id @default("default")
+  smtpHost     String   @default("")
+  smtpPort     Int      @default(587)
+  smtpSecure   Boolean  @default(false)
+  smtpUser     String   @default("")
+  smtpPassword String   @default("")
+  fromEmail    String   @default("")
+  fromName     String   @default("Guardians of Souls")
+  appUrl       String   @default("")
+  updatedAt    DateTime @updatedAt
 }
 
 // Jednorazowe kody zaproszenia do rejestracji (generowane przez admina)
