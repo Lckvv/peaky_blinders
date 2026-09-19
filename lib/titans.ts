@@ -3,7 +3,7 @@ export const TITANS = [
   { slug: 'kic', monsterName: 'Kic', label: 'Zabójczy Królik' },
   { slug: 'renegat', monsterName: 'Renegat', label: 'Renegat Baulus' },
   { slug: 'arcy', monsterName: 'Arcy', label: 'Piekielny Arcymag' },
-  { slug: 'zoons', monsterName: 'Zoons', label: 'Zoons' },
+  { slug: 'zoons', monsterName: 'Zoons', label: 'Versus Zoons' },
   { slug: 'lowczyni', monsterName: 'Łowczyni', label: 'Łowczyni Wspomnień' },
   { slug: 'przyzywacz', monsterName: 'Przyzywacz', label: 'Przyzywacz Demonów' },
   { slug: 'magua', monsterName: 'Magua', label: 'Maddok Magua' },
