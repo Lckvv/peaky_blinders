@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 
-const SCRIPT_VERSION = '2.8';
+const SCRIPT_VERSION = '2.9';
 
 // GET /api/script/install.user.js?token=JWT
 // Serwuje LOADER â€“ maĹ‚y skrypt, ktĂłry Ĺ‚aduje wĹ‚aĹ›ciwy kod z serwera (ochrona oryginaĹ‚u).
@@ -50,7 +50,7 @@ function generateLoader(scriptUrl: string, backendUrl: string, version: string):
 // @name         Margonem Map Timer
 // @namespace    http://tampermonkey.net/
 // @version      ${version}
-// @description  Loader - laduje skrypt z serwera (Peaky Blinders Map Timer)
+// @description  Loader - laduje skrypt z serwera (Guardians of Souls Map Timer)
 // @author       Lucek
 // @match        https://*.margonem.com/*
 // @connect      *

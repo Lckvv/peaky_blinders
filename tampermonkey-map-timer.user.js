@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Margonem Map Timer
 // @namespace    http://tampermonkey.net/
-// @version      2.8
-// @description  Śledzenie czasu na mapach tytanów, powiadomienia levelu (globalne). Event Easter wyłączony — tylko statystyki na stronie.
+// @version      2.9
+// @description  Śledzenie czasu na mapach tytanów (Guardians of Souls). Event Easter wyłączony — tylko statystyki na stronie.
 // @author       Lucek
 // @match        https://*.margonem.com/*
 // @grant        GM_xmlhttpRequest
@@ -26,12 +26,29 @@
     // ================================================================
     //  CONFIG — zmień BACKEND_URL i API_KEY po rejestracji na stronie
     // ================================================================
+    const DEFAULT_BACKEND_URL = 'https://guardiansofsouls.up.railway.app';
+
+    function isLegacyBackendUrl(url) {
+        if (!url || typeof url !== 'string') return true;
+        var u = url.toLowerCase();
+        return u.indexOf('peakyblinders') !== -1;
+    }
+
+    function resolveBackendUrl() {
+        var stored = String(GM_getValue('backend_url', '') || '').trim().replace(/\/$/, '');
+        if (isLegacyBackendUrl(stored)) {
+            stored = DEFAULT_BACKEND_URL;
+            GM_setValue('backend_url', stored);
+        }
+        return stored;
+    }
+
     const CONFIG = {
         // 🔑 Twój API key — dostaniesz go po rejestracji na stronie
         API_KEY: GM_getValue('api_key', ''),
 
         // 🌐 Adres backendu (Railway) — możesz zmienić w ustawieniach ⏱
-        BACKEND_URL: GM_getValue('backend_url', 'https://peakyblinders-production-61db.up.railway.app'),
+        BACKEND_URL: resolveBackendUrl(),
 
         // 🗺️ Mapy tytanów (event Easter wyłączony — bez zliczania czasu na mapach 41/81).
         TARGETS: [
@@ -225,8 +242,7 @@
 
     function refreshConfigFromStorage() {
         CONFIG.API_KEY = GM_getValue('api_key', '');
-        const url = GM_getValue('backend_url', '');
-        if (url) CONFIG.BACKEND_URL = url.replace(/\/$/, '');
+        CONFIG.BACKEND_URL = resolveBackendUrl();
     }
 
     // ================================================================
