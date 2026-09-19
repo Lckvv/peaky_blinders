@@ -19,186 +19,9 @@ const TYTANI = [
   { name: 'Tanroth', slug: 'tanroth' },
 ] as const;
 
-const navStyles: Record<string, React.CSSProperties> = {
-  sidebar: {
-    position: 'fixed',
-    left: 0,
-    top: 80,
-    width: 260,
-    height: 'calc(100vh - 80px)',
-    background: 'linear-gradient(180deg, #16213e 0%, #1a1a2e 100%)',
-    borderRight: '1px solid #2f3758',
-    padding: '24px 0',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 2,
-    boxShadow: '8px 0 30px rgba(0,0,0,0.3)',
-    overflowY: 'auto',
-    zIndex: 90,
-  },
-  navSection: {
-    padding: '0 12px',
-    marginBottom: 8,
-  },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: 600,
-    color: '#5a6a8a',
-    letterSpacing: '0.06em',
-    textTransform: 'uppercase',
-    marginBottom: 6,
-    paddingLeft: 12,
-  },
-  link: {
-    display: 'block',
-    padding: '12px 20px',
-    color: '#b8c5d6',
-    textDecoration: 'none',
-    fontSize: 14,
-    borderRadius: 10,
-    marginBottom: 2,
-    transition: 'background 0.15s, color 0.15s',
-  },
-  linkActive: {
-    background: 'linear-gradient(90deg, rgba(52, 152, 219, 0.24), rgba(52, 152, 219, 0.08))',
-    color: '#5ab5f5',
-    fontWeight: 600,
-  },
-  dropdownTrigger: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-    padding: '12px 20px',
-    gap: 12,
-    background: 'none',
-    border: 'none',
-    color: '#b8c5d6',
-    fontSize: 14,
-    cursor: 'pointer',
-    textAlign: 'left',
-    borderRadius: 10,
-    transition: 'background 0.15s, color 0.15s',
-  },
-  dropdownTriggerOpen: {
-    background: 'linear-gradient(90deg, rgba(52, 152, 219, 0.2), rgba(52, 152, 219, 0.08))',
-    color: '#5ab5f5',
-    fontWeight: 600,
-  },
-  sublink: {
-    display: 'block',
-    padding: '10px 20px 10px 36px',
-    color: '#8892b0',
-    textDecoration: 'none',
-    fontSize: 13,
-    borderRadius: 6,
-    marginLeft: 8,
-    marginBottom: 2,
-    transition: 'background 0.15s, color 0.15s',
-  },
-  sublinkActive: {
-    background: 'rgba(52, 152, 219, 0.16)',
-    color: '#5ab5f5',
-  },
-  sublink2: {
-    display: 'block',
-    padding: '8px 20px 8px 48px',
-    color: '#8892b0',
-    textDecoration: 'none',
-    fontSize: 13,
-    borderRadius: 6,
-    marginLeft: 8,
-    marginBottom: 2,
-    transition: 'background 0.15s, color 0.15s',
-  },
-  sublink2Active: {
-    background: 'rgba(52, 152, 219, 0.12)',
-    color: '#3498db',
-  },
-  sublink3: {
-    display: 'block',
-    padding: '8px 20px 8px 60px',
-    color: '#8892b0',
-    textDecoration: 'none',
-    fontSize: 13,
-    borderRadius: 6,
-    marginLeft: 8,
-    marginBottom: 2,
-    transition: 'background 0.15s, color 0.15s',
-  },
-  sublink3Active: {
-    background: 'rgba(52, 152, 219, 0.16)',
-    color: '#5ab5f5',
-  },
-  chevron: {
-    fontSize: 10,
-    transition: 'transform 0.2s',
-    flexShrink: 0,
-  },
-  overlay: {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(0,0,0,0.5)',
-    zIndex: 95,
-    opacity: 0,
-    pointerEvents: 'none' as const,
-    transition: 'opacity 0.2s ease',
-  },
-  overlayVisible: {
-    opacity: 1,
-    pointerEvents: 'auto' as const,
-  },
-  closeBtn: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 36,
-    height: 36,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: 'rgba(255,255,255,0.1)',
-    border: 'none',
-    borderRadius: 8,
-    color: '#fff',
-    fontSize: 20,
-    cursor: 'pointer',
-    lineHeight: 1,
-  },
-  adminLink: {
-    display: 'block',
-    padding: '12px 20px',
-    color: '#e67e22',
-    textDecoration: 'none',
-    fontSize: 14,
-    borderRadius: 8,
-    marginLeft: 12,
-    marginRight: 12,
-    marginBottom: 8,
-    marginTop: 8,
-    border: '1px solid rgba(230, 126, 34, 0.3)',
-    transition: 'background 0.15s, color 0.15s',
-  },
-  adminLinkActive: {
-    background: 'rgba(230, 126, 34, 0.15)',
-    color: '#f39c12',
-  },
-  superAdminLink: {
-    display: 'block',
-    padding: '10px 20px 10px 36px',
-    color: '#9b59b6',
-    textDecoration: 'none',
-    fontSize: 13,
-    borderRadius: 6,
-    marginLeft: 8,
-    marginBottom: 2,
-    transition: 'background 0.15s, color 0.15s',
-  },
-  superAdminLinkActive: {
-    background: 'rgba(155, 89, 182, 0.2)',
-    color: '#bb8fce',
-  },
-};
+function cx(...parts: Array<string | false | undefined | null>) {
+  return parts.filter(Boolean).join(' ');
+}
 
 type NavbarProps = {
   isMobile?: boolean;
@@ -209,41 +32,20 @@ type NavbarProps = {
 export default function Navbar({ isMobile, isOpen, onClose }: NavbarProps = {}) {
   const pathname = usePathname();
   const { user } = useAuth();
-  const [tytaniOpen, setTytaniOpen] = useState(() =>
-    pathname.startsWith('/tytani')
-  );
-  const [eventOpen, setEventOpen] = useState(() =>
-    pathname.startsWith('/2026')
-  );
-  const [year2026Open, setYear2026Open] = useState(() =>
-    pathname.startsWith('/2026')
-  );
-  const [urodziny20Open, setUrodziny20Open] = useState(() =>
-    pathname.startsWith('/2026/20urodziny')
-  );
-  const [easterOpen, setEasterOpen] = useState(() =>
-    pathname.startsWith('/2026/easter')
-  );
+  const [tytaniOpen, setTytaniOpen] = useState(() => pathname.startsWith('/tytani'));
+  const [eventOpen, setEventOpen] = useState(() => pathname.startsWith('/2026'));
+  const [year2026Open, setYear2026Open] = useState(() => pathname.startsWith('/2026'));
+  const [urodziny20Open, setUrodziny20Open] = useState(() => pathname.startsWith('/2026/20urodziny'));
+  const [easterOpen, setEasterOpen] = useState(() => pathname.startsWith('/2026/easter'));
   const [logsOpen, setLogsOpen] = useState(() => pathname.startsWith('/admin/logs'));
 
   const isHome = pathname === '/';
-  const isAdmin = pathname.startsWith('/admin');
   const currentTytanSlug = pathname.startsWith('/tytani/')
     ? pathname.replace('/tytani/', '').split('/')[0]
     : null;
 
-  const sidebarStyle: React.CSSProperties = {
-    ...navStyles.sidebar,
-    ...(isMobile
-      ? {
-          transform: isOpen ? 'translateX(0)' : 'translateX(-100%)',
-          transition: 'transform 0.25s ease-out',
-          top: 80,
-          height: 'calc(100vh - 80px)',
-          zIndex: 96,
-        }
-      : {}),
-  };
+  const canPhases = user?.role === 'admin' || user?.role === 'koordynator' || user?.role === 'super_admin';
+  const canAdmin = user?.role === 'admin' || user?.role === 'super_admin';
 
   return (
     <>
@@ -252,307 +54,179 @@ export default function Navbar({ isMobile, isOpen, onClose }: NavbarProps = {}) 
           role="button"
           tabIndex={0}
           aria-label="Zamknij menu"
-          style={{
-            ...navStyles.overlay,
-            ...(isOpen ? navStyles.overlayVisible : {}),
-          }}
+          className={cx('gos-nav__overlay', isOpen && 'is-visible')}
           onClick={onClose}
           onKeyDown={(e) => e.key === 'Enter' && onClose?.()}
         />
       )}
-      <nav style={sidebarStyle} className="nav-sidebar">
-        <style>{`
-          .nav-sidebar .nav-link:hover { background: rgba(52, 152, 219, 0.15); color: #3498db; }
-          .nav-sidebar .nav-dropdown-trigger:hover { background: rgba(52, 152, 219, 0.12); color: #3498db; }
-          .nav-sidebar .nav-sublink:hover { background: rgba(52, 152, 219, 0.1); color: #3498db; }
-          .nav-sidebar .nav-sublink3:hover { background: rgba(52, 152, 219, 0.1); color: #3498db; }
-          .nav-sidebar .nav-admin-link:hover { background: rgba(230, 126, 34, 0.2); color: #f39c12; }
-          .nav-sidebar .nav-super-admin-link:hover { background: rgba(155, 89, 182, 0.25); color: #bb8fce; }
-          .nav-sidebar .nav-close-btn:hover { background: rgba(255,255,255,0.2); }
-        `}</style>
+      <nav className={cx('gos-nav', isMobile && isOpen && 'is-open')} aria-label="Nawigacja klanu">
         {isMobile && (
-          <button
-            type="button"
-            className="nav-close-btn"
-            style={navStyles.closeBtn}
-            onClick={onClose}
-            aria-label="Zamknij menu"
-          >
+          <button type="button" className="gos-nav__close" onClick={onClose} aria-label="Zamknij menu">
             ×
           </button>
         )}
-        <div style={{ ...navStyles.navSection, ...(isMobile ? { paddingTop: 48 } : {}) }}>
-          <div style={navStyles.sectionLabel}>Nawigacja</div>
-          <Link
-            href="/"
-            className="nav-link"
-            style={{
-              ...navStyles.link,
-              ...(isHome ? navStyles.linkActive : {}),
-            }}
-            onClick={onClose}
-          >
+
+        <div className={cx('gos-nav__section', isMobile && 'gos-nav__section--mobile')}>
+          <p className="gos-nav__label">Nawigacja</p>
+          <Link href="/" className={cx('gos-nav__item', isHome && 'is-active')} onClick={onClose}>
             Home
           </Link>
 
-        <div>
           <button
             type="button"
-            className="nav-dropdown-trigger"
-            style={{
-              ...navStyles.dropdownTrigger,
-              ...(tytaniOpen ? navStyles.dropdownTriggerOpen : {}),
-            }}
+            className={cx('gos-nav__item', tytaniOpen && 'is-open', pathname.startsWith('/tytani') && 'is-active')}
             onClick={() => setTytaniOpen((o) => !o)}
           >
             <span>Tytani</span>
-            <span
-              style={{
-                ...navStyles.chevron,
-                transform: tytaniOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-              }}
-            >
-              ▼
-            </span>
+            <span className={cx('gos-nav__chevron', tytaniOpen && 'is-open')}>▼</span>
           </button>
-          {tytaniOpen && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-              {TYTANI.map(({ name, slug }) => {
-                const href = `/tytani/${slug}`;
-                const isActive = currentTytanSlug === slug;
-                return (
-                  <Link
-                    key={slug}
-                    href={href}
-                    className="nav-sublink"
-                    style={{
-                      ...navStyles.sublink,
-                      ...(isActive ? navStyles.sublinkActive : {}),
-                    }}
-                    onClick={onClose}
-                  >
-                    {name}
-                  </Link>
-                );
-              })}
-            </div>
-          )}
+          {tytaniOpen &&
+            TYTANI.map(({ name, slug }) => (
+              <Link
+                key={slug}
+                href={`/tytani/${slug}`}
+                className={cx('gos-nav__item', 'gos-nav__item--sub', currentTytanSlug === slug && 'is-active')}
+                onClick={onClose}
+              >
+                {name}
+              </Link>
+            ))}
         </div>
-      </div>
 
-      <div style={navStyles.navSection}>
-        <Link
-          href="/kupie"
-          className="nav-link"
-          style={{
-            ...navStyles.link,
-            ...(pathname === '/kupie' ? navStyles.linkActive : {}),
-          }}
-          onClick={onClose}
-        >
-          Kupie
-        </Link>
-        <Link
-          href="/sprzedam"
-          className="nav-link"
-          style={{
-            ...navStyles.link,
-            ...(pathname === '/sprzedam' ? navStyles.linkActive : {}),
-          }}
-          onClick={onClose}
-        >
-          Sprzedam
-        </Link>
-        <div>
+        <div className="gos-nav__section">
+          <Link
+            href="/kupie"
+            className={cx('gos-nav__item', pathname === '/kupie' && 'is-active')}
+            onClick={onClose}
+          >
+            Kupie
+          </Link>
+          <Link
+            href="/sprzedam"
+            className={cx('gos-nav__item', pathname === '/sprzedam' && 'is-active')}
+            onClick={onClose}
+          >
+            Sprzedam
+          </Link>
+
           <button
             type="button"
-            className="nav-dropdown-trigger"
-            style={{
-              ...navStyles.dropdownTrigger,
-              ...(eventOpen ? navStyles.dropdownTriggerOpen : {}),
-            }}
+            className={cx('gos-nav__item', eventOpen && 'is-open', pathname.startsWith('/2026') && 'is-active')}
             onClick={() => setEventOpen((o) => !o)}
           >
             <span>Event</span>
-            <span style={{ ...navStyles.chevron, transform: eventOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
+            <span className={cx('gos-nav__chevron', eventOpen && 'is-open')}>▼</span>
           </button>
           {eventOpen && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            <>
               <button
                 type="button"
-                className="nav-dropdown-trigger"
-                style={{
-                  ...navStyles.dropdownTrigger,
-                  ...navStyles.sublink,
-                  padding: '10px 20px 10px 36px',
-                  ...(year2026Open ? navStyles.dropdownTriggerOpen : {}),
-                }}
+                className={cx('gos-nav__item', 'gos-nav__item--sub', year2026Open && 'is-open', pathname.startsWith('/2026') && 'is-active')}
                 onClick={() => setYear2026Open((o) => !o)}
               >
                 <span>2026</span>
-                <span style={{ ...navStyles.chevron, transform: year2026Open ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
+                <span className={cx('gos-nav__chevron', year2026Open && 'is-open')}>▼</span>
               </button>
               {year2026Open && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                <>
                   <button
                     type="button"
-                    className="nav-dropdown-trigger"
-                    style={{
-                      ...navStyles.dropdownTrigger,
-                      ...navStyles.sublink,
-                      padding: '10px 20px 10px 36px',
-                      ...(urodziny20Open ? navStyles.dropdownTriggerOpen : {}),
-                    }}
+                    className={cx('gos-nav__item', 'gos-nav__item--sub2', urodziny20Open && 'is-open', pathname.startsWith('/2026/20urodziny') && 'is-active')}
                     onClick={() => setUrodziny20Open((o) => !o)}
                   >
                     <span>20 urodziny</span>
-                    <span style={{ ...navStyles.chevron, transform: urodziny20Open ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
+                    <span className={cx('gos-nav__chevron', urodziny20Open && 'is-open')}>▼</span>
                   </button>
                   {urodziny20Open && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                      <Link href="/2026/20urodziny" className="nav-sublink3" style={{ ...navStyles.sublink3, ...(pathname === '/2026/20urodziny' ? navStyles.sublink3Active : {}) }} onClick={onClose}>Strona główna</Link>
-                      <Link href="/2026/20urodziny/seeker-of-creation" className="nav-sublink3" style={{ ...navStyles.sublink3, ...(pathname === '/2026/20urodziny/seeker-of-creation' ? navStyles.sublink3Active : {}) }} onClick={onClose}>63 - Seeker of Creation</Link>
-                      <Link href="/2026/20urodziny/harbinger-of-elancia" className="nav-sublink3" style={{ ...navStyles.sublink3, ...(pathname === '/2026/20urodziny/harbinger-of-elancia' ? navStyles.sublink3Active : {}) }} onClick={onClose}>143 - Harbinger of Elancia</Link>
-                      <Link href="/2026/20urodziny/thunder-wielding-barbarian" className="nav-sublink3" style={{ ...navStyles.sublink3, ...(pathname === '/2026/20urodziny/thunder-wielding-barbarian' ? navStyles.sublink3Active : {}) }} onClick={onClose}>300 - Thunder-Wielding Barbarian</Link>
-                    </div>
+                    <>
+                      <Link href="/2026/20urodziny" className={cx('gos-nav__item', 'gos-nav__item--sub3', pathname === '/2026/20urodziny' && 'is-active')} onClick={onClose}>Strona główna</Link>
+                      <Link href="/2026/20urodziny/seeker-of-creation" className={cx('gos-nav__item', 'gos-nav__item--sub3', pathname === '/2026/20urodziny/seeker-of-creation' && 'is-active')} onClick={onClose}>63 - Seeker of Creation</Link>
+                      <Link href="/2026/20urodziny/harbinger-of-elancia" className={cx('gos-nav__item', 'gos-nav__item--sub3', pathname === '/2026/20urodziny/harbinger-of-elancia' && 'is-active')} onClick={onClose}>143 - Harbinger of Elancia</Link>
+                      <Link href="/2026/20urodziny/thunder-wielding-barbarian" className={cx('gos-nav__item', 'gos-nav__item--sub3', pathname === '/2026/20urodziny/thunder-wielding-barbarian' && 'is-active')} onClick={onClose}>300 - Thunder-Wielding Barbarian</Link>
+                    </>
                   )}
                   <button
                     type="button"
-                    className="nav-dropdown-trigger"
-                    style={{
-                      ...navStyles.dropdownTrigger,
-                      ...navStyles.sublink,
-                      padding: '10px 20px 10px 36px',
-                      ...(easterOpen ? navStyles.dropdownTriggerOpen : {}),
-                    }}
+                    className={cx('gos-nav__item', 'gos-nav__item--sub2', easterOpen && 'is-open', pathname.startsWith('/2026/easter') && 'is-active')}
                     onClick={() => setEasterOpen((o) => !o)}
                   >
                     <span>Easter (statystyki)</span>
-                    <span style={{ ...navStyles.chevron, transform: easterOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
+                    <span className={cx('gos-nav__chevron', easterOpen && 'is-open')}>▼</span>
                   </button>
                   {easterOpen && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                      <Link href="/2026/easter" className="nav-sublink3" style={{ ...navStyles.sublink3, ...(pathname === '/2026/easter' ? navStyles.sublink3Active : {}) }} onClick={onClose}>Strona główna</Link>
-                      <Link href="/2026/easter/hotblood-capon" className="nav-sublink3" style={{ ...navStyles.sublink3, ...(pathname === '/2026/easter/hotblood-capon' ? navStyles.sublink3Active : {}) }} onClick={onClose}>81 - Hotblood Capon</Link>
-                      <Link href="/2026/easter/grim-blackcluck" className="nav-sublink3" style={{ ...navStyles.sublink3, ...(pathname === '/2026/easter/grim-blackcluck' ? navStyles.sublink3Active : {}) }} onClick={onClose}>41 - Grim Blackcluck</Link>
-                    </div>
+                    <>
+                      <Link href="/2026/easter" className={cx('gos-nav__item', 'gos-nav__item--sub3', pathname === '/2026/easter' && 'is-active')} onClick={onClose}>Strona główna</Link>
+                      <Link href="/2026/easter/hotblood-capon" className={cx('gos-nav__item', 'gos-nav__item--sub3', pathname === '/2026/easter/hotblood-capon' && 'is-active')} onClick={onClose}>81 - Hotblood Capon</Link>
+                      <Link href="/2026/easter/grim-blackcluck" className={cx('gos-nav__item', 'gos-nav__item--sub3', pathname === '/2026/easter/grim-blackcluck' && 'is-active')} onClick={onClose}>41 - Grim Blackcluck</Link>
+                    </>
                   )}
-                </div>
+                </>
               )}
-            </div>
+            </>
           )}
         </div>
-      </div>
 
-      <div style={navStyles.navSection}>
-        {(user?.role === 'admin' || user?.role === 'koordynator' || user?.role === 'super_admin') && (
-          <Link
-            href="/admin/rezerwacje"
-            className="nav-admin-link"
-            style={{
-              ...navStyles.adminLink,
-              ...(pathname === '/admin/rezerwacje' ? navStyles.adminLinkActive : {}),
-            }}
-            onClick={onClose}
-          >
-            ⚙ Rezerwacje
-          </Link>
-        )}
-        {(user?.role === 'admin' || user?.role === 'koordynator' || user?.role === 'super_admin') && (
-          <Link
-            href="/admin"
-            className="nav-admin-link"
-            style={{
-              ...navStyles.adminLink,
-              ...(pathname === '/admin' ? navStyles.adminLinkActive : {}),
-            }}
-            onClick={onClose}
-          >
-            ⚙ Fazy
-          </Link>
-        )}
-        {(user?.role === 'admin' || user?.role === 'super_admin') && (
-          <Link
-            href="/admin/panel"
-            className="nav-admin-link"
-            style={{
-              ...navStyles.adminLink,
-              ...(pathname === '/admin/panel' ? navStyles.adminLinkActive : {}),
-            }}
-            onClick={onClose}
-          >
-            ⚙ Admin Panel
-          </Link>
-        )}
-        {(user?.role === 'admin' || user?.role === 'super_admin') && (
-          <Link
-            href="/admin/ustawienia"
-            className="nav-admin-link"
-            style={{
-              ...navStyles.adminLink,
-              ...(pathname === '/admin/ustawienia' ? navStyles.adminLinkActive : {}),
-            }}
-            onClick={onClose}
-          >
-            ⚙ Ustawienia poczty
-          </Link>
-        )}
-        {user?.role === 'super_admin' && (
-          <div>
-            <button
-              type="button"
-              className="nav-dropdown-trigger"
-              style={{
-                ...navStyles.dropdownTrigger,
-                ...(logsOpen ? navStyles.dropdownTriggerOpen : {}),
-                color: '#9b59b6',
-              }}
-              onClick={() => setLogsOpen((o) => !o)}
-            >
-              <span>📋 Logs</span>
-              <span style={{ ...navStyles.chevron, transform: logsOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
-            </button>
-            {logsOpen && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                <Link
-                  href="/admin/logs/discord"
-                  className="nav-super-admin-link"
-                  style={{
-                    ...navStyles.superAdminLink,
-                    ...(pathname === '/admin/logs/discord' ? navStyles.superAdminLinkActive : {}),
-                  }}
-                  onClick={onClose}
+        {(canPhases || canAdmin || user?.role === 'super_admin') && (
+          <div className="gos-nav__section">
+            <p className="gos-nav__label">Administracja</p>
+            {canPhases && (
+              <Link
+                href="/admin/rezerwacje"
+                className={cx('gos-nav__item', 'gos-nav__item--admin', pathname === '/admin/rezerwacje' && 'is-active')}
+                onClick={onClose}
+              >
+                Rezerwacje
+              </Link>
+            )}
+            {canPhases && (
+              <Link
+                href="/admin"
+                className={cx('gos-nav__item', 'gos-nav__item--admin', pathname === '/admin' && 'is-active')}
+                onClick={onClose}
+              >
+                Fazy
+              </Link>
+            )}
+            {canAdmin && (
+              <Link
+                href="/admin/panel"
+                className={cx('gos-nav__item', 'gos-nav__item--admin', pathname === '/admin/panel' && 'is-active')}
+                onClick={onClose}
+              >
+                Admin Panel
+              </Link>
+            )}
+            {canAdmin && (
+              <Link
+                href="/admin/ustawienia"
+                className={cx('gos-nav__item', 'gos-nav__item--admin', pathname === '/admin/ustawienia' && 'is-active')}
+                onClick={onClose}
+              >
+                Ustawienia poczty
+              </Link>
+            )}
+            {user?.role === 'super_admin' && (
+              <>
+                <button
+                  type="button"
+                  className={cx('gos-nav__item', 'gos-nav__item--logs', logsOpen && 'is-open', pathname.startsWith('/admin/logs') && 'is-active')}
+                  onClick={() => setLogsOpen((o) => !o)}
                 >
-                  Logs Discord
-                </Link>
-                <Link
-                  href="/admin/logs/margonem"
-                  className="nav-super-admin-link"
-                  style={{
-                    ...navStyles.superAdminLink,
-                    ...(pathname === '/admin/logs/margonem' ? navStyles.superAdminLinkActive : {}),
-                  }}
-                  onClick={onClose}
-                >
-                  Logs Margonem
-                </Link>
-                <Link
-                  href="/admin/logs/chat"
-                  className="nav-super-admin-link"
-                  style={{
-                    ...navStyles.superAdminLink,
-                    ...(pathname === '/admin/logs/chat' ? navStyles.superAdminLinkActive : {}),
-                  }}
-                  onClick={onClose}
-                >
-                  Logs Chat
-                </Link>
-              </div>
+                  <span>Logs</span>
+                  <span className={cx('gos-nav__chevron', logsOpen && 'is-open')}>▼</span>
+                </button>
+                {logsOpen && (
+                  <>
+                    <Link href="/admin/logs/discord" className={cx('gos-nav__item', 'gos-nav__item--sub', 'gos-nav__item--logs', pathname === '/admin/logs/discord' && 'is-active')} onClick={onClose}>Logs Discord</Link>
+                    <Link href="/admin/logs/margonem" className={cx('gos-nav__item', 'gos-nav__item--sub', 'gos-nav__item--logs', pathname === '/admin/logs/margonem' && 'is-active')} onClick={onClose}>Logs Margonem</Link>
+                    <Link href="/admin/logs/chat" className={cx('gos-nav__item', 'gos-nav__item--sub', 'gos-nav__item--logs', pathname === '/admin/logs/chat' && 'is-active')} onClick={onClose}>Logs Chat</Link>
+                  </>
+                )}
+              </>
             )}
           </div>
         )}
-      </div>
-    </nav>
+      </nav>
     </>
   );
 }

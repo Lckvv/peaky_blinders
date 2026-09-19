@@ -58,7 +58,7 @@ export default function AuthGuard({ children }: { children: ReactNode }) {
           isOpen={mobileMenuOpen}
           onClose={() => setMobileMenuOpen(false)}
         />
-        <main style={{ flex: 1, overflow: 'auto', minWidth: 0, marginLeft: isMobile ? 0 : 260 }}>
+        <main className="gos-main" style={{ marginLeft: isMobile ? 0 : 260 }}>
           {children}
         </main>
       </div>

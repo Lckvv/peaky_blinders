@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Cinzel, Outfit } from 'next/font/google';
 import { AuthProvider } from './components/AuthContext';
 import AuthGuard from './components/AuthGuard';
+import './gos.css';
 
 const cinzel = Cinzel({
   subsets: ['latin'],
@@ -28,7 +29,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pl" className={`${cinzel.variable} ${outfit.variable}`}>
-      <body style={{ margin: 0, fontFamily: 'var(--font-outfit), system-ui, sans-serif', background: '#0f0f23', color: '#eee' }}>
+      <body style={{ margin: 0, fontFamily: 'var(--font-outfit), system-ui, sans-serif', background: '#07080f', color: '#f6f1e4' }}>
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', overflowX: 'hidden', width: '100%' }}>
           <AuthProvider>
             <AuthGuard>

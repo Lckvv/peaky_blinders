@@ -106,7 +106,7 @@ export default function LoginForm() {
               <input
                 id="gos-email"
                 type="email"
-                placeholder="np. straznik@example.com"
+                placeholder="np. gos@gmail.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -122,7 +122,7 @@ export default function LoginForm() {
             <input
               id="gos-login"
               type={mode === 'register' ? 'text' : 'text'}
-              placeholder={mode === 'register' ? 'Twoja nazwa' : 'email lub username'}
+              placeholder={mode === 'register' ? 'Twój głowny Nick w grze' : 'email lub username'}
               value={mode === 'register' ? username : email}
               onChange={(e) => (mode === 'register' ? setUsername(e.target.value) : setEmail(e.target.value))}
               required
