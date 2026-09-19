@@ -157,9 +157,10 @@ body {
   font: inherit;
   font-size: 14px;
   font-weight: 500;
-  line-height: 1.3;
+  line-height: 1.35;
   text-decoration: none;
   text-align: left;
+  white-space: normal;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
@@ -489,6 +490,172 @@ body {
   word-break: break-all;
 }
 
+.gos-podium {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 12px;
+  margin: 4px auto 32px;
+  padding: 8px 8px 0;
+  max-width: 560px;
+}
+
+.gos-podium__col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 148px;
+  flex-shrink: 0;
+}
+
+.gos-podium__player {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
+  min-height: 168px;
+  margin-bottom: 10px;
+}
+
+.gos-podium__crown {
+  display: flex;
+  height: 18px;
+  margin-bottom: -2px;
+  filter: drop-shadow(0 4px 8px rgba(227, 195, 106, 0.45));
+}
+
+.gos-podium__frame {
+  width: 72px;
+  height: 108px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gos-podium__frame--1 {
+  width: 80px;
+  height: 118px;
+}
+
+.gos-podium__avatar {
+  width: 32px;
+  height: 48px;
+  overflow: hidden;
+  position: relative;
+  transform: scale(2);
+  transform-origin: center center;
+  border-radius: 6px;
+  background: #0c101c;
+  border: 2px solid rgba(227, 195, 106, 0.28);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.4);
+}
+
+.gos-podium__col--1 .gos-podium__avatar {
+  transform: scale(2.2);
+  border-color: #e3c36a;
+  box-shadow: 0 0 22px rgba(227, 195, 106, 0.4), 0 10px 22px rgba(0, 0, 0, 0.4);
+}
+
+.gos-podium__col--2 .gos-podium__avatar {
+  border-color: #c5cdd8;
+}
+
+.gos-podium__col--3 .gos-podium__avatar {
+  border-color: #d08a52;
+}
+
+.gos-podium__avatar img {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+}
+
+.gos-podium__avatar--empty {
+  background: linear-gradient(180deg, #1a2030, #0c101c);
+}
+
+.gos-podium__nick {
+  width: 100%;
+  font-size: 13px;
+  font-weight: 700;
+  color: #f3e6b8;
+  text-align: center;
+  line-height: 1.25;
+  word-break: break-word;
+}
+
+.gos-podium__score {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: #9be7b3;
+}
+
+.gos-podium__score--points {
+  color: #f0b27a;
+}
+
+.gos-podium__step {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 12px 12px 4px 4px;
+  box-sizing: border-box;
+}
+
+.gos-podium__step::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, transparent 42%);
+  pointer-events: none;
+}
+
+.gos-podium__step::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 0;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.gos-podium__col--1 .gos-podium__step {
+  height: 128px;
+  background: linear-gradient(180deg, #f4de9a 0%, #d4ae3c 42%, #8d6a16 100%);
+  box-shadow: 0 16px 32px rgba(201, 162, 39, 0.28), inset 0 -10px 16px rgba(0, 0, 0, 0.18);
+}
+
+.gos-podium__col--2 .gos-podium__step {
+  height: 100px;
+  background: linear-gradient(180deg, #e8edf4 0%, #9aa6b8 42%, #4b5563 100%);
+  box-shadow: 0 14px 28px rgba(80, 90, 110, 0.28), inset 0 -10px 16px rgba(0, 0, 0, 0.18);
+}
+
+.gos-podium__col--3 .gos-podium__step {
+  height: 80px;
+  background: linear-gradient(180deg, #e8b08a 0%, #b56a36 42%, #6e3a16 100%);
+  box-shadow: 0 14px 28px rgba(146, 64, 14, 0.26), inset 0 -10px 16px rgba(0, 0, 0, 0.18);
+}
+
+.gos-podium__place {
+  position: relative;
+  z-index: 1;
+  font-family: var(--font-cinzel), Georgia, serif;
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1;
+  color: rgba(12, 10, 6, 0.72);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
 @media (max-width: 768px) {
   .gos-header__title {
     font-size: 16px;
@@ -511,4 +678,20 @@ body {
   .gos-page {
     padding: 24px 16px 48px;
   }
+
+  .gos-podium {
+    gap: 6px;
+  }
+
+  .gos-podium__col {
+    width: 108px;
+  }
+
+  .gos-podium__nick {
+    font-size: 11px;
+  }
+
+  .gos-podium__col--1 .gos-podium__step { height: 108px; }
+  .gos-podium__col--2 .gos-podium__step { height: 84px; }
+  .gos-podium__col--3 .gos-podium__step { height: 68px; }
 }

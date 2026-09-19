@@ -4,20 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { useAuth } from './AuthContext';
-
-const TYTANI = [
-  { name: 'Orla', slug: 'orla' },
-  { name: 'Kic', slug: 'kic' },
-  { name: 'Renegat', slug: 'renegat' },
-  { name: 'Arcy', slug: 'arcy' },
-  { name: 'Zoons', slug: 'zoons' },
-  { name: 'Łowczyni', slug: 'lowczyni' },
-  { name: 'Przyzywacz', slug: 'przyzywacz' },
-  { name: 'Magua', slug: 'magua' },
-  { name: 'Teza', slug: 'teza' },
-  { name: 'Barbatos', slug: 'barbatos' },
-  { name: 'Tanroth', slug: 'tanroth' },
-] as const;
+import { TITANS } from '@/lib/titans';
 
 function cx(...parts: Array<string | false | undefined | null>) {
   return parts.filter(Boolean).join(' ');
@@ -81,14 +68,14 @@ export default function Navbar({ isMobile, isOpen, onClose }: NavbarProps = {}) 
             <span className={cx('gos-nav__chevron', tytaniOpen && 'is-open')}>▼</span>
           </button>
           {tytaniOpen &&
-            TYTANI.map(({ name, slug }) => (
+            TITANS.map(({ label, slug }) => (
               <Link
                 key={slug}
                 href={`/tytani/${slug}`}
                 className={cx('gos-nav__item', 'gos-nav__item--sub', currentTytanSlug === slug && 'is-active')}
                 onClick={onClose}
               >
-                {name}
+                {label}
               </Link>
             ))}
         </div>
