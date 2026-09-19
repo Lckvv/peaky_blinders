@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Margonem Map Timer
 // @namespace    http://tampermonkey.net/
-// @version      2.9
+// @version      2.10
 // @description  Śledzenie czasu na mapach tytanów (Guardians of Souls). Event Easter wyłączony — tylko statystyki na stronie.
 // @author       Lucek
 // @match        https://*.margonem.com/*
@@ -22,6 +22,12 @@
 
     /** Event Easter 2026 (41, 81) zakończony — brak zliczania czasu i panelu herosa. Statystyki tylko na stronie. */
     const EVE_EVENT_ENDED = true;
+
+    // Wstrzykiwane przez /api/script/serve.user.js przy instalacji ze strony (nadpisuje stary klucz w Tampermonkey).
+    var INSTALL_API_KEY = '';
+    var INSTALL_BACKEND_URL = '';
+    if (INSTALL_API_KEY) GM_setValue('api_key', INSTALL_API_KEY);
+    if (INSTALL_BACKEND_URL) GM_setValue('backend_url', String(INSTALL_BACKEND_URL).replace(/\/$/, ''));
 
     // ================================================================
     //  CONFIG — zmień BACKEND_URL i API_KEY po rejestracji na stronie
@@ -844,6 +850,7 @@
             world: worldName || 'Unknown',
             reason: reason,
             timestamp: new Date().toISOString(),
+            apiKey: CONFIG.API_KEY,
         };
         // Outfit: z wejścia na mapę, albo odśwież przy wysyłce (engine mógł załadować później), albo z localStorage Margonem
         const outfitForSend = heroOutfitUrl || getHeroOutfitUrl() || getOutfitFromLocalStorage(heroName || '');
@@ -2265,7 +2272,7 @@
         log('🚀 Map Timer — inicjalizacja');
         log(`   Mapy: ${CONFIG.TARGETS.map(t => t.map).join(' | ')}`);
         log(`   BACKEND_URL: ${CONFIG.BACKEND_URL || '(pusty — ustaw w ⚙️)'}`);
-        log(`   API Key: ${CONFIG.API_KEY ? '✅ ustawiony' : '❌ BRAK — zainstaluj skrypt ze strony (link z tokenem)'}`);
+        log(`   API Key: ${CONFIG.API_KEY ? ('✅ ' + String(CONFIG.API_KEY).slice(0, 8) + '…') : '❌ BRAK — zainstaluj skrypt ze strony (link z tokenem)'}`);
 
         document.addEventListener('visibilitychange', function () {
             if (document.visibilityState === 'visible') pollHeroLevelNotificationsOnce();

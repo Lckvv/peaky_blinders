@@ -34,7 +34,16 @@ export async function GET(request: NextRequest) {
         const apiKey = user.apiKeys[0].key;
         const keyEscaped = String(apiKey).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         const urlEscaped = String(backendUrl).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        // Zamieniamy wszystkie wystąpienia — inaczej refreshConfigFromStorage() nadpisze klucz/URL pustym (GM_getValue z pustego storage zwraca default '').
+        // Wymuś zapis w Tampermonkey — GM_getValue(default) NIE nadpisuje już zapisanego (nawet pustego/starego) klucza.
+        code = code.replace(
+          /var INSTALL_API_KEY = '';/,
+          `var INSTALL_API_KEY = '${keyEscaped}';`
+        );
+        code = code.replace(
+          /var INSTALL_BACKEND_URL = '';/,
+          `var INSTALL_BACKEND_URL = '${urlEscaped}';`
+        );
+        // Zapasowo podmień też defaulty GM_getValue.
         code = code.replace(/GM_getValue\s*\(\s*['"]api_key['"]\s*,\s*['"][^'"]*['"]\s*\)/g, `GM_getValue('api_key', '${keyEscaped}')`);
         code = code.replace(/GM_getValue\s*\(\s*['"]backend_url['"]\s*,\s*['"][^'"]*['"]\s*\)/g, `GM_getValue('backend_url', '${urlEscaped}')`);
       }
@@ -44,7 +53,7 @@ export async function GET(request: NextRequest) {
   return new NextResponse(code, {
     headers: {
       'Content-Type': 'text/javascript; charset=utf-8',
-      'Cache-Control': 'public, max-age=120',
+      'Cache-Control': 'no-store',
     },
   });
 }

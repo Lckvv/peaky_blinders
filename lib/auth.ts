@@ -45,8 +45,11 @@ export async function verifyToken(
 // ==================== API KEY AUTH (for Tampermonkey) ====================
 
 export async function validateApiKey(apiKey: string) {
+  const trimmed = String(apiKey || '').trim();
+  if (!trimmed) return null;
+
   const key = await prisma.apiKey.findUnique({
-    where: { key: apiKey, active: true },
+    where: { key: trimmed, active: true },
     include: { user: true },
   });
 
@@ -77,7 +80,7 @@ export function generateApiKey(): string {
  * Header: X-API-Key: mgt_xxxxx
  */
 export async function authFromApiKey(request: NextRequest) {
-  const apiKey = request.headers.get('x-api-key');
+  const apiKey = request.headers.get('x-api-key')?.trim();
   if (!apiKey) return null;
   return validateApiKey(apiKey);
 }
