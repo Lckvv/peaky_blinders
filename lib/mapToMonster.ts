@@ -13,8 +13,16 @@ export const MAP_NAME_TO_MONSTER: Record<string, string> = {
   "Bandits' Hideout - Vault": 'Renegat',
   // Arcy (Arcymag)
   'Politraka Volcano - Infernal Abyss': 'Arcy',
+  // Zoons
+  'Goblin Dwelling - Forge': 'Zoons',
+  // Łowczyni
+  'Source of Memories': 'Łowczyni',
   // Przyzywacz
   'Chamber of Bloody Rites': 'Przyzywacz',
+  // Przyzywacz
+  'Den of Lizad Nightmares - Spring': 'Magua',
+  // Przyzywacz
+  'Teotihuacan - Main Chamber': 'Teza',
   // Barbatos
   'Hall of Ruined Temple': 'Barbatos',
   // Tanroth

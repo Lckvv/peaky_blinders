@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Margonem Map Timer
 // @namespace    http://tampermonkey.net/
-// @version      2.11
+// @version      2.12
 // @description  Śledzenie czasu na mapach tytanów (Guardians of Souls). Event Easter wyłączony — tylko statystyki na stronie.
 // @author       Lucek
 // @match        https://*.margonem.com/*
@@ -58,11 +58,15 @@
 
         // 🗺️ Mapy tytanów (event Easter wyłączony — bez zliczania czasu na mapach 41/81).
         TARGETS: [
-            { map: "Caerbannog's Grotto - 2nd Chamber", monster: 'Kic' },
             { map: 'Shimmering Cavern', monster: 'Orla' },
+            { map: "Caerbannog's Grotto - 2nd Chamber", monster: 'Kic' },
             { map: "Bandits' Hideout - Vault", monster: 'Renegat' },
             { map: 'Politraka Volcano - Infernal Abyss', monster: 'Arcy' },
+            { map: 'Goblin Dwelling - Forge', monster: 'Zoons' },
+            { map: 'Source of Memories', monster: 'Łowczyni' },
             { map: 'Chamber of Bloody Rites', monster: 'Przyzywacz' },
+            { map: 'Den of Lizad Nightmares - Spring', monster: 'Magua' },
+            { map: 'Teotihuacan - Main Chamber', monster: 'Teza' },
             { map: 'Hall of Ruined Temple', monster: 'Barbatos' },
             { map: 'Ice Throne Room', monster: 'Tanroth' },
         ],
