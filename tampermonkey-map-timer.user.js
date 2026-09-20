@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Margonem Map Timer
 // @namespace    http://tampermonkey.net/
-// @version      2.10
+// @version      2.11
 // @description  Śledzenie czasu na mapach tytanów (Guardians of Souls). Event Easter wyłączony — tylko statystyki na stronie.
 // @author       Lucek
 // @match        https://*.margonem.com/*
@@ -163,84 +163,129 @@
     const EVE_LAST_LEFT_CACHE_TTL_MS = 5 * 1000;
     let eveMapPopupEl = null;
     let eveMapPopupCurrentMap = null;
-    // Heros → Discord: webhook (kanał herosi), panel z przyciskiem „Zawołaj klan”
-    const DISCORD_WEBHOOK_HEROS = 'https://discord.com/api/webhooks/1473433710220148816/FWedosu8fOskXb7Dy1C2AUiJ99lSi75LD4JkjfbrYcizdE7vbD97MQK-Gwc9UPf0JBhC';
-    // Gdy herosa nie ma na liście (ping = @here) – dodatkowo na kanał herosi-eve (Spidey Bot)
-    const DISCORD_WEBHOOK_HEROS_EVE = 'https://discord.com/api/webhooks/1473567764483674183/nMHJepfgVrTl657vIzlWbgv-dLN4OyNrFDe9c2o715iv3uzPHWVSNO_mZMbwlhi3Elr2';
+    // Heros/Tytan → Discord: webhooki kanałów + ping ról
+    const DISCORD_WEBHOOK_HEROS = 'https://discord.com/api/webhooks/1551179402832777335/AstpXI8k3MLSQdZ3p9pQoCXHWtNRs7mwH-RZjwCZ1fuG6969dwwfP_GerHAT9V1fOCPS';
+    const DISCORD_WEBHOOK_TITAN = 'https://discord.com/api/webhooks/1551180032813047922/q-lyYWmh7wWYhP3O6KCp0h18Lr62pFmwm3gIHQ5VX10bIMxvfuUViSd9zM_qpWkq4qAd';
     // Nazwa herosa (z gry) → ping na Discord; brak na liście = @here
     const HEROS_PING_MAP = {
-        'Wicked Patrick': '@Patryk',
-        'Crimson Avenger': '@Karm',
+        'Wicked Patrick': '@Mroczny Patryk',
+        'Crimson Avenger': '@Karmazynowy Mściciel',
         'Thief': '@Złodziej',
-        'Spiteful Guide': '@Przewo',
-        'Possessed Paladin': '@Opek',
-        'Hellish Skeletor': '@Kostek',
-        'Grove Sentinel': '@Koziec',
-        "Night's Mistress": '@Kocha',
-        'Prince Kasim': '@Pers',
-        'Pious Friar': '@Brat',
-        'Golden Roger': '@Roger',
-        'Sheepless Shepherd': '@Baca',
-        'Spellcaster Atalia': '@Atalia',
-        'Insane Orc Hunter': '@Obło',
-        'Usurer Grauhaz': '@Lichwa',
-        'Viviana Nandin': '@Viviana',
+        'Spiteful Guide': '@Zły Przewodnik',
+        'Possessed Paladin': '@Opętany Paladyn',
+        'Hellish Skeletor': '@Piekielny Kościej',
+        'Grove Sentinel': '@Koziec Mąciciel Ścieżek',
+        "Night's Mistress": '@Kochanka Nocy',
+        'Prince Kasim': '@Książe Kasim',
+        'Pious Friar': '@Święty Braciszek',
+        'Golden Roger': '@Złoty Roger',
+        'Sheepless Shepherd': '@Baca bez Łowiec',
+        'Spellcaster Atalia': '@Czarująca Atalia',
+        'Insane Orc Hunter': '@Obłąkany Łowca Orków',
+        'Usurer Grauhaz': '@Lichwiarz Grauhaz',
+        'Viviana Nandin': '@Viviana Nandin',
         'Frightener': '@Przeraza',
-        'Demonis Lord of the Void': '@Demonis',
-        'Mulher Ma': '@Mulher',
-        'Vapor Veneno': '@Vapor',
-        'Oakhornus': '@Dębek',
-        'Tepeyollotl': '@Kot',
-        'Triad Specter': '@Wiedzma',
-        'Negthotep the Abyss Priest': '@Kapłan',
-        'Young Dragon': '@Smok',
+        'Demonis Lord of the Void': '@Demonis Pan Nicości',
+        'Mulher Ma': '@Mulher Ma',
+        'Vapor Veneno': '@Vapor Veneno',
+        'Oakhornus': '@Dęborożec',
+        'Tepeyollotl': '@Tepeyollotl',
+        'Triad Specter': '@Widmo Triady',
+        'Negthotep the Abyss Priest': '@Negthotep Czarny Kapłan',
+        'Young Dragon': '@Młody Smok',
+    };
+    // Nazwa tytana (z gry) → ping na Discord; brak na liście = @here
+    const TITAN_PING_MAP = {
+        'Virgin Eagless': '@Dziewicza Orlica',
+        'Killer Rabbit': '@Zabójczy Królik',
+        'Renegade Baulus': '@Renegat Baulus',
+        'Infernal Archmage': '@Piekielny Arcymag',
+        'Versus Zoons': '@Versus Zoons',
+        'Huntress of Memories': '@Łowczyni Wspomnień',
+        'Daemons Summoner': '@Przyzywacz Demonów',
+        'Maddok Magua': '@Maddok Magua',
+        'Tezcatlipoca': '@Tezcatlipoca',
+        'Dragon Guardian Barbatos': '@Barbatos Smoczy Strażnik',
+        'Tanroth': '@Tanroth',
     };
     // Nazwa herosa → Discord ROLE ID. Ping roli w treści: <@&ROLE_ID> (niebieski).
     const HEROS_DISCORD_ROLE_IDS = {
-        'Wicked Patrick': '1417548939842027651',
-        'Spiteful Guide': '1417548990303436820',
-        'Possessed Paladin': '1417549095882457288',
-        'Hellish Skeletor': '1417549176194994297',
-        'Grove Sentinel': '1417549368587849888',
-        "Night's Mistress": '1417549435604308090',
-        'Prince Kasim': '1417549507629154415',
-        'Pious Friar': '1417549553992728646',
-        'Golden Roger': '1417549631113662676',
-        'Sheepless Shepherd': '1417549696012128327',
-        'Spellcaster Atalia': '1417549738399629322',
-        'Insane Orc Hunter': '1417549843374542918',
-        'Usurer Grauhaz': '1417549886080942171',
-        'Viviana Nandin': '1417549935842427154',
-        'Frightener': '1452579670833758238',
-        'Demonis Lord of the Void': '1417550055203934318',
-        'Mulher Ma': '1417549984311804027',
-        'Vapor Veneno': '1417550099889786970',
-        'Oakhornus': '1417550144097882252',
-        'Tepeyollotl': '1417550181070540981',
-        'Negthotep the Abyss Priest': '1417550230194487386',
-        'Young Dragon': '1417550287459061765',
+        'Wicked Patrick': '1472308873837674755',
+        'Crimson Avenger': '1472308934025941094',
+        'Thief': '1472308994977829068',
+        'Spiteful Guide': '1472309048388096243',
+        'Possessed Paladin': '1472309150946951248',
+        'Hellish Skeletor': '1472309197453393980',
+        'Grove Sentinel': '1472309289996521675',
+        "Night's Mistress": '1471916507297484905',
+        'Prince Kasim': '1471916577728233574',
+        'Pious Friar': '1471916606228664336',
+        'Golden Roger': '1471916626336026835',
+        'Sheepless Shepherd': '1471916650025717995',
+        'Spellcaster Atalia': '1471916679297630310',
+        'Insane Orc Hunter': '1471916718795522059',
+        'Usurer Grauhaz': '1471916737887994098',
+        'Viviana Nandin': '1471917686337441934',
+        'Frightener': '1471916771392094374',
+        'Demonis Lord of the Void': '1471916812185763840',
+        'Mulher Ma': '1471916847736684708',
+        'Vapor Veneno': '1471916953848512604',
+        'Oakhornus': '1471916979752407101',
+        'Tepeyollotl': '1471917002166767668',
+        'Triad Specter': '1471917021200650516',
+        'Negthotep the Abyss Priest': '1471917052242559059',
+        'Young Dragon': '1471917079190831258',
     };
-    function getHeroPing(heroName) {
-        if (!heroName || typeof heroName !== 'string') return '@here';
-        var key = heroName.trim();
-        var lower = key.toLowerCase();
-        for (var k in HEROS_PING_MAP) {
-            if (k.toLowerCase() === lower) return HEROS_PING_MAP[k];
+    // Nazwa tytana → Discord ROLE ID.
+    const TITAN_DISCORD_ROLE_IDS = {
+        'Virgin Eagless': '725114797875789926',
+        'Killer Rabbit': '725114855698202656',
+        'Renegade Baulus': '725114894034272317',
+        'Infernal Archmage': '725114977656242247',
+        'Versus Zoons': '725115162398294047',
+        'Huntress of Memories': '780724987551023134',
+        'Daemons Summoner': '725115268182835281',
+        'Maddok Magua': '952532626760151050',
+        'Tezcatlipoca': '780726825575383111',
+        'Dragon Guardian Barbatos': '1109961353784995973',
+        'Tanroth': '780726964830732319',
+    };
+    function lookupPing(name, pingMap) {
+        if (!name || typeof name !== 'string') return '@here';
+        var lower = name.trim().toLowerCase();
+        for (var k in pingMap) {
+            if (k.toLowerCase() === lower) return pingMap[k];
         }
         return '@here';
     }
-    /** Zwraca fragment treści do pinga: <@&roleId> (rola, niebieski) albo @nick / @here. */
-    function getHeroMentionForContent(heroName) {
-        if (!heroName || typeof heroName !== 'string') return '@here';
-        var key = heroName.trim();
-        var lower = key.toLowerCase();
-        for (var k in HEROS_DISCORD_ROLE_IDS) {
+    function lookupRoleMention(name, roleIds, pingMap) {
+        if (!name || typeof name !== 'string') return '@here';
+        var lower = name.trim().toLowerCase();
+        for (var k in roleIds) {
             if (k.toLowerCase() === lower) {
-                var id = HEROS_DISCORD_ROLE_IDS[k];
+                var id = roleIds[k];
                 if (id && String(id).trim()) return '<@&' + String(id).trim() + '>';
             }
         }
-        return getHeroPing(heroName);
+        return lookupPing(name, pingMap);
+    }
+    /** Zwraca fragment treści do pinga: <@&roleId> (rola, niebieski) albo @nick / @here. */
+    function getHeroMentionForContent(heroName) {
+        return lookupRoleMention(heroName, HEROS_DISCORD_ROLE_IDS, HEROS_PING_MAP);
+    }
+    function getTitanMentionForContent(titanName) {
+        return lookupRoleMention(titanName, TITAN_DISCORD_ROLE_IDS, TITAN_PING_MAP);
+    }
+    function nameLooksLikeTitan(name) {
+        if (!name || typeof name !== 'string') return false;
+        var lower = name.trim().toLowerCase();
+        for (var k in TITAN_DISCORD_ROLE_IDS) {
+            if (k.toLowerCase() === lower) return true;
+        }
+        for (var p in TITAN_PING_MAP) {
+            if (p.toLowerCase() === lower) return true;
+        }
+        return false;
     }
     let heroAlertPanelEl = null;
     let lastHeroAlertData = null;
@@ -433,7 +478,8 @@
         if (!heroNpc) return;
         if (lastHerosNotifiedMapName === mapName) return;
         lastHerosNotifiedMapName = mapName;
-        const name = (heroNpc.nick && String(heroNpc.nick).trim()) || (heroNpc.wt >= TITAN_WT_MIN ? 'Tytan' : 'Heros');
+        const isTitan = heroNpc.wt >= TITAN_WT_MIN;
+        const name = (heroNpc.nick && String(heroNpc.nick).trim()) || (isTitan ? 'Tytan' : 'Heros');
         lastHeroAlertData = {
             nick: name,
             lvl: heroNpc.lvl,
@@ -441,6 +487,8 @@
             y: heroNpc.y,
             mapName: mapName,
             tpl: heroNpc.tpl,
+            wt: heroNpc.wt,
+            isTitan: isTitan || nameLooksLikeTitan(name),
         };
         var nameTrim = (name || '').trim();
         var eveKey = EVE_HERO_NICK_TO_KEY[nameTrim];
@@ -468,7 +516,7 @@
             heroAlertPanelEl.id = 'map-timer-hero-alert';
             heroAlertPanelEl.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:100010;background:#1a1a2e;border:2px solid #e67e22;border-radius:12px;padding:14px 18px;box-shadow:0 8px 24px rgba(0,0,0,0.5);font-family:Arial,sans-serif;min-width:280px;';
             heroAlertPanelEl.innerHTML =
-                '<div style="color:#fff;font-weight:bold;font-size:14px;margin-bottom:8px;">🦸 Heros na mapie!</div>' +
+                '<div class="map-timer-hero-alert-title" style="color:#fff;font-weight:bold;font-size:14px;margin-bottom:8px;">🦸 Heros na mapie!</div>' +
                 '<div class="map-timer-hero-alert-info" style="color:#b8c5d6;font-size:12px;margin-bottom:12px;"></div>' +
                 '<button type="button" class="map-timer-hero-alert-call" style="display:block;width:100%;margin-bottom:10px;padding:8px 14px;background:#27ae60;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:bold;">Powiadom klan na Discordzie</button>' +
                 '<div style="font-size:11px;color:#8892b0;margin-bottom:6px;">Powiadomienie w grze (level):</div>' +
@@ -486,6 +534,8 @@
                 heroAlertPanelEl.querySelector('.map-timer-hero-alert-level-btns').appendChild(btn);
             });
         }
+        var titleEl = heroAlertPanelEl.querySelector('.map-timer-hero-alert-title');
+        if (titleEl) titleEl.textContent = lastHeroAlertData.isTitan ? '⚔️ Tytan na mapie!' : '🦸 Heros na mapie!';
         var info = heroAlertPanelEl.querySelector('.map-timer-hero-alert-info');
         var lvlStr = lastHeroAlertData.lvl != null ? lastHeroAlertData.lvl + 'm' : '?';
         var posStr = (lastHeroAlertData.x != null && lastHeroAlertData.y != null) ? (lastHeroAlertData.x + ',' + lastHeroAlertData.y) : '?';
@@ -721,10 +771,14 @@
                 })
             }).catch(function () {});
         }
-        var ping = getHeroPing(lastHeroAlertData.nick);
-        var mention = getHeroMentionForContent(lastHeroAlertData.nick);
-        var content = mention + ' Hero! ' + lastHeroAlertData.nick + ' (' + lvlStr + '), ' + lastHeroAlertData.mapName + ' (' + posStr + ')';
-        var isNoHeroOnList = (ping === '@here');
+        var isTitan = !!lastHeroAlertData.isTitan || nameLooksLikeTitan(lastHeroAlertData.nick);
+        var mention = isTitan
+            ? getTitanMentionForContent(lastHeroAlertData.nick)
+            : getHeroMentionForContent(lastHeroAlertData.nick);
+        var kindLabel = isTitan ? 'Tytan!' : 'Hero!';
+        var channelLabel = isTitan ? 'tytani' : 'herosi';
+        var webhookUrl = isTitan ? DISCORD_WEBHOOK_TITAN : DISCORD_WEBHOOK_HEROS;
+        var content = mention + ' ' + kindLabel + ' ' + lastHeroAlertData.nick + ' (' + lvlStr + '), ' + lastHeroAlertData.mapName + ' (' + posStr + ')';
         var payload = {
             content: content,
             allowed_mentions: { parse: ['everyone', 'users', 'roles'] }
@@ -733,34 +787,14 @@
             heroAlertSending = false;
             if (btn) { btn.disabled = false; btn.textContent = 'Powiadom klan na Discordzie'; }
         }
-        if (isNoHeroOnList) {
-            fetch(DISCORD_WEBHOOK_HEROS_EVE, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            }).then(function (r) {
-                done();
-                if (r.ok) {
-                    showToast('✅ Wysłano na Discord (herosi-eve)');
-                    hideHeroAlertPanel();
-                } else {
-                    showToast('❌ Błąd wysyłania na herosi-eve: ' + r.status, 'error');
-                }
-            }).catch(function (e) {
-                done();
-                log('Discord webhook herosi-eve error:', e);
-                showToast('❌ Błąd połączenia z Discord', 'error');
-            });
-            return;
-        }
-        fetch(DISCORD_WEBHOOK_HEROS, {
+        fetch(webhookUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
         }).then(function (r) {
             done();
             if (r.ok) {
-                showToast('✅ Wysłano na Discord (herosi)');
+                showToast('✅ Wysłano na Discord (' + channelLabel + ')');
                 hideHeroAlertPanel();
             } else {
                 showToast('❌ Błąd wysyłania na Discord: ' + r.status, 'error');
