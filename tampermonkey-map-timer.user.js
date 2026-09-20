@@ -1,17 +1,15 @@
 // ==UserScript==
 // @name         Margonem Map Timer
 // @namespace    http://tampermonkey.net/
-// @version      2.14
+// @version      2.15
 // @description  Śledzenie czasu na mapach tytanów (Guardians of Souls). Event Easter wyłączony — tylko statystyki na stronie.
 // @author       Lucek
 // @match        https://*.margonem.com/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
 // @grant        GM_setValue
-// @connect      *
 // @connect      *.railway.app
 // @connect      *.up.railway.app
-// @connect      discord.com
 // ==/UserScript==
 
 (function () {
@@ -169,9 +167,7 @@
     const EVE_LAST_LEFT_CACHE_TTL_MS = 5 * 1000;
     let eveMapPopupEl = null;
     let eveMapPopupCurrentMap = null;
-    // Heros/Tytan → Discord: webhooki kanałów + ping ról
-    const DISCORD_WEBHOOK_HEROS = 'https://discord.com/api/webhooks/1551179402832777335/AstpXI8k3MLSQdZ3p9pQoCXHWtNRs7mwH-RZjwCZ1fuG6969dwwfP_GerHAT9V1fOCPS';
-    const DISCORD_WEBHOOK_TITAN = 'https://discord.com/api/webhooks/1551180032813047922/q-lyYWmh7wWYhP3O6KCp0h18Lr62pFmwm3gIHQ5VX10bIMxvfuUViSd9zM_qpWkq4qAd';
+    // Discord idzie przez /api/timer/clan-alert (webhooki tylko na serwerze).
     // Nazwa herosa (z gry) → ping na Discord; brak na liście = @here
     const HEROS_PING_MAP = {
         'Wicked Patrick': '@Mroczny Patryk',
@@ -826,29 +822,8 @@
             actionBtns[i].textContent = 'Wysyłam…';
         }
         var callerNick = getCurrentHeroName();
-        var lvlStr = lastHeroAlertData.lvl != null ? lastHeroAlertData.lvl + 'm' : '?';
-        var posStr = (lastHeroAlertData.x != null && lastHeroAlertData.y != null) ? (lastHeroAlertData.x + ',' + lastHeroAlertData.y) : '?';
-        var kindLabel = isTitan ? 'Tytan!' : 'Heros!';
-        var channelLabel = isTitan ? 'tytani' : 'herosi';
-        var mention = isTitan
-            ? getTitanMentionForContent(lastHeroAlertData.nick)
-            : getHeroMentionForContent(lastHeroAlertData.nick);
-        var content = mention + ' ' + kindLabel + ' ' + lastHeroAlertData.nick + ' (' + lvlStr + '), ' + lastHeroAlertData.mapName + ' (' + posStr + ')';
-        content += '\nWoła: ' + callerNick;
-        if (!isTitan) {
-            var lo = selectedHeroCallLevel - HERO_CALL_LEVEL_RANGE;
-            var hi = selectedHeroCallLevel + HERO_CALL_LEVEL_RANGE;
-            content += ' · przedział ' + selectedHeroCallLevel + ' (' + lo + '–' + hi + ')';
-        }
-        if (withSummon) content += '\n⚡ Zaproponowano Przywołanie na herosa';
         var imageUrl = getAlertImageForApi();
-        var discordPayload = {
-            content: content,
-            allowed_mentions: { parse: ['everyone', 'users', 'roles'] }
-        };
-        if (imageUrl && String(imageUrl).indexOf('https://') === 0) {
-            discordPayload.embeds = [{ thumbnail: { url: imageUrl } }];
-        }
+        var channelLabel = isTitan ? 'tytani' : 'herosi';
 
         function restoreBtns() {
             heroAlertSending = false;
@@ -866,39 +841,44 @@
         }
 
         function postDiscord() {
-            fetch(isTitan ? DISCORD_WEBHOOK_TITAN : DISCORD_WEBHOOK_HEROS, {
+            fetch(apiTimerUrl('/api/timer/clan-alert'), {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(discordPayload),
+                headers: { 'Content-Type': 'application/json', 'X-API-Key': CONFIG.API_KEY },
+                body: JSON.stringify({
+                    kind: isTitan ? 'titan' : 'hero',
+                    withSummon: withSummon,
+                    nick: lastHeroAlertData.nick,
+                    mapName: lastHeroAlertData.mapName,
+                    lvl: lastHeroAlertData.lvl != null ? lastHeroAlertData.lvl : null,
+                    x: lastHeroAlertData.x != null ? lastHeroAlertData.x : null,
+                    y: lastHeroAlertData.y != null ? lastHeroAlertData.y : null,
+                    callerNick: callerNick,
+                    level: isTitan ? 0 : selectedHeroCallLevel,
+                    heroImageUrl: imageUrl || undefined
+                }),
             }).then(function (r) {
                 restoreBtns();
                 if (r.ok) {
                     showToast('✅ Wysłano na Discord (' + channelLabel + ')' + (withSummon ? ' + przywołanie' : ''));
+                } else if (r.status === 429) {
+                    showToast('❌ Za dużo wołań — poczekaj chwilę', 'error');
                 } else {
                     showToast('❌ Błąd Discord: ' + r.status, 'error');
                 }
             }).catch(function (e) {
                 restoreBtns();
-                log('Discord webhook error:', e);
-                showToast('❌ Błąd połączenia z Discord', 'error');
+                log('Discord alert error:', e);
+                showToast('❌ Błąd połączenia z serwerem', 'error');
             });
         }
 
-        if (CONFIG.API_KEY) {
-            fetch(apiTimerUrl('/api/timer/hero-alert-log'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-API-Key': CONFIG.API_KEY },
-                body: JSON.stringify({
-                    senderNick: callerNick,
-                    heroNick: lastHeroAlertData.nick,
-                    mapName: lastHeroAlertData.mapName,
-                    lvl: lastHeroAlertData.lvl != null ? lastHeroAlertData.lvl : null,
-                    x: lastHeroAlertData.x != null ? lastHeroAlertData.x : null,
-                    y: lastHeroAlertData.y != null ? lastHeroAlertData.y : null
-                })
-            }).catch(function () {});
+        if (!CONFIG.API_KEY) {
+            restoreBtns();
+            showToast('Brak API key — zainstaluj skrypt ze strony po zalogowaniu', 'error');
+            return;
+        }
 
-            fetch(apiTimerUrl('/api/timer/hero-level-notifications'), {
+        fetch(apiTimerUrl('/api/timer/hero-level-notifications'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-API-Key': CONFIG.API_KEY },
                 body: JSON.stringify({
@@ -928,10 +908,6 @@
                 showToast('Wołanie w grze nie doszło — Discord i tak poleci', 'error');
                 postDiscord();
             });
-        } else {
-            showToast('Brak API key — tylko Discord, bez okien w grze', 'error');
-            postDiscord();
-        }
     }
 
     function sendComingToCall(notificationId, btn) {
@@ -1050,11 +1026,11 @@
 
     /** Async — pobiera globalne powiadomienia i pokazuje popup graczom w przedziale. */
     function fetchAndShowHeroLevelNotificationsAsync() {
-        if (!CONFIG.BACKEND_URL) return;
+        if (!CONFIG.BACKEND_URL || !CONFIG.API_KEY) return;
         var since = lastSeenHeroNotificationTs;
         if (myActiveCallId) since = Math.max(0, Date.now() - 9 * 60 * 1000);
         var url = apiTimerUrl('/api/timer/hero-level-notifications?since=' + since);
-        fetch(url, { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (json) {
+        fetch(url, { cache: 'no-store', headers: { 'X-API-Key': CONFIG.API_KEY } }).then(function (r) { return r.ok ? r.json() : null; }).then(function (json) {
             if (!json || !json.notifications) return;
             processIncomingCalls(json.notifications || []);
         }).catch(function () {});

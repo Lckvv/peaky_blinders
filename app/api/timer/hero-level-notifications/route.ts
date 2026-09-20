@@ -51,9 +51,13 @@ const includeHelpers = {
   helpers: { select: { nick: true }, orderBy: { createdAt: 'asc' as const } },
 };
 
-// GET /api/timer/hero-level-notifications?since=timestamp — lista powiadomień globalna
+// GET /api/timer/hero-level-notifications?since=timestamp — tylko zalogowany skrypt (X-API-Key)
 export async function GET(request: NextRequest) {
   try {
+    const user = await authFromApiKey(request);
+    if (!user) {
+      return noStoreJson({ error: 'Invalid or missing API key' }, 401);
+    }
     const sinceStr = request.nextUrl.searchParams.get('since');
     const since = sinceStr ? parseInt(sinceStr, 10) : Date.now() - NOTIFICATION_MAX_AGE_MS;
     if (!Number.isInteger(since) || since < 0) {

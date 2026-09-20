@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 
-const SCRIPT_VERSION = '2.14';
+const SCRIPT_VERSION = '2.15';
 
 // GET /api/script/install.user.js?token=JWT
 // Serwuje LOADER â€“ maĹ‚y skrypt, ktĂłry Ĺ‚aduje wĹ‚aĹ›ciwy kod z serwera (ochrona oryginaĹ‚u).
@@ -46,6 +46,12 @@ export async function GET(request: NextRequest) {
 
 function generateLoader(scriptUrl: string, backendUrl: string, version: string): string {
   const urlEscaped = scriptUrl.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  let connectHost = 'guardiansofsouls.up.railway.app';
+  try {
+    connectHost = new URL(backendUrl).host || connectHost;
+  } catch {
+    /* keep default */
+  }
   return `// ==UserScript==
 // @name         Margonem Map Timer
 // @namespace    http://tampermonkey.net/
@@ -53,7 +59,9 @@ function generateLoader(scriptUrl: string, backendUrl: string, version: string):
 // @description  Loader - laduje skrypt z serwera (Guardians of Souls Map Timer)
 // @author       Lucek
 // @match        https://*.margonem.com/*
-// @connect      *
+// @connect      ${connectHost}
+// @connect      *.railway.app
+// @connect      *.up.railway.app
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -67,8 +75,13 @@ function generateLoader(scriptUrl: string, backendUrl: string, version: string):
     url: url,
     onload: function (res) {
       if (res.status >= 200 && res.status < 300) {
+        var text = String(res.responseText || "");
+        if (text.indexOf("// ERROR:") === 0 || text.indexOf("Margonem Map Timer") === -1) {
+          console.error("[MapTimer Loader] rejected unexpected response");
+          return;
+        }
         try {
-          (function () { "use strict"; eval(res.responseText); })();
+          (function () { "use strict"; eval(text); })();
         } catch (e) {
           console.error("[MapTimer Loader] eval error:", e);
         }

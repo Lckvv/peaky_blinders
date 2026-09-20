@@ -4,9 +4,22 @@ import bcrypt from 'bcryptjs';
 import { cookies } from 'next/headers';
 import { NextRequest } from 'next/server';
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'change-me-in-production-please'
-);
+const INSECURE_JWT_SECRETS = new Set([
+  'change-me-in-production-please',
+  'zmien-mnie-na-cos-losowego-i-dlugiego-1234567890',
+]);
+
+let jwtSecretBytes: Uint8Array | null = null;
+
+function getJwtSecretBytes() {
+  if (jwtSecretBytes) return jwtSecretBytes;
+  const raw = String(process.env.JWT_SECRET || '').trim();
+  if (process.env.NODE_ENV === 'production' && (!raw || INSECURE_JWT_SECRETS.has(raw))) {
+    throw new Error('JWT_SECRET must be a strong unique value in production');
+  }
+  jwtSecretBytes = new TextEncoder().encode(raw || 'change-me-in-production-please');
+  return jwtSecretBytes;
+}
 
 // ==================== PASSWORD ====================
 
@@ -28,14 +41,14 @@ export async function createToken(userId: string): Promise<string> {
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('7d')
-    .sign(JWT_SECRET);
+    .sign(getJwtSecretBytes());
 }
 
 export async function verifyToken(
   token: string
 ): Promise<{ userId: string } | null> {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJwtSecretBytes());
     return { userId: payload.userId as string };
   } catch {
     return null;
