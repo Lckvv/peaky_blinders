@@ -223,19 +223,36 @@ model ChatLog {
   @@index([createdAt])
 }
 
-// Powiadomienia w grze: level (64,83,114,144,217,300), gracze ze skryptem odbierają i widzą popup z grafiką herosa
+// Powiadomienia w grze: heros (przedział 64/83/…) lub tytan. Gracze ze skryptem odbierają popup.
 model HeroLevelNotification {
   id            String   @id @default(cuid())
-  level         Int      // 64 | 83 | 114 | 144 | 217 | 300
-  nick          String   // nazwa herosa z gry
+  level         Int      // 0 = tytan (bez przedziału) | 64 | 83 | 114 | 144 | 217 | 300
+  nick          String   // nazwa herosa/tytana z gry
   mapName       String
   x             Int?
   y             Int?
-  lvl           Int?     // poziom herosa (np. 265m)
-  heroImageUrl  String?  // opcjonalny URL obrazka
+  lvl           Int?     // poziom NPC (np. 265m)
+  heroImageUrl  String?  // URL grafiki NPC z gry (CDN Garmory)
+  callerNick    String   @default("")
+  kind          String   @default("hero") // hero | titan
+  withSummon    Boolean  @default(false)
   createdAt     DateTime @default(now())
+  helpers       HeroCallHelper[]
 
   @@index([createdAt])
+}
+
+// Kto zgłosił się do pomocy na wołanie herosa/tytana
+model HeroCallHelper {
+  id             String                 @id @default(cuid())
+  notificationId String
+  notification   HeroLevelNotification  @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  userId         String
+  nick           String
+  createdAt      DateTime               @default(now())
+
+  @@unique([notificationId, userId])
+  @@index([notificationId])
 }
 
 // Tokeny resetu hasła (jednorazowe, wygasają po 1h)

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Margonem Map Timer
 // @namespace    http://tampermonkey.net/
-// @version      2.12
+// @version      2.13
 // @description  Śledzenie czasu na mapach tytanów (Guardians of Souls). Event Easter wyłączony — tylko statystyki na stronie.
 // @author       Lucek
 // @match        https://*.margonem.com/*
@@ -112,6 +112,8 @@
     const HEROS_WT_MIN = 80;
     const HEROS_WT_MAX = 89;
     const TITAN_WT_MIN = 100;
+    const HERO_CALL_LEVELS = [64, 83, 114, 144, 217, 300];
+    const HERO_CALL_LEVEL_RANGE = 13;
     let lastHerosNotifiedMapName = null;
     // Heros eventowy (41, 81): wejście/wyjście wysyłane przez session (map_enter / leave).
     // Punkty łowcy są przypisane do KONTA (userId z API key), nie do postaci — wiele postaci = jedno konto.
@@ -294,6 +296,9 @@
     let heroAlertPanelEl = null;
     let lastHeroAlertData = null;
     let heroAlertSending = false;
+    let selectedHeroCallLevel = 144;
+    let myActiveCallId = null;
+    let callStylesInjected = false;
 
     function refreshConfigFromStorage() {
         CONFIG.API_KEY = GM_getValue('api_key', '');
@@ -321,6 +326,7 @@
     }
 
     const GARMORY_OUTFIT_BASE = 'https://micc.garmory-cdn.cloud/obrazki/postacie';
+    const GARMORY_NPC_BASE = 'https://micc.garmory-cdn.cloud/obrazki/npc';
 
     /** Zwraca pełny URL obrazka stroju (outfit) z CDN Garmory. Źródła: hero.icon, hero.outfit, hero.outfitData (src/url/image). */
     function getHeroOutfitUrl() {
@@ -406,7 +412,73 @@
         return (info && info.name) ? info.name : (heroName || 'Ty');
     }
 
-    /** Lista NPCów na mapie (potwory, herosy itd.). Zwraca tablicę { id, wt, nick, tpl }. wt = widget type (Lootlog: >79 = Heros, >89 = Kolos, >99 = Tytan). */
+    function getCurrentHeroLevel() {
+        try {
+            var engine = getEngine();
+            var h = engine && engine.hero;
+            var d = h && h.d ? h.d : h;
+            var lvl = d && d.lvl != null ? Number(d.lvl) : (h && h.lvl != null ? Number(h.lvl) : NaN);
+            return Number.isFinite(lvl) ? lvl : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /** Ścieżka ikony NPC → CDN Garmory (lootlog: micc.garmory-cdn.cloud/obrazki/npc/). */
+    function resolveNpcGfxUrl(icon) {
+        if (!icon || typeof icon !== 'string') return null;
+        var s = icon.trim();
+        if (!s) return null;
+        if (s.indexOf('http://') === 0 || s.indexOf('https://') === 0) return s;
+        if (s.indexOf('//') === 0) return 'https:' + s;
+        s = s.replace(/^\/+/, '');
+        if (s.indexOf('obrazki/') === 0) return 'https://micc.garmory-cdn.cloud/' + s;
+        return GARMORY_NPC_BASE.replace(/\/$/, '') + '/' + s;
+    }
+
+    function pickNpcIconFromObj(obj) {
+        if (!obj || typeof obj !== 'object') return null;
+        var raw = obj.icon ?? obj.gfx ?? obj.img ?? obj.image ?? obj.src ?? obj.url ?? obj.outfit ?? obj.avatar;
+        if (raw && typeof raw === 'object') raw = raw.src ?? raw.url ?? raw.id ?? raw.path ?? null;
+        return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
+    }
+
+    function getNpcTplObject(tpl) {
+        if (tpl == null || tpl === '') return null;
+        try {
+            var engine = getEngine();
+            var tplManager = engine && engine.npcTplManager && typeof engine.npcTplManager.getNpcTpl === 'function' ? engine.npcTplManager : null;
+            if (!tplManager) return null;
+            var obj = tplManager.getNpcTpl(tpl);
+            return obj && typeof obj === 'object' ? obj : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function mapNpcRecord(npc, tplManager) {
+        var d = npc && npc.d != null ? npc.d : npc;
+        if (!d) return null;
+        var tplObj = null;
+        if (d.tpl != null && tplManager) {
+            try { tplObj = tplManager.getNpcTpl(d.tpl); } catch (e) { tplObj = null; }
+        }
+        var wt = d.wt != null ? Number(d.wt) : undefined;
+        if (wt == null && tplObj && tplObj.wt != null) wt = Number(tplObj.wt);
+        var icon = pickNpcIconFromObj(d) || pickNpcIconFromObj(npc) || pickNpcIconFromObj(tplObj);
+        return {
+            id: d.id,
+            wt: wt,
+            nick: d.nick,
+            tpl: d.tpl,
+            icon: icon,
+            lvl: d.lvl != null ? Number(d.lvl) : (tplObj && tplObj.lvl != null ? Number(tplObj.lvl) : undefined),
+            x: d.x != null ? Number(d.x) : undefined,
+            y: d.y != null ? Number(d.y) : undefined,
+        };
+    }
+
+    /** Lista NPCów na mapie (potwory, herosy itd.). wt = widget type (Lootlog: >79 = Heros, >89 = Kolos, >99 = Tytan). */
     function getNpcsOnMap() {
         const engine = getEngine();
         if (!engine) return [];
@@ -415,24 +487,11 @@
                 const list = engine.npcs.getDrawableList();
                 if (!Array.isArray(list)) return [];
                 const tplManager = engine.npcTplManager && typeof engine.npcTplManager.getNpcTpl === 'function' ? engine.npcTplManager : null;
-                return list.map(function (npc) {
-                    const d = npc && npc.d != null ? npc.d : npc;
-                    if (!d) return null;
-                    var wt = d.wt != null ? Number(d.wt) : undefined;
-                    if (wt == null && d.tpl != null && tplManager) {
-                        var tpl = tplManager.getNpcTpl(d.tpl);
-                        wt = tpl && tpl.wt != null ? Number(tpl.wt) : undefined;
-                    }
-                    return { id: d.id, wt: wt, nick: d.nick, tpl: d.tpl, lvl: d.lvl != null ? Number(d.lvl) : undefined, x: d.x != null ? Number(d.x) : undefined, y: d.y != null ? Number(d.y) : undefined };
-                }).filter(Boolean);
+                return list.map(function (npc) { return mapNpcRecord(npc, tplManager); }).filter(Boolean);
             }
             if (typeof window.g !== 'undefined' && window.g && window.g.npc) {
                 const arr = Object.values(window.g.npc);
-                return arr.map(function (d) {
-                    if (!d) return null;
-                    const wt = d.wt != null ? Number(d.wt) : undefined;
-                    return { id: d.id, wt: wt, nick: d.nick, tpl: d.tpl, lvl: d.lvl != null ? Number(d.lvl) : undefined, x: d.x != null ? Number(d.x) : undefined, y: d.y != null ? Number(d.y) : undefined };
-                }).filter(Boolean);
+                return arr.map(function (d) { return mapNpcRecord(d, null); }).filter(Boolean);
             }
         } catch (e) {
             if (CONFIG.DEBUG) log('getNpcsOnMap error:', e);
@@ -446,27 +505,57 @@
         return (wt >= HEROS_WT_MIN && wt <= HEROS_WT_MAX) || wt >= TITAN_WT_MIN;
     }
 
+    function getNpcImageUrlFromNpc(npcOrTpl) {
+        if (npcOrTpl && typeof npcOrTpl === 'object') {
+            var fromObj = resolveNpcGfxUrl(pickNpcIconFromObj(npcOrTpl) || npcOrTpl.icon);
+            if (fromObj) return fromObj;
+            if (npcOrTpl.tpl != null) npcOrTpl = npcOrTpl.tpl;
+        }
+        var tplObj = getNpcTplObject(npcOrTpl);
+        return resolveNpcGfxUrl(pickNpcIconFromObj(tplObj));
+    }
+
     /** Pobiera URL obrazka NPC/herosa z gry (silnik — szablon tpl). Zwraca null gdy brak. */
     function getNpcImageUrlFromEngine(tpl) {
-        if (tpl == null || tpl === '') return null;
-        try {
-            const engine = getEngine();
-            const tplManager = engine && engine.npcTplManager && typeof engine.npcTplManager.getNpcTpl === 'function' ? engine.npcTplManager : null;
-            if (!tplManager) return null;
-            const obj = tplManager.getNpcTpl(tpl);
-            if (!obj || typeof obj !== 'object') return null;
-            var pathOrUrl = obj.icon ?? obj.gfx ?? obj.img ?? obj.image ?? obj.src ?? obj.url ?? obj.outfit ?? obj.avatar;
-            if (typeof pathOrUrl !== 'string' || !pathOrUrl.trim()) return null;
-            pathOrUrl = pathOrUrl.trim();
-            if (pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')) return pathOrUrl;
-            if (pathOrUrl.startsWith('//')) return 'https:' + pathOrUrl;
-            var path = pathOrUrl.startsWith('/') ? pathOrUrl : '/' + pathOrUrl;
-            var origin = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : 'https://margonem.com';
-            return origin.replace(/\/$/, '') + path;
-        } catch (e) {
-            if (CONFIG.DEBUG) log('getNpcImageUrlFromEngine error:', e);
-            return null;
+        return getNpcImageUrlFromNpc(tpl);
+    }
+
+    function nearestCallLevel(heroLvl) {
+        if (heroLvl == null || !Number.isFinite(Number(heroLvl))) return 144;
+        var best = HERO_CALL_LEVELS[0];
+        var bestDiff = 9999;
+        HERO_CALL_LEVELS.forEach(function (l) {
+            var d = Math.abs(l - Number(heroLvl));
+            if (d < bestDiff) { bestDiff = d; best = l; }
+        });
+        return best;
+    }
+
+    function isPlayerInCallRange(callLevel, myLvl) {
+        if (callLevel == null || callLevel === 0) return true;
+        if (myLvl == null || !Number.isFinite(Number(myLvl))) return true;
+        return Math.abs(Number(myLvl) - Number(callLevel)) <= HERO_CALL_LEVEL_RANGE;
+    }
+
+    function apiTimerUrl(path) {
+        return CONFIG.BACKEND_URL.replace(/\/$/, '') + path;
+    }
+
+    function resolveAlertImageUrl(data) {
+        if (!data) return null;
+        if (data.icon) {
+            var fromIcon = resolveNpcGfxUrl(data.icon);
+            if (fromIcon) return fromIcon;
         }
+        var fromEngine = getNpcImageUrlFromNpc(data) || getNpcImageUrlFromEngine(data.tpl);
+        if (fromEngine) return fromEngine;
+        if (data.heroImageUrl && typeof data.heroImageUrl === 'string') {
+            var u = data.heroImageUrl.trim();
+            if (u.indexOf('http') === 0) return u;
+            if (u.charAt(0) === '/' && CONFIG.BACKEND_URL) return CONFIG.BACKEND_URL.replace(/\/$/, '') + u;
+            return resolveNpcGfxUrl(u);
+        }
+        return null;
     }
 
     /** Jedno powiadomienie na mapę — reset przy wyjściu z mapy lub odświeżeniu. Pokazuje panel z przyciskami Zawołaj klan / Zamknij. */
@@ -491,9 +580,12 @@
             y: heroNpc.y,
             mapName: mapName,
             tpl: heroNpc.tpl,
+            icon: heroNpc.icon,
             wt: heroNpc.wt,
             isTitan: isTitan || nameLooksLikeTitan(name),
         };
+        selectedHeroCallLevel = lastHeroAlertData.isTitan ? 0 : nearestCallLevel(heroNpc.lvl);
+        myActiveCallId = null;
         var nameTrim = (name || '').trim();
         var eveKey = EVE_HERO_NICK_TO_KEY[nameTrim];
         if (eveKey == null && nameTrim) {
@@ -513,37 +605,156 @@
         log('Heros/Tytan na mapie:', name, '(wt:', heroNpc.wt + ')');
     }
 
+    function injectCallStyles() {
+        if (callStylesInjected) return;
+        callStylesInjected = true;
+        var st = document.createElement('style');
+        st.id = 'map-timer-call-css';
+        st.textContent =
+            '#map-timer-hero-alert{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:100010;width:min(420px,calc(100vw - 24px));padding:18px 18px 16px;border-radius:16px;font-family:Arial,sans-serif;box-shadow:0 16px 48px rgba(0,0,0,.55);color:#e8eef7;}' +
+            '#map-timer-hero-alert.is-hero{background:linear-gradient(180deg,#24180f 0%,#1a1a2e 70%);border:2px solid #e67e22;}' +
+            '#map-timer-hero-alert.is-titan{background:linear-gradient(180deg,#1a1028 0%,#141428 70%);border:2px solid #9b59b6;}' +
+            '#map-timer-hero-alert .mt-call-head{display:flex;gap:14px;align-items:center;margin-bottom:12px;}' +
+            '#map-timer-hero-alert .mt-call-art{width:88px;height:88px;flex-shrink:0;border-radius:12px;background:#111827;display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:36px;}' +
+            '#map-timer-hero-alert .mt-call-art img{width:100%;height:100%;object-fit:contain;image-rendering:pixelated;}' +
+            '#map-timer-hero-alert .mt-call-kicker{font-size:11px;letter-spacing:.12em;text-transform:uppercase;margin:0 0 4px;font-weight:700;}' +
+            '#map-timer-hero-alert.is-hero .mt-call-kicker{color:#e67e22;}' +
+            '#map-timer-hero-alert.is-titan .mt-call-kicker{color:#c39bd3;}' +
+            '#map-timer-hero-alert .mt-call-name{font-size:18px;font-weight:800;margin:0 0 4px;color:#fff;}' +
+            '#map-timer-hero-alert .mt-call-meta{font-size:12px;color:#9aa8bd;line-height:1.4;}' +
+            '#map-timer-hero-alert .mt-call-label{font-size:11px;color:#8892b0;margin:10px 0 6px;}' +
+            '#map-timer-hero-alert .mt-call-levels{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}' +
+            '#map-timer-hero-alert .mt-call-lvl{padding:6px 10px;background:#2a2a4a;color:#eee;border:1px solid #444;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;}' +
+            '#map-timer-hero-alert .mt-call-lvl.is-on{background:#e67e22;border-color:#f5b041;color:#1a1a2e;}' +
+            '#map-timer-hero-alert .mt-call-actions button{display:block;width:100%;margin-bottom:8px;padding:10px 12px;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:700;color:#fff;}' +
+            '#map-timer-hero-alert .mt-call-notify{background:#27ae60;}' +
+            '#map-timer-hero-alert .mt-call-summon{background:#d35400;}' +
+            '#map-timer-hero-alert.is-titan .mt-call-notify{background:#8e44ad;}' +
+            '#map-timer-hero-alert .mt-call-close{background:#34495e!important;font-weight:600!important;}' +
+            '#map-timer-hero-alert .mt-call-helpers{font-size:12px;color:#d5deea;background:rgba(0,0,0,.25);border-radius:8px;padding:8px 10px;margin:4px 0 10px;min-height:18px;}' +
+            '.map-timer-hero-level-popup{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:100012;width:min(400px,calc(100vw - 24px));padding:18px;border-radius:16px;font-family:Arial,sans-serif;box-shadow:0 18px 50px rgba(0,0,0,.6);color:#e8eef7;text-align:center;}' +
+            '.map-timer-hero-level-popup.is-hero{background:linear-gradient(180deg,#2a1a10 0%,#1a1a2e 78%);border:2px solid #e67e22;}' +
+            '.map-timer-hero-level-popup.is-titan{background:linear-gradient(180deg,#221433 0%,#141428 78%);border:2px solid #9b59b6;}' +
+            '.map-timer-hero-level-popup .mt-pop-kicker{font-size:11px;letter-spacing:.14em;text-transform:uppercase;font-weight:800;margin-bottom:8px;}' +
+            '.map-timer-hero-level-popup.is-hero .mt-pop-kicker{color:#e67e22;}' +
+            '.map-timer-hero-level-popup.is-titan .mt-pop-kicker{color:#c39bd3;}' +
+            '.map-timer-hero-level-popup .mt-pop-art{width:120px;height:120px;margin:0 auto 10px;border-radius:14px;background:#111827;display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:48px;}' +
+            '.map-timer-hero-level-popup .mt-pop-art img{width:100%;height:100%;object-fit:contain;image-rendering:pixelated;}' +
+            '.map-timer-hero-level-popup .mt-pop-name{font-size:20px;font-weight:800;color:#fff;margin:0 0 6px;}' +
+            '.map-timer-hero-level-popup .mt-pop-meta{font-size:13px;color:#b8c5d6;margin-bottom:8px;}' +
+            '.map-timer-hero-level-popup .mt-pop-badge{display:inline-block;margin:4px 4px 10px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:800;}' +
+            '.map-timer-hero-level-popup .mt-pop-badge.range{background:#2a2a4a;color:#f5b041;}' +
+            '.map-timer-hero-level-popup .mt-pop-badge.summon{background:#d35400;color:#fff;}' +
+            '.map-timer-hero-level-popup .mt-pop-caller{font-size:12px;color:#9aa8bd;margin-bottom:12px;}' +
+            '.map-timer-hero-level-popup .mt-pop-help{display:block;width:100%;padding:10px 12px;background:#27ae60;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:800;margin-bottom:8px;}' +
+            '.map-timer-hero-level-popup .mt-pop-help:disabled{opacity:.7;cursor:default;}' +
+            '.map-timer-hero-level-popup .mt-pop-x{position:absolute;top:8px;right:10px;background:none;border:none;color:#8892b0;cursor:pointer;font-size:22px;line-height:1;}';
+        document.head.appendChild(st);
+    }
+
+    function fillNpcArt(container, data, fallbackEmoji) {
+        if (!container) return;
+        container.textContent = '';
+        var img = document.createElement('img');
+        img.alt = '';
+        var tryOrder = [];
+        var gameUrl = resolveAlertImageUrl(data);
+        if (gameUrl) tryOrder.push(gameUrl);
+        if (data && data.level) {
+            tryOrder.push(getHeroLevelImageUrl(data.level, 'png'));
+            tryOrder.push(getHeroLevelImageUrl(data.level, 'gif'));
+            tryOrder.push(getHeroLevelImageUrlFile(data.level, 'portrait.png'));
+            tryOrder.push(getHeroLevelImageUrlFile(data.level, 'portrait.gif'));
+        }
+        var idx = 0;
+        function fail() {
+            container.textContent = fallbackEmoji || '🦸';
+        }
+        function tryNext() {
+            if (idx < tryOrder.length && tryOrder[idx]) {
+                img.src = tryOrder[idx++];
+            } else {
+                fail();
+            }
+        }
+        img.onerror = tryNext;
+        if (tryOrder.length) {
+            container.appendChild(img);
+            img.src = tryOrder[idx++];
+        } else {
+            fail();
+        }
+    }
+
+    function renderCallHelpers(helpers) {
+        var el = heroAlertPanelEl && heroAlertPanelEl.querySelector('.mt-call-helpers');
+        if (!el) return;
+        helpers = helpers || [];
+        if (!helpers.length) {
+            el.textContent = 'Przyjdą pomóc: nikt jeszcze';
+            return;
+        }
+        el.textContent = 'Przyjdą pomóc (' + helpers.length + '): ' + helpers.join(', ');
+    }
+
     function showHeroAlertPanel() {
         if (!lastHeroAlertData) return;
+        injectCallStyles();
+        var isTitan = !!lastHeroAlertData.isTitan;
         if (!heroAlertPanelEl) {
             heroAlertPanelEl = document.createElement('div');
             heroAlertPanelEl.id = 'map-timer-hero-alert';
-            heroAlertPanelEl.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:100010;background:#1a1a2e;border:2px solid #e67e22;border-radius:12px;padding:14px 18px;box-shadow:0 8px 24px rgba(0,0,0,0.5);font-family:Arial,sans-serif;min-width:280px;';
-            heroAlertPanelEl.innerHTML =
-                '<div class="map-timer-hero-alert-title" style="color:#fff;font-weight:bold;font-size:14px;margin-bottom:8px;">🦸 Heros na mapie!</div>' +
-                '<div class="map-timer-hero-alert-info" style="color:#b8c5d6;font-size:12px;margin-bottom:12px;"></div>' +
-                '<button type="button" class="map-timer-hero-alert-call" style="display:block;width:100%;margin-bottom:10px;padding:8px 14px;background:#27ae60;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:bold;">Powiadom klan na Discordzie</button>' +
-                '<div style="font-size:11px;color:#8892b0;margin-bottom:6px;">Powiadomienie w grze (level):</div>' +
-                '<div class="map-timer-hero-alert-level-btns" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;"></div>' +
-                '<button type="button" class="map-timer-hero-alert-close" style="padding:8px 14px;background:#34495e;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;">Zamknij</button>';
             document.body.appendChild(heroAlertPanelEl);
-            heroAlertPanelEl.querySelector('.map-timer-hero-alert-call').addEventListener('click', sendHeroAlertToDiscord);
-            heroAlertPanelEl.querySelector('.map-timer-hero-alert-close').addEventListener('click', hideHeroAlertPanel);
-            [64, 83, 114, 144, 217, 300].forEach(function (level) {
-                var btn = document.createElement('button');
-                btn.type = 'button';
-                btn.textContent = level;
-                btn.style.cssText = 'padding:6px 12px;background:#2a2a4a;color:#eee;border:1px solid #444;border-radius:6px;cursor:pointer;font-size:12px;';
-                btn.addEventListener('click', function () { sendHeroLevelNotification(level); });
-                heroAlertPanelEl.querySelector('.map-timer-hero-alert-level-btns').appendChild(btn);
-            });
         }
-        var titleEl = heroAlertPanelEl.querySelector('.map-timer-hero-alert-title');
-        if (titleEl) titleEl.textContent = lastHeroAlertData.isTitan ? '⚔️ Tytan na mapie!' : '🦸 Heros na mapie!';
-        var info = heroAlertPanelEl.querySelector('.map-timer-hero-alert-info');
+        heroAlertPanelEl.className = isTitan ? 'is-titan' : 'is-hero';
         var lvlStr = lastHeroAlertData.lvl != null ? lastHeroAlertData.lvl + 'm' : '?';
         var posStr = (lastHeroAlertData.x != null && lastHeroAlertData.y != null) ? (lastHeroAlertData.x + ',' + lastHeroAlertData.y) : '?';
-        info.textContent = lastHeroAlertData.nick + ' (' + lvlStr + '), ' + lastHeroAlertData.mapName + ' (' + posStr + ')';
+        var rangeNote = isTitan ? '' : ('Przedział ±' + HERO_CALL_LEVEL_RANGE + ' lvl od wybranej wartości.');
+        var actionsHtml = isTitan
+            ? '<button type="button" class="mt-call-notify" data-summon="0">Powiadom klan o tytanie</button>'
+            : '<button type="button" class="mt-call-notify" data-summon="0">Powiadom klan o herosie</button>' +
+              '<button type="button" class="mt-call-summon" data-summon="1">Powiadom klan o herosie i zaproponuj Przywołanie</button>';
+        heroAlertPanelEl.innerHTML =
+            '<div class="mt-call-head">' +
+                '<div class="mt-call-art"></div>' +
+                '<div>' +
+                    '<div class="mt-call-kicker">' + (isTitan ? 'Tytan na mapie' : 'Heros na mapie') + '</div>' +
+                    '<div class="mt-call-name"></div>' +
+                    '<div class="mt-call-meta"></div>' +
+                '</div>' +
+            '</div>' +
+            (isTitan ? '' : '<div class="mt-call-label">Wołaj przedział (Twoja postać: ' + (getCurrentHeroLevel() != null ? getCurrentHeroLevel() : '?') + ' lvl)</div><div class="mt-call-levels"></div>') +
+            '<div class="mt-call-helpers">Przyjdą pomóc: nikt jeszcze</div>' +
+            '<div class="mt-call-actions">' + actionsHtml +
+            '<button type="button" class="mt-call-close">Zamknij</button></div>';
+        heroAlertPanelEl.querySelector('.mt-call-name').textContent = lastHeroAlertData.nick || '';
+        heroAlertPanelEl.querySelector('.mt-call-meta').textContent = lvlStr + ' · ' + lastHeroAlertData.mapName + ' (' + posStr + ')' + (rangeNote ? ' · ' + rangeNote : '');
+        fillNpcArt(heroAlertPanelEl.querySelector('.mt-call-art'), lastHeroAlertData, isTitan ? '⚔️' : '🦸');
+        if (!isTitan) {
+            var lvlWrap = heroAlertPanelEl.querySelector('.mt-call-levels');
+            HERO_CALL_LEVELS.forEach(function (level) {
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'mt-call-lvl' + (selectedHeroCallLevel === level ? ' is-on' : '');
+                btn.textContent = String(level);
+                btn.addEventListener('click', function () {
+                    selectedHeroCallLevel = level;
+                    var all = heroAlertPanelEl.querySelectorAll('.mt-call-lvl');
+                    for (var i = 0; i < all.length; i++) {
+                        all[i].classList.toggle('is-on', Number(all[i].textContent) === selectedHeroCallLevel);
+                    }
+                });
+                lvlWrap.appendChild(btn);
+            });
+        }
+        var actionBtns = heroAlertPanelEl.querySelectorAll('.mt-call-notify, .mt-call-summon');
+        for (var a = 0; a < actionBtns.length; a++) {
+            actionBtns[a].addEventListener('click', function (ev) {
+                var withSummon = ev.currentTarget.getAttribute('data-summon') === '1';
+                sendClanCall({ withSummon: withSummon });
+            });
+        }
+        heroAlertPanelEl.querySelector('.mt-call-close').addEventListener('click', hideHeroAlertPanel);
         heroAlertPanelEl.style.display = 'block';
     }
 
@@ -551,92 +762,200 @@
         if (heroAlertPanelEl) heroAlertPanelEl.style.display = 'none';
     }
 
-    var lastSeenHeroNotificationTs = 0;
+    var lastSeenHeroNotificationTs = Math.max(0, Date.now() - 9 * 60 * 1000);
     var lastFetchedHeroNotifTs = 0;
-    var shownHeroNotificationIds = {}; // id -> true, żeby ten sam rekord nie pokazał się dwa razy
-    var HERO_LEVEL_SHOWN_KEYS_MAX = 300;
-    function getHeroLevelShownKeys() {
+    var shownHeroNotificationIds = {};
+    var SHOWN_CALL_IDS_TTL_MS = 30 * 60 * 1000;
+    var SHOWN_CALL_IDS_MAX = 200;
+
+    function getShownCallIdRecords() {
         try {
             if (typeof GM_getValue !== 'function') return [];
-            var raw = GM_getValue('hero_level_shown_keys', '[]');
+            var raw = GM_getValue('hero_call_shown_ids', '[]');
             var arr = JSON.parse(raw || '[]');
-            return Array.isArray(arr) ? arr : [];
+            if (!Array.isArray(arr)) return [];
+            var now = Date.now();
+            return arr.filter(function (x) { return x && x.id && (now - Number(x.ts || 0)) < SHOWN_CALL_IDS_TTL_MS; });
         } catch (e) { return []; }
     }
-    function addHeroLevelShownKey(key) {
-        var arr = getHeroLevelShownKeys();
-        if (arr.indexOf(key) >= 0) return;
-        arr.push(key);
-        if (arr.length > HERO_LEVEL_SHOWN_KEYS_MAX) arr = arr.slice(-HERO_LEVEL_SHOWN_KEYS_MAX);
-        try { if (typeof GM_setValue === 'function') GM_setValue('hero_level_shown_keys', JSON.stringify(arr)); } catch (e) { /* ignore */ }
-    }
-    function shouldShowHeroLevelNotification(id, level, nick) {
-        if (shownHeroNotificationIds[id]) return false;
-        var key = (level || '') + ':' + String(nick || '').trim().toLowerCase();
-        return getHeroLevelShownKeys().indexOf(key) < 0;
-    }
-    function markHeroLevelNotificationShown(id, level, nick) {
-        shownHeroNotificationIds[id] = true;
-        var key = (level || '') + ':' + String(nick || '').trim().toLowerCase();
-        addHeroLevelShownKey(key);
-    }
-    function sendHeroLevelNotification(level) {
-        if (!lastHeroAlertData) return;
-        var lvlStr = lastHeroAlertData.lvl != null ? lastHeroAlertData.lvl + 'm' : '?';
-        var heroImageUrl = getNpcImageUrlFromEngine(lastHeroAlertData.tpl) || null;
-        if (!heroImageUrl) heroImageUrl = getOutfitFromLocalStorage(lastHeroAlertData.nick) || null;
-        try {
-            var charlist = typeof window.Margonem !== 'undefined' && window.Margonem.charlist ? window.Margonem.charlist : (typeof window.g !== 'undefined' && window.g && window.g.charlist ? window.g.charlist : null);
-            if (!heroImageUrl && charlist) heroImageUrl = findOutfitInCharlist(charlist, lastHeroAlertData.nick) || null;
-        } catch (e) { /* ignore */ }
-        var heroImgForApi = heroImageUrl || undefined;
-        if (heroImgForApi && typeof heroImgForApi === 'string' && heroImgForApi.trim().charAt(0) === '/' && CONFIG.BACKEND_URL) {
-            heroImgForApi = CONFIG.BACKEND_URL.replace(/\/$/, '') + heroImgForApi.trim();
+    function persistShownCallId(id) {
+        if (!id) return;
+        var arr = getShownCallIdRecords();
+        for (var i = 0; i < arr.length; i++) {
+            if (arr[i].id === id) return;
         }
-        var payload = {
-            level: level,
-            nick: lastHeroAlertData.nick,
-            mapName: lastHeroAlertData.mapName,
-            x: lastHeroAlertData.x,
-            y: lastHeroAlertData.y,
-            lvl: lastHeroAlertData.lvl,
-            heroImageUrl: heroImgForApi || undefined
+        arr.push({ id: id, ts: Date.now() });
+        if (arr.length > SHOWN_CALL_IDS_MAX) arr = arr.slice(-SHOWN_CALL_IDS_MAX);
+        try { if (typeof GM_setValue === 'function') GM_setValue('hero_call_shown_ids', JSON.stringify(arr)); } catch (e) { /* ignore */ }
+    }
+    function shouldShowHeroLevelNotification(id) {
+        if (!id) return false;
+        if (shownHeroNotificationIds[id]) return false;
+        var recs = getShownCallIdRecords();
+        for (var i = 0; i < recs.length; i++) {
+            if (recs[i].id === id) return false;
+        }
+        return true;
+    }
+    function markHeroLevelNotificationShown(id) {
+        if (!id) return;
+        shownHeroNotificationIds[id] = true;
+        persistShownCallId(id);
+    }
+
+    function getAlertImageForApi() {
+        var url = resolveAlertImageUrl(lastHeroAlertData);
+        if (url && url.charAt(0) === '/' && CONFIG.BACKEND_URL) url = CONFIG.BACKEND_URL.replace(/\/$/, '') + url;
+        return url || undefined;
+    }
+
+    function sendClanCall(opts) {
+        if (!lastHeroAlertData) return;
+        opts = opts || {};
+        var isTitan = !!lastHeroAlertData.isTitan || nameLooksLikeTitan(lastHeroAlertData.nick);
+        var withSummon = !isTitan && !!opts.withSummon;
+        if (!isTitan && HERO_CALL_LEVELS.indexOf(selectedHeroCallLevel) < 0) {
+            showToast('Wybierz przedział levelu', 'error');
+            return;
+        }
+        if (heroAlertSending) return;
+        heroAlertSending = true;
+        var actionBtns = heroAlertPanelEl ? heroAlertPanelEl.querySelectorAll('.mt-call-notify, .mt-call-summon') : [];
+        for (var i = 0; i < actionBtns.length; i++) {
+            actionBtns[i].disabled = true;
+            actionBtns[i].textContent = 'Wysyłam…';
+        }
+        var callerNick = getCurrentHeroName();
+        var lvlStr = lastHeroAlertData.lvl != null ? lastHeroAlertData.lvl + 'm' : '?';
+        var posStr = (lastHeroAlertData.x != null && lastHeroAlertData.y != null) ? (lastHeroAlertData.x + ',' + lastHeroAlertData.y) : '?';
+        var kindLabel = isTitan ? 'Tytan!' : 'Heros!';
+        var channelLabel = isTitan ? 'tytani' : 'herosi';
+        var mention = isTitan
+            ? getTitanMentionForContent(lastHeroAlertData.nick)
+            : getHeroMentionForContent(lastHeroAlertData.nick);
+        var content = mention + ' ' + kindLabel + ' ' + lastHeroAlertData.nick + ' (' + lvlStr + '), ' + lastHeroAlertData.mapName + ' (' + posStr + ')';
+        content += '\nWoła: ' + callerNick;
+        if (!isTitan) {
+            var lo = selectedHeroCallLevel - HERO_CALL_LEVEL_RANGE;
+            var hi = selectedHeroCallLevel + HERO_CALL_LEVEL_RANGE;
+            content += ' · przedział ' + selectedHeroCallLevel + ' (' + lo + '–' + hi + ')';
+        }
+        if (withSummon) content += '\n⚡ Zaproponowano Przywołanie na herosa';
+        var imageUrl = getAlertImageForApi();
+        var discordPayload = {
+            content: content,
+            allowed_mentions: { parse: ['everyone', 'users', 'roles'] }
         };
-        var url = CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/hero-level-notifications';
-        var doSend = function (retry) {
-            fetch(url, {
+        if (imageUrl && String(imageUrl).indexOf('https://') === 0) {
+            discordPayload.embeds = [{ thumbnail: { url: imageUrl } }];
+        }
+
+        function restoreBtns() {
+            heroAlertSending = false;
+            if (!heroAlertPanelEl) return;
+            var notifyBtn = heroAlertPanelEl.querySelector('.mt-call-notify');
+            var summonBtn = heroAlertPanelEl.querySelector('.mt-call-summon');
+            if (notifyBtn) {
+                notifyBtn.disabled = false;
+                notifyBtn.textContent = isTitan ? 'Powiadom klan o tytanie' : 'Powiadom klan o herosie';
+            }
+            if (summonBtn) {
+                summonBtn.disabled = false;
+                summonBtn.textContent = 'Powiadom klan o herosie i zaproponuj Przywołanie';
+            }
+        }
+
+        function postDiscord() {
+            fetch(isTitan ? DISCORD_WEBHOOK_TITAN : DISCORD_WEBHOOK_HEROS, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-API-Key': CONFIG.API_KEY || '' },
-                body: JSON.stringify(payload),
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(discordPayload),
             }).then(function (r) {
-                if (r.status === 200) {
-                    markHeroLevelNotificationShown('sent-' + Date.now(), level, lastHeroAlertData.nick);
-                    showHeroLevelPopup({
-                        level: level,
-                        nick: lastHeroAlertData.nick,
-                        mapName: lastHeroAlertData.mapName,
-                        x: lastHeroAlertData.x,
-                        y: lastHeroAlertData.y,
-                        lvl: lastHeroAlertData.lvl,
-                        heroImageUrl: heroImageUrl
-                    });
-                    showToast('Powiadomienie (level ' + level + ') wysłane');
+                restoreBtns();
+                if (r.ok) {
+                    showToast('✅ Wysłano na Discord (' + channelLabel + ')' + (withSummon ? ' + przywołanie' : ''));
                 } else {
-                    if (!retry) {
-                        doSend(true);
-                    } else {
-                        showToast('Błąd wysyłania powiadomienia: ' + r.status, 'error');
-                    }
+                    showToast('❌ Błąd Discord: ' + r.status, 'error');
                 }
             }).catch(function (e) {
-                if (!retry) {
-                    doSend(true);
-                } else {
-                    showToast('Błąd połączenia — sprawdź internet i API key', 'error');
-                }
+                restoreBtns();
+                log('Discord webhook error:', e);
+                showToast('❌ Błąd połączenia z Discord', 'error');
             });
-        };
-        doSend(false);
+        }
+
+        if (CONFIG.API_KEY) {
+            fetch(apiTimerUrl('/api/timer/hero-alert-log'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-API-Key': CONFIG.API_KEY },
+                body: JSON.stringify({
+                    senderNick: callerNick,
+                    heroNick: lastHeroAlertData.nick,
+                    mapName: lastHeroAlertData.mapName,
+                    lvl: lastHeroAlertData.lvl != null ? lastHeroAlertData.lvl : null,
+                    x: lastHeroAlertData.x != null ? lastHeroAlertData.x : null,
+                    y: lastHeroAlertData.y != null ? lastHeroAlertData.y : null
+                })
+            }).catch(function () {});
+
+            fetch(apiTimerUrl('/api/timer/hero-level-notifications'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-API-Key': CONFIG.API_KEY },
+                body: JSON.stringify({
+                    level: isTitan ? 0 : selectedHeroCallLevel,
+                    nick: lastHeroAlertData.nick,
+                    mapName: lastHeroAlertData.mapName,
+                    x: lastHeroAlertData.x,
+                    y: lastHeroAlertData.y,
+                    lvl: lastHeroAlertData.lvl,
+                    heroImageUrl: imageUrl,
+                    callerNick: callerNick,
+                    kind: isTitan ? 'titan' : 'hero',
+                    withSummon: withSummon
+                }),
+            }).then(function (r) {
+                return r.json().then(function (json) {
+                    if (r.ok && json && json.id) {
+                        myActiveCallId = json.id;
+                        markHeroLevelNotificationShown(json.id);
+                        renderCallHelpers((json.notification && json.notification.helpers) || []);
+                    } else if (!r.ok) {
+                        showToast('Wołanie w grze: ' + (json && json.error ? json.error : r.status), 'error');
+                    }
+                    postDiscord();
+                });
+            }).catch(function () {
+                showToast('Wołanie w grze nie doszło — Discord i tak poleci', 'error');
+                postDiscord();
+            });
+        } else {
+            showToast('Brak API key — tylko Discord, bez okien w grze', 'error');
+            postDiscord();
+        }
+    }
+
+    function sendComingToCall(notificationId, btn) {
+        if (!notificationId || !CONFIG.API_KEY) {
+            showToast('Brak API key — nie można zgłosić pomocy', 'error');
+            return;
+        }
+        if (btn) { btn.disabled = true; btn.textContent = 'Wysyłam…'; }
+        fetch(apiTimerUrl('/api/timer/hero-call-coming'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-API-Key': CONFIG.API_KEY },
+            body: JSON.stringify({ notificationId: notificationId, nick: getCurrentHeroName() }),
+        }).then(function (r) { return r.json().then(function (json) { return { r: r, json: json }; }); }).then(function (res) {
+            if (res.r.ok) {
+                if (btn) btn.textContent = 'Zgłoszono — ' + getCurrentHeroName();
+                showToast('✅ Wołający widzi, że idziesz');
+            } else {
+                if (btn) { btn.disabled = false; btn.textContent = 'Przyjdę pomóc'; }
+                showToast(res.json && res.json.error ? res.json.error : 'Błąd zgłoszenia', 'error');
+            }
+        }).catch(function () {
+            if (btn) { btn.disabled = false; btn.textContent = 'Przyjdę pomóc'; }
+            showToast('Błąd połączenia', 'error');
+        });
     }
 
     /** URL obrazka/GIF herosa po levelu z backendu (np. /api/hero-level-images/64/hero.gif). */
@@ -649,103 +968,95 @@
         if (!CONFIG.BACKEND_URL || level == null || !filename) return null;
         return CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/hero-level-images/' + level + '/' + encodeURIComponent(filename);
     }
+
     function showHeroLevelPopup(data) {
+        injectCallStyles();
+        var isTitan = data.kind === 'titan' || data.level === 0;
         var lvlStr = (data.lvl != null) ? data.lvl + 'm' : '?';
         var posStr = (data.x != null && data.y != null) ? (data.x + ',' + data.y) : '?';
-        var textNoPing = 'Hero! ' + (data.nick || '') + ' (' + lvlStr + '), ' + (data.mapName || '') + ' (' + posStr + ')';
         var pop = document.createElement('div');
-        pop.className = 'map-timer-hero-level-popup';
-        pop.style.cssText = 'position:fixed;top:80px;right:20px;z-index:100012;background:#1a1a2e;border:2px solid #e67e22;border-radius:12px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,0.5);font-family:Arial,sans-serif;max-width:360px;display:flex;align-items:center;gap:12px;';
-        var imgEl = document.createElement('div');
-        imgEl.style.cssText = 'width:64px;height:64px;flex-shrink:0;background:#2a2a4a;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:32px;';
-        var img = document.createElement('img');
-        img.alt = '';
-        img.style.cssText = 'width:100%;height:100%;object-fit:contain;border-radius:8px;';
-        var tryOrder = [];
-        if (data.level != null) {
-            tryOrder.push(getHeroLevelImageUrl(data.level, 'png'));
-            tryOrder.push(getHeroLevelImageUrl(data.level, 'gif'));
-            tryOrder.push(getHeroLevelImageUrl(data.level, 'webp'));
-            tryOrder.push(getHeroLevelImageUrlFile(data.level, 'portrait.png'));
-            tryOrder.push(getHeroLevelImageUrlFile(data.level, 'portrait.gif'));
-            tryOrder.push(getHeroLevelImageUrlFile(data.level, 'platform.png'));
+        pop.className = 'map-timer-hero-level-popup ' + (isTitan ? 'is-titan' : 'is-hero');
+        var rangeLo = data.level ? (data.level - HERO_CALL_LEVEL_RANGE) : null;
+        var rangeHi = data.level ? (data.level + HERO_CALL_LEVEL_RANGE) : null;
+        pop.innerHTML =
+            '<button type="button" class="mt-pop-x">×</button>' +
+            '<div class="mt-pop-kicker">' + (isTitan ? 'Wołanie na tytana' : 'Wołanie na herosa') + '</div>' +
+            '<div class="mt-pop-art"></div>' +
+            '<div class="mt-pop-name"></div>' +
+            '<div class="mt-pop-meta"></div>' +
+            '<div class="mt-pop-badges"></div>' +
+            '<div class="mt-pop-caller"></div>' +
+            '<button type="button" class="mt-pop-help">Przyjdę pomóc</button>';
+        pop.querySelector('.mt-pop-name').textContent = data.nick || '';
+        pop.querySelector('.mt-pop-meta').textContent = lvlStr + ' · ' + (data.mapName || '') + ' (' + posStr + ')';
+        var badges = pop.querySelector('.mt-pop-badges');
+        if (!isTitan && data.level) {
+            var b = document.createElement('span');
+            b.className = 'mt-pop-badge range';
+            b.textContent = 'Przedział ' + data.level + ' (' + rangeLo + '–' + rangeHi + ')';
+            badges.appendChild(b);
         }
-        var heroImg = data.heroImageUrl;
-        if (heroImg && typeof heroImg === 'string') {
-            heroImg = heroImg.trim();
-            if (heroImg && heroImg.indexOf('http') !== 0 && heroImg.charAt(0) === '/' && CONFIG.BACKEND_URL) {
-                heroImg = CONFIG.BACKEND_URL.replace(/\/$/, '') + heroImg;
-            }
-            if (heroImg) tryOrder.push(heroImg);
+        if (data.withSummon && !isTitan) {
+            var s = document.createElement('span');
+            s.className = 'mt-pop-badge summon';
+            s.textContent = '⚡ Przywołanie';
+            badges.appendChild(s);
         }
-        var idx = 0;
-        function tryNext() {
-            if (idx < tryOrder.length && tryOrder[idx]) {
-                img.src = tryOrder[idx];
-                idx++;
-            } else {
-                imgEl.textContent = '🦸';
-                if (img.parentNode) imgEl.removeChild(img);
-            }
-        }
-        img.onerror = tryNext;
-        img.onload = function () { idx = 999; };
-        if (tryOrder.length > 0 && tryOrder[0]) {
-            img.src = tryOrder[0];
-            idx = 1;
-            imgEl.appendChild(img);
-        } else {
-            imgEl.textContent = '🦸';
-        }
-        var right = document.createElement('div');
-        right.style.cssText = 'flex:1;min-width:0;';
-        right.innerHTML =
-            '<div style="color:#b8c5d6;font-size:12px;margin-bottom:4px;">' + escapeHtml(textNoPing) + '</div>' +
-            '<div style="font-weight:bold;font-size:16px;color:#e67e22;text-align:center;margin:6px 0;">LEVEL: ' + (data.level || '') + '</div>' +
-            '<div style="color:#8892b0;font-size:11px;">' + (data.mapName || '') + ' (' + posStr + ')</div>';
-        var closeBtn = document.createElement('button');
-        closeBtn.type = 'button';
-        closeBtn.textContent = '×';
-        closeBtn.style.cssText = 'position:absolute;top:4px;right:4px;background:none;border:none;color:#8892b0;cursor:pointer;font-size:18px;line-height:1;padding:0 4px;';
-        closeBtn.addEventListener('click', function () { if (pop.parentNode) pop.parentNode.removeChild(pop); });
-        pop.appendChild(imgEl);
-        pop.appendChild(right);
-        pop.appendChild(closeBtn);
+        pop.querySelector('.mt-pop-caller').textContent = data.callerNick ? ('Woła: ' + data.callerNick) : '';
+        fillNpcArt(pop.querySelector('.mt-pop-art'), data, isTitan ? '⚔️' : '🦸');
+        pop.querySelector('.mt-pop-x').addEventListener('click', function () { if (pop.parentNode) pop.parentNode.removeChild(pop); });
+        pop.querySelector('.mt-pop-help').addEventListener('click', function (ev) {
+            sendComingToCall(data.id, ev.currentTarget);
+        });
         document.body.appendChild(pop);
-        setTimeout(function () { if (pop.parentNode) pop.parentNode.removeChild(pop); }, 15000);
+        setTimeout(function () { if (pop.parentNode) pop.parentNode.removeChild(pop); }, 45000);
     }
 
-    function fetchAndShowHeroLevelNotifications() {
-        if (!CONFIG.BACKEND_URL) return;
-        var xhr = new XMLHttpRequest();
-        xhr.open('GET', CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/hero-level-notifications?since=' + lastSeenHeroNotificationTs, false);
-        try {
-            xhr.send();
-            if (xhr.status !== 200) return;
-            var json = JSON.parse(xhr.responseText);
-            var list = json.notifications || [];
-            list.forEach(function (n) {
-                if (n.createdAt && n.createdAt > lastSeenHeroNotificationTs) lastSeenHeroNotificationTs = n.createdAt;
-                if (!shouldShowHeroLevelNotification(n.id, n.level, n.nick)) return;
-                markHeroLevelNotificationShown(n.id, n.level, n.nick);
-                showHeroLevelPopup({ level: n.level, nick: n.nick, mapName: n.mapName, x: n.x, y: n.y, lvl: n.lvl, heroImageUrl: n.heroImageUrl });
+    function processIncomingCalls(list) {
+        var myNick = String(getCurrentHeroName() || '').trim().toLowerCase();
+        var myLvl = getCurrentHeroLevel();
+        list.forEach(function (n) {
+            var ts = n.createdAt != null ? Number(n.createdAt) : 0;
+            if (ts > lastSeenHeroNotificationTs) lastSeenHeroNotificationTs = ts;
+            if (myActiveCallId && n.id === myActiveCallId) {
+                renderCallHelpers(n.helpers || []);
+            }
+            if (!shouldShowHeroLevelNotification(n.id)) return;
+            var kind = n.kind === 'titan' ? 'titan' : 'hero';
+            var caller = String(n.callerNick || '').trim().toLowerCase();
+            if (caller && caller === myNick) {
+                markHeroLevelNotificationShown(n.id);
+                return;
+            }
+            if (kind === 'hero' && n.level && !isPlayerInCallRange(n.level, myLvl)) {
+                return;
+            }
+            markHeroLevelNotificationShown(n.id);
+            showHeroLevelPopup({
+                id: n.id,
+                level: n.level,
+                nick: n.nick,
+                mapName: n.mapName,
+                x: n.x,
+                y: n.y,
+                lvl: n.lvl,
+                heroImageUrl: n.heroImageUrl,
+                callerNick: n.callerNick,
+                kind: kind,
+                withSummon: !!n.withSummon,
             });
-        } catch (e) { /* ignore */ }
+        });
     }
-    /** Async — pobiera globalne powiadomienia (wysłane przez dowolnego użytkownika) i pokazuje popup wszystkim z otwartym skryptem. */
+
+    /** Async — pobiera globalne powiadomienia i pokazuje popup graczom w przedziale. */
     function fetchAndShowHeroLevelNotificationsAsync() {
         if (!CONFIG.BACKEND_URL) return;
-        var url = CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/hero-level-notifications?since=' + lastSeenHeroNotificationTs;
+        var since = lastSeenHeroNotificationTs;
+        if (myActiveCallId) since = Math.max(0, Date.now() - 9 * 60 * 1000);
+        var url = apiTimerUrl('/api/timer/hero-level-notifications?since=' + since);
         fetch(url, { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (json) {
             if (!json || !json.notifications) return;
-            var list = json.notifications || [];
-            list.forEach(function (n) {
-                var ts = n.createdAt != null ? Number(n.createdAt) : 0;
-                if (ts > lastSeenHeroNotificationTs) lastSeenHeroNotificationTs = ts;
-                if (!shouldShowHeroLevelNotification(n.id, n.level, n.nick)) return;
-                markHeroLevelNotificationShown(n.id, n.level, n.nick);
-                showHeroLevelPopup({ level: n.level, nick: n.nick, mapName: n.mapName, x: n.x, y: n.y, lvl: n.lvl, heroImageUrl: n.heroImageUrl });
-            });
+            processIncomingCalls(json.notifications || []);
         }).catch(function () {});
     }
     function pollHeroLevelNotificationsOnce() {
@@ -754,60 +1065,7 @@
     }
 
     function sendHeroAlertToDiscord() {
-        if (!lastHeroAlertData) return;
-        var lvlStr = lastHeroAlertData.lvl != null ? lastHeroAlertData.lvl + 'm' : '?';
-        var posStr = (lastHeroAlertData.x != null && lastHeroAlertData.y != null) ? (lastHeroAlertData.x + ',' + lastHeroAlertData.y) : '?';
-        if (heroAlertSending) return;
-        heroAlertSending = true;
-        var btn = heroAlertPanelEl && heroAlertPanelEl.querySelector('.map-timer-hero-alert-call');
-        if (btn) { btn.disabled = true; btn.textContent = 'Wysyłam…'; }
-        if (CONFIG.API_KEY) {
-            fetch(CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/hero-alert-log', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-API-Key': CONFIG.API_KEY },
-                body: JSON.stringify({
-                    senderNick: getCurrentHeroName(),
-                    heroNick: lastHeroAlertData.nick,
-                    mapName: lastHeroAlertData.mapName,
-                    lvl: lastHeroAlertData.lvl != null ? lastHeroAlertData.lvl : null,
-                    x: lastHeroAlertData.x != null ? lastHeroAlertData.x : null,
-                    y: lastHeroAlertData.y != null ? lastHeroAlertData.y : null
-                })
-            }).catch(function () {});
-        }
-        var isTitan = !!lastHeroAlertData.isTitan || nameLooksLikeTitan(lastHeroAlertData.nick);
-        var mention = isTitan
-            ? getTitanMentionForContent(lastHeroAlertData.nick)
-            : getHeroMentionForContent(lastHeroAlertData.nick);
-        var kindLabel = isTitan ? 'Tytan!' : 'Hero!';
-        var channelLabel = isTitan ? 'tytani' : 'herosi';
-        var webhookUrl = isTitan ? DISCORD_WEBHOOK_TITAN : DISCORD_WEBHOOK_HEROS;
-        var content = mention + ' ' + kindLabel + ' ' + lastHeroAlertData.nick + ' (' + lvlStr + '), ' + lastHeroAlertData.mapName + ' (' + posStr + ')';
-        var payload = {
-            content: content,
-            allowed_mentions: { parse: ['everyone', 'users', 'roles'] }
-        };
-        function done() {
-            heroAlertSending = false;
-            if (btn) { btn.disabled = false; btn.textContent = 'Powiadom klan na Discordzie'; }
-        }
-        fetch(webhookUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        }).then(function (r) {
-            done();
-            if (r.ok) {
-                showToast('✅ Wysłano na Discord (' + channelLabel + ')');
-                hideHeroAlertPanel();
-            } else {
-                showToast('❌ Błąd wysyłania na Discord: ' + r.status, 'error');
-            }
-        }).catch(function (e) {
-            done();
-            log('Discord webhook error:', e);
-            showToast('❌ Błąd połączenia z Discord', 'error');
-        });
+        sendClanCall({ withSummon: false });
     }
 
     /** Lista postaci obecnych na mapie (Engine.others / g.other). */
@@ -1138,7 +1396,7 @@
                 eveRespawnCache = null;
             }
         }
-        if (nowTick - lastFetchedHeroNotifTs >= 3000) {
+        if (nowTick - lastFetchedHeroNotifTs >= 2000) {
             lastFetchedHeroNotifTs = nowTick;
             fetchAndShowHeroLevelNotificationsAsync();
         }
