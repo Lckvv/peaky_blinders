@@ -206,7 +206,6 @@ export default function Navbar({ isMobile, isOpen, onClose }: NavbarProps = {}) 
                   <>
                     <Link href="/admin/logs/discord" className={cx('gos-nav__item', 'gos-nav__item--sub', 'gos-nav__item--logs', pathname === '/admin/logs/discord' && 'is-active')} onClick={onClose}>Logs Discord</Link>
                     <Link href="/admin/logs/margonem" className={cx('gos-nav__item', 'gos-nav__item--sub', 'gos-nav__item--logs', pathname === '/admin/logs/margonem' && 'is-active')} onClick={onClose}>Logs Margonem</Link>
-                    <Link href="/admin/logs/chat" className={cx('gos-nav__item', 'gos-nav__item--sub', 'gos-nav__item--logs', pathname === '/admin/logs/chat' && 'is-active')} onClick={onClose}>Logs Chat</Link>
                   </>
                 )}
               </>

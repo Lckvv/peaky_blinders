@@ -24,7 +24,6 @@ model User {
   phaseResults  PhaseResult[]
   eveHunterKills EveHunterKill[]
   heroAlertLogs  HeroAlertLog[]
-  chatLogs       ChatLog[]
   invitationCodeUsed InvitationCode?
   passwordResetTokens PasswordResetToken[]
 }
@@ -203,21 +202,6 @@ model HeroAlertLog {
   x          Int?
   y          Int?
   createdAt  DateTime @default(now())
-
-  @@index([userId])
-  @@index([createdAt])
-}
-
-// Log wiadomości prywatnych z czatu (kto, do kogo, treść, godzina z czatu, data zapisu)
-model ChatLog {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  author      String   // kto wysłał (np. Zara)
-  receiver    String   // do kogo (np. slepek)
-  text        String   @db.Text
-  messageTime String?  // godzina z czatu np. [13:49]
-  createdAt   DateTime @default(now()) // data i czas zapisu
 
   @@index([userId])
   @@index([createdAt])

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Margonem Map Timer
 // @namespace    http://tampermonkey.net/
-// @version      2.13
+// @version      2.14
 // @description  Śledzenie czasu na mapach tytanów (Guardians of Souls). Event Easter wyłączony — tylko statystyki na stronie.
 // @author       Lucek
 // @match        https://*.margonem.com/*
@@ -2521,46 +2521,6 @@
     });
 
     // ================================================================
-    //  Logi czatu — wiadomości prywatne do backendu (Logs Chat)
-    // ================================================================
-    var privateChatLogObserverAttached = false;
-    function initPrivateChatLogger() {
-        if (privateChatLogObserverAttached) return;
-        var wrapper = document.querySelector('.PRIVATE-message-wrapper');
-        if (!wrapper) return;
-        privateChatLogObserverAttached = true;
-        var observer = new MutationObserver(function (mutations) {
-            if (!CONFIG.API_KEY || !CONFIG.BACKEND_URL) return;
-            mutations.forEach(function (mutation) {
-                for (var i = 0; i < mutation.addedNodes.length; i++) {
-                    var node = mutation.addedNodes[i];
-                    if (node.nodeType !== 1 || !node.classList || !node.classList.contains('new-chat-message')) continue;
-                    var authorEl = node.querySelector('.author-section');
-                    var receiverEl = node.querySelector('.receiver-section');
-                    var textEl = node.querySelector('.message-section');
-                    var tsEl = node.querySelector('.ts-section');
-                    var author = authorEl ? String(authorEl.innerText || '').replace(':', '').trim() : '';
-                    var receiver = receiverEl ? String(receiverEl.innerText || '').replace(':', '').trim() : '';
-                    var text = textEl ? String(textEl.innerText || '').trim() : '';
-                    var messageTime = tsEl ? String(tsEl.innerText || '').trim() : '';
-                    if (!author || !text) continue;
-                    var url = CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/chat-log';
-                    fetch(url, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'X-API-Key': CONFIG.API_KEY },
-                        body: JSON.stringify({ author: author, receiver: receiver, text: text, messageTime: messageTime || null })
-                    }).catch(function () {});
-                }
-            });
-        });
-        observer.observe(wrapper, { childList: true, subtree: true });
-    }
-    function tryAttachPrivateChatLogger() {
-        if (privateChatLogObserverAttached) return;
-        initPrivateChatLogger();
-    }
-
-    // ================================================================
     //  INIT
     // ================================================================
     function init() {
@@ -2576,8 +2536,6 @@
 
         setInterval(tick, CONFIG.CHECK_INTERVAL);
         setTimeout(function () { tick(); }, 800);
-
-        setInterval(tryAttachPrivateChatLogger, 2000);
 
         const waitForEngine = setInterval(function () {
             if (getEngine()) {
