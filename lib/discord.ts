@@ -84,7 +84,16 @@ const TITAN_DISCORD_ROLE_IDS: RoleMap = {
   Tanroth: '780726964830732319',
 };
 
+export const HERO_CALL_LEVELS = [63, 83, 114, 144, 167, 190, 217, 244, 271, 300];
 export const HERO_CALL_LEVEL_RANGE = 13;
+const HERO_CALL_LEVEL_RANGE_UP: Record<number, number> = { 300: 200 };
+
+export function heroCallLevelRange(level: number): { lo: number; hi: number } {
+  return {
+    lo: level - HERO_CALL_LEVEL_RANGE,
+    hi: level + (HERO_CALL_LEVEL_RANGE_UP[level] ?? HERO_CALL_LEVEL_RANGE),
+  };
+}
 
 export function sanitizeDiscordText(value: string, max = 120): string {
   return String(value || '')
@@ -138,7 +147,10 @@ export function isAllowedDiscordImageUrl(url: string): boolean {
 
 function webhookFor(kind: 'hero' | 'titan'): string {
   const fromEnv = kind === 'titan' ? process.env.DISCORD_WEBHOOK_TITAN : process.env.DISCORD_WEBHOOK_HEROS;
-  return String(fromEnv || '').trim();
+  return String(fromEnv || '')
+    .trim()
+    .replace(/^['"]+|['"]+$/g, '')
+    .trim();
 }
 
 export async function sendClanDiscordMessage(opts: {

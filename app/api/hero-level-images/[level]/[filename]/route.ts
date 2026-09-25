@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readFileSync, existsSync } from 'fs';
 import path from 'path';
-
-const ALLOWED_LEVELS = [64, 83, 114, 144, 217, 300];
+import { HERO_CALL_LEVELS as ALLOWED_LEVELS } from '@/lib/discord';
 const ALLOWED_EXT = ['.gif', '.png', '.webp'];
 // Pliki w podfolderach: hero-level-images/heroes/64/hero.gif, 83/hero.png itd.
 const HEROES_BASE = path.join(process.cwd(), 'app', 'api', 'hero-level-images', 'heroes');

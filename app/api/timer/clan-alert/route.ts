@@ -2,14 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authFromApiKey } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import {
-  HERO_CALL_LEVEL_RANGE,
+  HERO_CALL_LEVELS,
   getMonsterMention,
+  heroCallLevelRange,
   sanitizeDiscordText,
   sendClanDiscordMessage,
 } from '@/lib/discord';
 import { rateLimit } from '@/lib/rate-limit';
-
-const HERO_LEVELS = [64, 83, 114, 144, 217, 300];
 
 /**
  * POST /api/timer/clan-alert — wyślij wołanie na Discord (webhook tylko na serwerze).
@@ -41,8 +40,8 @@ export async function POST(request: NextRequest) {
     if (!nick || !mapName) {
       return NextResponse.json({ error: 'nick and mapName are required' }, { status: 400 });
     }
-    if (kind === 'hero' && (!Number.isInteger(level) || !HERO_LEVELS.includes(level))) {
-      return NextResponse.json({ error: 'level must be one of: 64, 83, 114, 144, 217, 300' }, { status: 400 });
+    if (kind === 'hero' && (!Number.isInteger(level) || !HERO_CALL_LEVELS.includes(level))) {
+      return NextResponse.json({ error: `level must be one of: ${HERO_CALL_LEVELS.join(', ')}` }, { status: 400 });
     }
 
     const mention = getMonsterMention(kind, nick);
@@ -52,8 +51,7 @@ export async function POST(request: NextRequest) {
     let content = `${mention} ${kindLabel} ${nick} (${lvlStr}), ${mapName} (${posStr})`;
     content += `\nWoła: ${callerNick || '?'}`;
     if (kind === 'hero') {
-      const lo = level - HERO_CALL_LEVEL_RANGE;
-      const hi = level + HERO_CALL_LEVEL_RANGE;
+      const { lo, hi } = heroCallLevelRange(level);
       content += ` · przedział ${level} (${lo}–${hi})`;
     }
     if (withSummon) content += '\n⚡ Zaproponowano Przywołanie na herosa';

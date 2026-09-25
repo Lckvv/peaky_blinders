@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
-
-const SCRIPT_VERSION = '2.15';
+import { SCRIPT_VERSION } from '@/lib/script-meta';
 
 // GET /api/script/install.user.js?token=JWT
 // Serwuje LOADER â€“ maĹ‚y skrypt, ktĂłry Ĺ‚aduje wĹ‚aĹ›ciwy kod z serwera (ochrona oryginaĹ‚u).

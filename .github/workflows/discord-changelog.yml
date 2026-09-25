@@ -1,0 +1,146 @@
+name: Discord changelog
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tampermonkey-map-timer.user.js'
+      - 'app/api/script/**'
+      - 'lib/script-meta.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  APP_URL: ${{ vars.APP_URL || 'https://guardiansofsouls.up.railway.app' }}
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Collect changes
+        id: collect
+        env:
+          BEFORE: ${{ github.event.before }}
+          PUSHED_AT: ${{ github.event.repository.pushed_at }}
+        run: |
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BEFORE" 2>/dev/null; then
+            BEFORE="$(git rev-parse HEAD~1)"
+          fi
+          RANGE="$BEFORE..HEAD"
+
+          if ! [[ "$PUSHED_AT" =~ ^[0-9]+$ ]]; then PUSHED_AT="$(date +%s)"; fi
+          echo "pushed_at=$PUSHED_AT" >> "$GITHUB_OUTPUT"
+          echo "version=$(grep -oP "SCRIPT_VERSION = '\K[^']+" lib/script-meta.ts || echo '?')" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(sha256sum tampermonkey-map-timer.user.js | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+          git log --no-merges --format='- %s' "$RANGE" > commits.txt
+          # Only the userscript diff is sent anywhere; never server code or env files.
+          git diff "$RANGE" -- tampermonkey-map-timer.user.js | head -c 15000 > diff.txt
+
+      - name: Wait until production serves this exact script
+        id: deploy
+        env:
+          EXPECTED: ${{ steps.collect.outputs.sha256 }}
+        run: |
+          for i in $(seq 1 60); do
+            LIVE="$(curl -sf "$APP_URL/api/script/version" | jq -r '.sha256 // empty' || true)"
+            if [ "$LIVE" = "$EXPECTED" ]; then
+              echo "deployed_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "Attempt $i: live=${LIVE:-none}, expected=$EXPECTED"
+            sleep 20
+          done
+          echo "Production never served the expected script; changelog not posted." >&2
+          exit 1
+
+      - name: Summarize with AI
+        id: summary
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ -n "$OPENAI_API_KEY" ] && [ -s diff.txt ]; then
+            jq -n --rawfile diff diff.txt --rawfile commits commits.txt '{
+              model: "gpt-4o-mini",
+              temperature: 0.2,
+              response_format: { type: "json_object" },
+              messages: [
+                { role: "system", content: "Piszesz changelog po polsku dla graczy Margonem korzystających ze skryptu Tampermonkey. Na podstawie commitów i diffu zwróć JSON: {\"summary\": string, \"added\": string[], \"fixed\": string[], \"changed\": string[]}. summary to jedno zdanie podsumowania aktualizacji. added = nowe funkcje, fixed = naprawione błędy, changed = zmiany w działaniu. Każdy punkt to krótkie zdanie z perspektywy gracza, bez szczegółów technicznych, nazw zmiennych, adresów URL, tokenów ani kluczy. Puste kategorie zostaw jako []. Jeśli zmiana jest czysto techniczna, wpisz do changed \"Poprawki stabilności i wydajności\"." },
+                { role: "user", content: ("Commity:\n" + $commits + "\n\nDiff:\n" + $diff) }
+              ]
+            }' > request.json
+
+            if curl -sf https://api.openai.com/v1/chat/completions \
+                 -H "Authorization: Bearer $OPENAI_API_KEY" \
+                 -H "Content-Type: application/json" \
+                 -d @request.json > response.json; then
+              jq -r '.choices[0].message.content // empty' response.json \
+                | jq -e '{summary: (.summary // ""), added: (.added // []), fixed: (.fixed // []), changed: (.changed // [])}' \
+                > changelog.json 2>/dev/null || rm -f changelog.json
+            fi
+          fi
+          if [ ! -s changelog.json ]; then
+            jq -R -s '{summary: "", added: [], fixed: [], changed: (split("\n") | map(ltrimstr("- ")) | map(select(length > 0)))}' \
+              commits.txt > changelog.json
+          fi
+          echo "checked_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+
+      - name: Post to Discord
+        env:
+          DISCORD_WEBHOOK_CHANGELOG: ${{ secrets.DISCORD_WEBHOOK_CHANGELOG }}
+          DISCORD_ROLE_ID: ${{ vars.DISCORD_CHANGELOG_ROLE_ID || '1553119394656288808' }}
+          VERSION: ${{ steps.collect.outputs.version }}
+          SHA256: ${{ steps.collect.outputs.sha256 }}
+          PUSHED_AT: ${{ steps.collect.outputs.pushed_at }}
+          DEPLOYED_AT: ${{ steps.deploy.outputs.deployed_at }}
+          CHECKED_AT: ${{ steps.summary.outputs.checked_at }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_CHANGELOG" ]; then
+            echo "DISCORD_WEBHOOK_CHANGELOG secret is not set" >&2
+            exit 1
+          fi
+
+          jq -n --slurpfile log changelog.json \
+            --arg version "$VERSION" --arg sha256 "$SHA256" --arg commit "${GITHUB_SHA::7}" \
+            --arg pushed "$PUSHED_AT" --arg deployed "$DEPLOYED_AT" --arg checked "$CHECKED_AT" \
+            --arg verify "$APP_URL/api/script/version" --arg role "$DISCORD_ROLE_ID" '
+            def section($title; $items):
+              if ($items | length) > 0 then "**" + $title + "**\n" + ($items | map("• " + tostring) | join("\n")) + "\n\n" else "" end;
+            $log[0] as $l
+            | {
+              username: "Map Timer – aktualizacje",
+              content: ("<@&" + $role + "> Nowa wersja skryptu **v" + $version + "** jest już dostępna!"),
+              allowed_mentions: { roles: [$role] },
+              embeds: [{
+                title: ("📦 Aktualizacja skryptu v" + $version),
+                description: (
+                  (if $l.summary != "" then "> " + $l.summary + "\n\n" else "" end)
+                  + section("✨ Nowości"; $l.added)
+                  + section("🛠️ Poprawki"; $l.fixed)
+                  + section("⚙️ Zmiany"; $l.changed)
+                  + "**🔄 Jak zaktualizować?**\nOdśwież grę (F5) – skrypt pobierze nową wersję automatycznie."
+                  | .[0:4000]
+                ),
+                color: 5814783,
+                fields: [
+                  { name: "🚀 Deploy ruszył", value: ("<t:" + $pushed + ":f>"), inline: true },
+                  { name: "✅ Potwierdzony na serwerze", value: ("<t:" + $deployed + ":f>"), inline: true },
+                  { name: "🔏 Sprawdzone i podpisane", value: ("<t:" + $checked + ":f>"), inline: true },
+                  { name: "🔐 SHA-256 skryptu", value: ("```\n" + $sha256 + "\n```") },
+                  { name: "🔎 Weryfikacja", value: ("[Sprawdź aktualny hash na serwerze](" + $verify + ")") }
+                ],
+                footer: { text: ("Wygenerowane automatycznie przez GitHub Actions • commit " + $commit) },
+                timestamp: (now | todate)
+              }]
+            }' > payload.json
+
+          curl -sf -X POST "$DISCORD_WEBHOOK_CHANGELOG" \
+            -H "Content-Type: application/json" \
+            -d @payload.json

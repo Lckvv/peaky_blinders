@@ -3,6 +3,11 @@ import { prisma } from '@/lib/prisma';
 import { authFromApiKey, validateApiKey } from '@/lib/auth';
 import { getMonsterNameFromMap } from '@/lib/mapToMonster';
 import { EVE_EVENT_ENDED, isEveHeroMonster } from '@/lib/eve-event-ended';
+import {
+  ABSOLUTE_MAX_SESSION_SEC,
+  TITAN_AFK_CAP_SEC,
+  clipOverlapSeconds,
+} from '@/lib/session-limits';
 
 // POST — record a map session (called by Tampermonkey script)
 export async function POST(request: NextRequest) {
@@ -85,8 +90,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Anti-abuse: max session 12 hours, reject suspiciously long
-    if (time > 43200) {
+    // Anti-abuse: reject malformed payloads (12h+)
+    if (time > ABSOLUTE_MAX_SESSION_SEC) {
       return NextResponse.json(
         { error: 'Session too long (max 12h). Possible bug in script.' },
         { status: 400 }
@@ -124,12 +129,47 @@ export async function POST(request: NextRequest) {
       phaseId = activePhase.id;
     }
 
-    // Calculate session start time
-    const endedAt = timestamp ? new Date(timestamp) : new Date();
-    const startedAt = new Date(endedAt.getTime() - time * 1000);
-
-    // Dla herosów EVE liczymy pełny czas sesji (bez odliczania respawnu po stronie serwera).
+    // Tytani: max 15 min na wizytę (AFK). startedAt liczymy od obciętego czasu, nie od raw `time`.
     let effectiveDurationSec = time;
+    if (!isHeroMonster && !isMapEnter && effectiveDurationSec > TITAN_AFK_CAP_SEC) {
+      effectiveDurationSec = TITAN_AFK_CAP_SEC;
+    }
+
+    const endedAt = timestamp ? new Date(timestamp) : new Date();
+    let startedAt = new Date(endedAt.getTime() - effectiveDurationSec * 1000);
+
+    const heroName = String(hero ?? 'Unknown');
+    const reasonStr = String(reason ?? 'unknown');
+
+    if (!isMapEnter && effectiveDurationSec > 0) {
+      const overlapping = await prisma.mapSession.findMany({
+        where: {
+          userId: user.id,
+          monsterId: monsterRecord.id,
+          phaseId,
+          heroName,
+          duration: { gt: 0 },
+          startedAt: { lt: endedAt },
+          endedAt: { gt: startedAt },
+        },
+        select: { startedAt: true, endedAt: true },
+      });
+      const overlapSec = clipOverlapSeconds(startedAt, endedAt, overlapping);
+      if (overlapSec > 0) {
+        effectiveDurationSec = Math.max(0, effectiveDurationSec - overlapSec);
+        startedAt = new Date(endedAt.getTime() - effectiveDurationSec * 1000);
+      }
+    }
+
+    if (!isMapEnter && effectiveDurationSec < 1) {
+      const totals = await sessionTotals(user.id, monsterRecord.id);
+      return NextResponse.json({
+        success: true,
+        sessionTime: 0,
+        ignored: 'overlap_or_cap',
+        ...totals,
+      });
+    }
 
     // Deduplikacja: ten sam użytkownik może wysłać sesję 2× (np. skrypt w iframe + top). Ignoruj duplikat.
     const duplicateWindowMs = 15000; // 15 s
@@ -138,9 +178,9 @@ export async function POST(request: NextRequest) {
         userId: user.id,
         monsterId: monsterRecord.id,
         phaseId: phaseId,
-        heroName: String(hero ?? 'Unknown'),
-        duration: time,
-        reason: String(reason ?? 'unknown'),
+        heroName,
+        duration: effectiveDurationSec,
+        reason: reasonStr,
         endedAt: {
           gte: new Date(endedAt.getTime() - duplicateWindowMs),
           lte: new Date(endedAt.getTime() + duplicateWindowMs),
@@ -148,24 +188,13 @@ export async function POST(request: NextRequest) {
       },
     });
     if (existingDuplicate) {
-      const totalResult = await prisma.mapSession.aggregate({
-        where: {
-          userId: user.id,
-          monsterId: monsterRecord.id,
-        },
-        _sum: { duration: true },
-        _count: true,
-      });
-      const totalTime = totalResult._sum.duration || 0;
-      const totalSessions = totalResult._count;
+      const totals = await sessionTotals(user.id, monsterRecord.id);
       return NextResponse.json({
         success: true,
         sessionId: existingDuplicate.id,
         sessionTime: effectiveDurationSec,
-        totalTime,
-        totalSessions,
-        totalTimeFormatted: formatTime(totalTime),
         duplicate: true,
+        ...totals,
       });
     }
 
@@ -177,12 +206,12 @@ export async function POST(request: NextRequest) {
         userId: user.id,
         monsterId: monsterRecord.id,
         phaseId: phaseId,
-        heroName: String(hero ?? 'Unknown'),
+        heroName,
         heroOutfitUrl: outfitUrlValue || null,
         world: String(world ?? 'Unknown'),
         mapName: mapName,
         duration: effectiveDurationSec,
-        reason: String(reason ?? 'unknown'),
+        reason: reasonStr,
         startedAt,
         endedAt,
       },
@@ -191,22 +220,11 @@ export async function POST(request: NextRequest) {
     // Timer „ostatnio opuszczono mapę” jest ustawiany przez skrypt (POST /api/timer/eve-map-last-left), nie tutaj.
     // Punkt łowcy (63, 143, 300) jest przyznawany w /api/timer/eve-hunter-found — skrypt wywołuje go w momencie wykrycia herosa na mapie (lista NPC, nick), nie przy map_enter.
 
-    // Calculate user's total time for this monster
-    const totalResult = await prisma.mapSession.aggregate({
-      where: {
-        userId: user.id,
-        monsterId: monsterRecord.id,
-      },
-      _sum: { duration: true },
-      _count: true,
-    });
-
-    const totalTime = totalResult._sum.duration || 0;
-    const totalSessions = totalResult._count;
+    const totals = await sessionTotals(user.id, monsterRecord.id);
 
     if (reason !== 'map_enter' || effectiveDurationSec > 0) {
       console.log(
-        `[Timer] ${user.username} (${hero}) → ${monster} on "${mapName}" — ${effectiveDurationSec}s${effectiveDurationSec !== time ? ` (raw ${time}s, freeze odjęty)` : ''} (total: ${totalTime}s, sessions: ${totalSessions})`
+        `[Timer] ${user.username} (${hero}) → ${monster} on "${mapName}" — ${effectiveDurationSec}s${effectiveDurationSec !== time ? ` (raw ${time}s, cap/overlap)` : ''} (total: ${totals.totalTime}s, sessions: ${totals.totalSessions})`
       );
     }
 
@@ -214,9 +232,7 @@ export async function POST(request: NextRequest) {
       success: true,
       sessionId: session.id,
       sessionTime: effectiveDurationSec,
-      totalTime,
-      totalSessions,
-      totalTimeFormatted: formatTime(totalTime),
+      ...totals,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -226,6 +242,21 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+async function sessionTotals(userId: string, monsterId: string) {
+  const totalResult = await prisma.mapSession.aggregate({
+    where: { userId, monsterId },
+    _sum: { duration: true },
+    _count: true,
+  });
+  const totalTime = totalResult._sum.duration || 0;
+  const totalSessions = totalResult._count;
+  return {
+    totalTime,
+    totalSessions,
+    totalTimeFormatted: formatTime(totalTime),
+  };
 }
 
 function formatTime(totalSeconds: number): string {

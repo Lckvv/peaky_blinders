@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authFromApiKey } from '@/lib/auth';
+import { HERO_CALL_LEVELS } from '@/lib/discord';
 
 const NOTIFICATION_MAX_AGE_MS = 10 * 60 * 1000; // 10 min
-const HERO_LEVELS = [64, 83, 114, 144, 217, 300];
 
 function noStoreJson(body: unknown, status = 200) {
   return NextResponse.json(body, {
@@ -102,9 +102,9 @@ export async function POST(request: NextRequest) {
     const callerNick = typeof body?.callerNick === 'string' ? body.callerNick.trim().slice(0, 80) : '';
     const withSummon = !!body?.withSummon && kind === 'hero';
 
-    if (kind === 'hero' && (!Number.isInteger(level) || !HERO_LEVELS.includes(level))) {
+    if (kind === 'hero' && (!Number.isInteger(level) || !HERO_CALL_LEVELS.includes(level))) {
       return NextResponse.json(
-        { error: 'level must be one of: 64, 83, 114, 144, 217, 300' },
+        { error: `level must be one of: ${HERO_CALL_LEVELS.join(', ')}` },
         { status: 400 }
       );
     }

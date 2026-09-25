@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Margonem Map Timer
 // @namespace    http://tampermonkey.net/
-// @version      2.15
+// @version      2.17
 // @description  Śledzenie czasu na mapach tytanów (Guardians of Souls). Event Easter wyłączony — tylko statystyki na stronie.
 // @author       Lucek
 // @match        https://*.margonem.com/*
@@ -93,9 +93,11 @@
     let kolejkiMenuOpen = false;
     let sessionFinalized = false;
     const HERO_AFK_CAP_SEC = 180;
+    // Musi być zgodne z lib/session-limits.ts (TITAN_AFK_CAP_SEC).
+    const TITAN_AFK_CAP_SEC = 15 * 60;
     const HERO_AFK_MONSTERS = ['Grim Blackcluck', 'Hotblood Capon'];
     var EVE_HERO_NICK_TO_KEY = { 'Grim Blackcluck': 41, 'Hotblood Capon': 81 };
-    let heroAfkCapped = false;
+    let sessionAfkCapped = false;
     let reservationsCache = { monster: null, data: null, ts: 0 };
     let phaseLeaderboardCache = { monster: null, data: null, ts: 0 };
     var kolejkiAsyncCache = { monster: null, reservations: [], timeByNick: {}, ts: 0 };
@@ -110,8 +112,9 @@
     const HEROS_WT_MIN = 80;
     const HEROS_WT_MAX = 89;
     const TITAN_WT_MIN = 100;
-    const HERO_CALL_LEVELS = [64, 83, 114, 144, 217, 300];
+    const HERO_CALL_LEVELS = [63, 83, 114, 144, 167, 190, 217, 244, 271, 300];
     const HERO_CALL_LEVEL_RANGE = 13;
+    const HERO_CALL_LEVEL_RANGE_UP = { 300: 200 };
     let lastHerosNotifiedMapName = null;
     // Heros eventowy (41, 81): wejście/wyjście wysyłane przez session (map_enter / leave).
     // Punkty łowcy są przypisane do KONTA (userId z API key), nie do postaci — wiele postaci = jedno konto.
@@ -527,10 +530,17 @@
         return best;
     }
 
+    function heroCallLevelRange(level) {
+        level = Number(level);
+        var up = HERO_CALL_LEVEL_RANGE_UP[level] != null ? HERO_CALL_LEVEL_RANGE_UP[level] : HERO_CALL_LEVEL_RANGE;
+        return { lo: level - HERO_CALL_LEVEL_RANGE, hi: level + up };
+    }
+
     function isPlayerInCallRange(callLevel, myLvl) {
         if (callLevel == null || callLevel === 0) return true;
         if (myLvl == null || !Number.isFinite(Number(myLvl))) return true;
-        return Math.abs(Number(myLvl) - Number(callLevel)) <= HERO_CALL_LEVEL_RANGE;
+        var range = heroCallLevelRange(callLevel);
+        return Number(myLvl) >= range.lo && Number(myLvl) <= range.hi;
     }
 
     function apiTimerUrl(path) {
@@ -705,7 +715,7 @@
         heroAlertPanelEl.className = isTitan ? 'is-titan' : 'is-hero';
         var lvlStr = lastHeroAlertData.lvl != null ? lastHeroAlertData.lvl + 'm' : '?';
         var posStr = (lastHeroAlertData.x != null && lastHeroAlertData.y != null) ? (lastHeroAlertData.x + ',' + lastHeroAlertData.y) : '?';
-        var rangeNote = isTitan ? '' : ('Przedział ±' + HERO_CALL_LEVEL_RANGE + ' lvl od wybranej wartości.');
+        var rangeNote = isTitan ? '' : ('Przedział ±' + HERO_CALL_LEVEL_RANGE + ' lvl od wybranej wartości (300: ' + heroCallLevelRange(300).lo + '–' + heroCallLevelRange(300).hi + ').');
         var actionsHtml = isTitan
             ? '<button type="button" class="mt-call-notify" data-summon="0">Powiadom klan o tytanie</button>'
             : '<button type="button" class="mt-call-notify" data-summon="0">Powiadom klan o herosie</button>' +
@@ -952,8 +962,9 @@
         var posStr = (data.x != null && data.y != null) ? (data.x + ',' + data.y) : '?';
         var pop = document.createElement('div');
         pop.className = 'map-timer-hero-level-popup ' + (isTitan ? 'is-titan' : 'is-hero');
-        var rangeLo = data.level ? (data.level - HERO_CALL_LEVEL_RANGE) : null;
-        var rangeHi = data.level ? (data.level + HERO_CALL_LEVEL_RANGE) : null;
+        var range = data.level ? heroCallLevelRange(data.level) : null;
+        var rangeLo = range ? range.lo : null;
+        var rangeHi = range ? range.hi : null;
         pop.innerHTML =
             '<button type="button" class="mt-pop-x">×</button>' +
             '<div class="mt-pop-kicker">' + (isTitan ? 'Wołanie na tytana' : 'Wołanie na herosa') + '</div>' +
@@ -1269,7 +1280,7 @@
         sessionStartTime = Date.now();
         accumulatedSeconds = 0;
         sessionFinalized = false;
-        heroAfkCapped = false;
+        sessionAfkCapped = false;
 
         const info = getHeroInfo();
         heroName = info?.name;
@@ -1287,10 +1298,9 @@
         sessionFinalized = true;
 
         accumulatedSeconds = Math.floor((Date.now() - sessionStartTime) / 1000);
-        var isHeroMonster = HERO_AFK_MONSTERS.indexOf(currentTarget.monster) >= 0;
         var promise = Promise.resolve();
-        if (isHeroMonster && heroAfkCapped) {
-            log('⏹ Finalize (AFK cap już wysłany, pomijam ponowne wysyłanie)');
+        if (sessionAfkCapped) {
+            log('⏹ Finalize (limit AFK już wysłany, pomijam ponowne wysyłanie)');
         } else {
             log(`⏹ Finalize po ${accumulatedSeconds}s (${reason}) — wysyłam POST (stara mapa), potem wejście na nową`);
             promise = sendToBackend(accumulatedSeconds, currentTarget.monster, currentTarget.map, reason, useUnloadSend) || promise;
@@ -1299,7 +1309,7 @@
         currentTarget = null;
         sessionStartTime = null;
         accumulatedSeconds = 0;
-        heroAfkCapped = false;
+        sessionAfkCapped = false;
         return promise;
     }
 
@@ -1342,16 +1352,16 @@
             }
             if (sessionStartTime && currentTarget) {
                 var elapsed = Math.floor((Date.now() - sessionStartTime) / 1000);
-                if (HERO_AFK_MONSTERS.indexOf(currentTarget.monster) >= 0) {
-                    if (heroAfkCapped) {
-                        accumulatedSeconds = HERO_AFK_CAP_SEC;
-                    } else if (elapsed >= HERO_AFK_CAP_SEC) {
-                        sendToBackend(HERO_AFK_CAP_SEC, currentTarget.monster, currentTarget.map, 'afk_cap', false);
-                        heroAfkCapped = true;
-                        accumulatedSeconds = HERO_AFK_CAP_SEC;
-                    } else {
-                        accumulatedSeconds = elapsed;
-                    }
+                var capSec = getAfkCapSec(currentTarget.monster);
+                if (sessionAfkCapped) {
+                    accumulatedSeconds = capSec;
+                } else if (elapsed >= capSec) {
+                    sendToBackend(capSec, currentTarget.monster, currentTarget.map, 'afk_cap', false);
+                    sessionAfkCapped = true;
+                    accumulatedSeconds = capSec;
+                    var capMin = Math.round(capSec / 60);
+                    showToast('Limit ' + capMin + ' min — odśwież stronę, żeby liczyć dalej.', 'warn');
+                    log('⏸ Limit AFK ' + capSec + 's — licznik zatrzymany do odświeżenia');
                 } else {
                     accumulatedSeconds = elapsed;
                 }
@@ -1628,10 +1638,27 @@
             else localStorage.setItem(TOP_TIMER_VISIBLE_KEY, visible ? '1' : '0');
         } catch (e) { /* ignore */ }
     }
+    function getAfkCapSec(monster) {
+        if (HERO_AFK_MONSTERS.indexOf(monster) >= 0) return HERO_AFK_CAP_SEC;
+        return TITAN_AFK_CAP_SEC;
+    }
+
     function updateTimerUI() {
         if (!uiElement) createTimerUI();
         const statusDot = CONFIG.API_KEY ? '🟢' : '🔴';
-        uiElement.textContent = `${statusDot} ⏱ ${currentTarget?.monster} — ${formatTime(accumulatedSeconds)}`;
+        if (sessionAfkCapped) {
+            uiElement.textContent = `${statusDot} ⏱ ${currentTarget?.monster} — ${formatTime(accumulatedSeconds)} (limit — odśwież)`;
+            uiElement.style.background = 'rgba(120,30,0,0.9)';
+            uiElement.style.color = '#ffcc88';
+            uiElement.style.border = '1px solid rgba(255,160,60,0.5)';
+            uiElement.style.textShadow = '0 0 4px rgba(255,160,60,0.5)';
+        } else {
+            uiElement.textContent = `${statusDot} ⏱ ${currentTarget?.monster} — ${formatTime(accumulatedSeconds)}`;
+            uiElement.style.background = 'rgba(0,0,0,0.8)';
+            uiElement.style.color = '#00ff88';
+            uiElement.style.border = '1px solid rgba(0,255,136,0.3)';
+            uiElement.style.textShadow = '0 0 4px rgba(0,255,136,0.5)';
+        }
         uiElement.style.display = (currentTarget && getTopTimerVisible()) ? 'block' : 'none';
     }
 
@@ -2472,7 +2499,8 @@
     // ================================================================
     function showToast(message, type = 'success') {
         const toast = document.createElement('div');
-        const bg = type === 'error' ? '#e74c3c' : '#27ae60';
+        const bg = type === 'error' ? '#e74c3c' : type === 'warn' ? '#e67e22' : '#27ae60';
+        const ttl = type === 'warn' ? 8000 : 3000;
         toast.style.cssText = `
             position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%);
             background: ${bg}; color: #fff; padding: 10px 20px; border-radius: 8px;
@@ -2485,7 +2513,7 @@
         setTimeout(() => {
             toast.style.opacity = '0';
             setTimeout(() => toast.remove(), 500);
-        }, 3000);
+        }, ttl);
     }
 
     // ================================================================

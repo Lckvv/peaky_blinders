@@ -207,10 +207,10 @@ model HeroAlertLog {
   @@index([createdAt])
 }
 
-// Powiadomienia w grze: heros (przedział 64/83/…) lub tytan. Gracze ze skryptem odbierają popup.
+// Powiadomienia w grze: heros (przedział 63/83/…) lub tytan. Gracze ze skryptem odbierają popup.
 model HeroLevelNotification {
   id            String   @id @default(cuid())
-  level         Int      // 0 = tytan (bez przedziału) | 64 | 83 | 114 | 144 | 217 | 300
+  level         Int      // 0 = tytan (bez przedziału) | 63 | 83 | 114 | 144 | 167 | 190 | 217 | 244 | 271 | 300
   nick          String   // nazwa herosa/tytana z gry
   mapName       String
   x             Int?
