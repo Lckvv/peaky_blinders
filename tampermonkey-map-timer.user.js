@@ -297,6 +297,13 @@
     let heroAlertSending = false;
     let selectedHeroCallLevel = 144;
     let myActiveCallId = null;
+    let myActiveCall = null; // { id, nick, mapName, isTitan, createdAt } — wołanie wysłane przez tego gracza
+    let lastCallHelpers = [];
+    let callMiniEl = null;
+    // Heros/tytan widziany na bieżącej mapie; zniknięcie z listy NPC przez kilka ticków = zbity.
+    let trackedHeroOnMap = null; // { id, nick, mapName, missingTicks }
+    const HERO_KILL_MISSING_TICKS = 3;
+    const HERO_CALL_RETENTION_MS = 30 * 60 * 1000;
     let callStylesInjected = false;
 
     function refreshConfigFromStorage() {
@@ -571,9 +578,11 @@
             lastHerosNotifiedMapName = null;
             hideHeroAlertPanel();
         }
+        if (trackedHeroOnMap && trackedHeroOnMap.mapName !== mapName) trackedHeroOnMap = null;
         if (!mapName) return;
         const npcs = getNpcsOnMap();
         const heroNpc = npcs.find(function (n) { return isHeroOrTitan(n.wt); });
+        trackHeroKill(heroNpc, mapName);
         if (!heroNpc) return;
         if (lastHerosNotifiedMapName === mapName) return;
         lastHerosNotifiedMapName = mapName;
@@ -591,7 +600,7 @@
             isTitan: isTitan || nameLooksLikeTitan(name),
         };
         selectedHeroCallLevel = lastHeroAlertData.isTitan ? 0 : nearestCallLevel(heroNpc.lvl);
-        myActiveCallId = null;
+        clearActiveCall();
         var nameTrim = (name || '').trim();
         var eveKey = EVE_HERO_NICK_TO_KEY[nameTrim];
         if (eveKey == null && nameTrim) {
@@ -609,6 +618,103 @@
         }
         showHeroAlertPanel();
         log('Heros/Tytan na mapie:', name, '(wt:', heroNpc.wt + ')');
+    }
+
+    function heroNpcDisplayName(heroNpc) {
+        var isTitan = heroNpc.wt >= TITAN_WT_MIN;
+        return (heroNpc.nick && String(heroNpc.nick).trim()) || (isTitan ? 'Tytan' : 'Heros');
+    }
+
+    /** Heros zniknął z listy NPC przez kilka ticków, a gracz dalej stoi na tej samej mapie = zbity. */
+    function trackHeroKill(heroNpc, mapName) {
+        if (heroNpc) {
+            var key = heroNpc.id != null ? heroNpc.id : heroNpcDisplayName(heroNpc);
+            if (!trackedHeroOnMap || trackedHeroOnMap.id !== key) {
+                trackedHeroOnMap = { id: key, nick: heroNpcDisplayName(heroNpc), mapName: mapName, missingTicks: 0 };
+            } else {
+                trackedHeroOnMap.missingTicks = 0;
+            }
+            return;
+        }
+        if (!trackedHeroOnMap) return;
+        trackedHeroOnMap.missingTicks++;
+        if (trackedHeroOnMap.missingTicks < HERO_KILL_MISSING_TICKS) return;
+        var killed = trackedHeroOnMap;
+        trackedHeroOnMap = null;
+        onHeroKilled(killed.nick, killed.mapName);
+    }
+
+    /** Każdy skrypt na mapie zgłasza zbicie; serwer wysyła na Discord tylko raz (i tylko gdy ktoś wołał). */
+    function onHeroKilled(nick, mapName) {
+        log('Heros/Tytan zniknął z mapy (zbity):', nick, mapName);
+        closeHeroWindowsFor(nick, mapName);
+        if (!CONFIG.API_KEY || !nick) return;
+        fetch(apiTimerUrl('/api/timer/hero-call-killed'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-API-Key': CONFIG.API_KEY },
+            body: JSON.stringify({ nick: nick, mapName: mapName, reporterNick: getCurrentHeroName() }),
+        }).catch(function () {});
+    }
+
+    function closeHeroWindowsFor(nick, mapName) {
+        if (myActiveCall && myActiveCall.nick === nick && myActiveCall.mapName === mapName) {
+            var wasTitan = myActiveCall.isTitan;
+            clearActiveCall();
+            showToast('✅ ' + (wasTitan ? 'Tytan' : 'Heros') + ' ' + nick + ' zbity');
+        }
+        if (lastHeroAlertData && lastHeroAlertData.nick === nick && lastHeroAlertData.mapName === mapName && heroAlertPanelEl) {
+            heroAlertPanelEl.style.display = 'none';
+        }
+    }
+
+    function clearActiveCall() {
+        myActiveCallId = null;
+        myActiveCall = null;
+        lastCallHelpers = [];
+        hideCallMini();
+    }
+
+    /** Małe okienko z listą chętnych — pokazywane po zamknięciu dużego panelu wołania. */
+    function showCallMini() {
+        if (!myActiveCall) return;
+        injectCallStyles();
+        if (!callMiniEl) {
+            callMiniEl = document.createElement('div');
+            callMiniEl.id = 'map-timer-call-mini';
+            callMiniEl.innerHTML =
+                '<button type="button" class="mt-mini-x" title="Zamknij">×</button>' +
+                '<div class="mt-mini-title"></div>' +
+                '<div class="mt-mini-list"></div>';
+            callMiniEl.querySelector('.mt-mini-x').addEventListener('click', hideCallMini);
+            document.body.appendChild(callMiniEl);
+        }
+        callMiniEl.className = myActiveCall.isTitan ? 'is-titan' : 'is-hero';
+        callMiniEl.querySelector('.mt-mini-title').textContent = 'Wołanie: ' + myActiveCall.nick;
+        renderCallMiniHelpers();
+        callMiniEl.style.display = 'block';
+    }
+
+    function hideCallMini() {
+        if (callMiniEl) callMiniEl.style.display = 'none';
+    }
+
+    function renderCallMiniHelpers() {
+        if (!callMiniEl) return;
+        var list = callMiniEl.querySelector('.mt-mini-list');
+        list.textContent = '';
+        if (!lastCallHelpers.length) {
+            list.textContent = 'Nikt jeszcze nie zgłosił chęci przyjścia';
+            return;
+        }
+        var head = document.createElement('div');
+        head.className = 'mt-mini-count';
+        head.textContent = 'Przyjdą pomóc (' + lastCallHelpers.length + '):';
+        list.appendChild(head);
+        lastCallHelpers.forEach(function (nick) {
+            var row = document.createElement('div');
+            row.textContent = '• ' + nick;
+            list.appendChild(row);
+        });
     }
 
     function injectCallStyles() {
@@ -654,7 +760,13 @@
             '.map-timer-hero-level-popup .mt-pop-caller{font-size:12px;color:#9aa8bd;margin-bottom:12px;}' +
             '.map-timer-hero-level-popup .mt-pop-help{display:block;width:100%;padding:10px 12px;background:#27ae60;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:800;margin-bottom:8px;}' +
             '.map-timer-hero-level-popup .mt-pop-help:disabled{opacity:.7;cursor:default;}' +
-            '.map-timer-hero-level-popup .mt-pop-x{position:absolute;top:8px;right:10px;background:none;border:none;color:#8892b0;cursor:pointer;font-size:22px;line-height:1;}';
+            '.map-timer-hero-level-popup .mt-pop-x{position:absolute;top:8px;right:10px;background:none;border:none;color:#8892b0;cursor:pointer;font-size:22px;line-height:1;}' +
+            '#map-timer-call-mini{position:fixed;right:16px;bottom:16px;z-index:100009;width:220px;max-height:260px;overflow-y:auto;padding:10px 12px;border-radius:12px;font-family:Arial,sans-serif;font-size:12px;color:#d5deea;box-shadow:0 8px 24px rgba(0,0,0,.5);}' +
+            '#map-timer-call-mini.is-hero{background:#1a1a2e;border:2px solid #e67e22;}' +
+            '#map-timer-call-mini.is-titan{background:#141428;border:2px solid #9b59b6;}' +
+            '#map-timer-call-mini .mt-mini-title{font-weight:800;color:#fff;margin:0 18px 6px 0;}' +
+            '#map-timer-call-mini .mt-mini-count{color:#27ae60;font-weight:700;margin-bottom:2px;}' +
+            '#map-timer-call-mini .mt-mini-x{position:absolute;top:4px;right:6px;background:none;border:none;color:#8892b0;cursor:pointer;font-size:18px;line-height:1;}';
         document.head.appendChild(st);
     }
 
@@ -693,9 +805,11 @@
     }
 
     function renderCallHelpers(helpers) {
+        helpers = helpers || [];
+        lastCallHelpers = helpers;
+        renderCallMiniHelpers();
         var el = heroAlertPanelEl && heroAlertPanelEl.querySelector('.mt-call-helpers');
         if (!el) return;
-        helpers = helpers || [];
         if (!helpers.length) {
             el.textContent = 'Przyjdą pomóc: nikt jeszcze';
             return;
@@ -765,7 +879,9 @@
     }
 
     function hideHeroAlertPanel() {
+        var wasVisible = !!heroAlertPanelEl && heroAlertPanelEl.style.display !== 'none';
         if (heroAlertPanelEl) heroAlertPanelEl.style.display = 'none';
+        if (wasVisible && myActiveCall) showCallMini();
     }
 
     var lastSeenHeroNotificationTs = Math.max(0, Date.now() - 9 * 60 * 1000);
@@ -907,6 +1023,14 @@
                 return r.json().then(function (json) {
                     if (r.ok && json && json.id) {
                         myActiveCallId = json.id;
+                        myActiveCall = {
+                            id: json.id,
+                            nick: lastHeroAlertData.nick,
+                            mapName: lastHeroAlertData.mapName,
+                            isTitan: isTitan,
+                            createdAt: (json.notification && json.notification.createdAt) || Date.now(),
+                        };
+                        if (!heroAlertPanelEl || heroAlertPanelEl.style.display === 'none') showCallMini();
                         markHeroLevelNotificationShown(json.id);
                         renderCallHelpers((json.notification && json.notification.helpers) || []);
                     } else if (!r.ok) {
@@ -1006,9 +1130,17 @@
             var ts = n.createdAt != null ? Number(n.createdAt) : 0;
             if (ts > lastSeenHeroNotificationTs) lastSeenHeroNotificationTs = ts;
             if (myActiveCallId && n.id === myActiveCallId) {
-                renderCallHelpers(n.helpers || []);
+                if (n.killedAt) {
+                    closeHeroWindowsFor(n.nick, n.mapName);
+                } else {
+                    renderCallHelpers(n.helpers || []);
+                }
             }
             if (!shouldShowHeroLevelNotification(n.id)) return;
+            if (n.killedAt) {
+                markHeroLevelNotificationShown(n.id);
+                return;
+            }
             var kind = n.kind === 'titan' ? 'titan' : 'hero';
             var caller = String(n.callerNick || '').trim().toLowerCase();
             if (caller && caller === myNick) {
@@ -1038,8 +1170,9 @@
     /** Async — pobiera globalne powiadomienia i pokazuje popup graczom w przedziale. */
     function fetchAndShowHeroLevelNotificationsAsync() {
         if (!CONFIG.BACKEND_URL || !CONFIG.API_KEY) return;
+        if (myActiveCall && Date.now() - myActiveCall.createdAt > HERO_CALL_RETENTION_MS) clearActiveCall();
         var since = lastSeenHeroNotificationTs;
-        if (myActiveCallId) since = Math.max(0, Date.now() - 9 * 60 * 1000);
+        if (myActiveCall) since = Math.max(0, myActiveCall.createdAt - 1000);
         var url = apiTimerUrl('/api/timer/hero-level-notifications?since=' + since);
         fetch(url, { cache: 'no-store', headers: { 'X-API-Key': CONFIG.API_KEY } }).then(function (r) { return r.ok ? r.json() : null; }).then(function (json) {
             if (!json || !json.notifications) return;

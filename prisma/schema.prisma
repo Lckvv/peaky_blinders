@@ -221,6 +221,8 @@ model HeroLevelNotification {
   kind          String   @default("hero") // hero | titan
   withSummon    Boolean  @default(false)
   createdAt     DateTime @default(now())
+  killedAt      DateTime? // kiedy skrypt wykrył zniknięcie NPC z mapy (heros/tytan zbity)
+  killedBy      String?   // nick gracza, którego skrypt zgłosił zbicie jako pierwszy
   helpers       HeroCallHelper[]
 
   @@index([createdAt])

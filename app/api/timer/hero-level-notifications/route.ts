@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authFromApiKey } from '@/lib/auth';
 import { HERO_CALL_LEVELS } from '@/lib/discord';
+import { HERO_CALL_RETENTION_MS } from '@/lib/hero-calls';
 
 const NOTIFICATION_MAX_AGE_MS = 10 * 60 * 1000; // 10 min
 
@@ -28,6 +29,7 @@ function mapNotification(n: {
   kind: string;
   withSummon: boolean;
   createdAt: Date;
+  killedAt: Date | null;
   helpers: { nick: string }[];
 }) {
   return {
@@ -44,6 +46,7 @@ function mapNotification(n: {
     withSummon: !!n.withSummon,
     helpers: n.helpers.map((h) => h.nick),
     createdAt: n.createdAt.getTime(),
+    killedAt: n.killedAt ? n.killedAt.getTime() : null,
   };
 }
 
@@ -64,7 +67,7 @@ export async function GET(request: NextRequest) {
       return noStoreJson({ error: 'since must be a positive timestamp' }, 400);
     }
 
-    const cutoff = new Date(Date.now() - NOTIFICATION_MAX_AGE_MS);
+    const cutoff = new Date(Date.now() - HERO_CALL_RETENTION_MS);
     await prisma.heroLevelNotification.deleteMany({
       where: { createdAt: { lt: cutoff } },
     });
