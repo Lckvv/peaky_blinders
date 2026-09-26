@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Margonem Map Timer
 // @namespace    http://tampermonkey.net/
-// @version      2.17
+// @version      2.18
 // @description  Śledzenie czasu na mapach tytanów (Guardians of Souls). Event Easter wyłączony — tylko statystyki na stronie.
 // @author       Lucek
 // @match        https://*.margonem.com/*
@@ -300,11 +300,21 @@
     let myActiveCall = null; // { id, nick, mapName, isTitan, createdAt } — wołanie wysłane przez tego gracza
     let lastCallHelpers = [];
     let callMiniEl = null;
-    // Heros/tytan widziany na bieżącej mapie; zniknięcie z listy NPC przez kilka ticków = zbity.
-    let trackedHeroOnMap = null; // { id, nick, mapName, missingTicks }
-    const HERO_KILL_MISSING_TICKS = 3;
+    let callMiniDismissed = false;
+    // Otwarte wołania (nick+mapa) — żeby kolejnym graczom nie otwierać okna „heros na mapie”.
+    var openCalls = {};
+    var announcedHeroCallKeys = {};
     const HERO_CALL_RETENTION_MS = 30 * 60 * 1000;
     let callStylesInjected = false;
+    var battleWatch = {
+        hooked: false,
+        active: false,
+        warriors: {},
+        legendaries: [],
+        mapName: '',
+        reportTimer: null,
+    };
+    var recentKillReports = {};
 
     function refreshConfigFromStorage() {
         CONFIG.API_KEY = GM_getValue('api_key', '');
@@ -578,11 +588,9 @@
             lastHerosNotifiedMapName = null;
             hideHeroAlertPanel();
         }
-        if (trackedHeroOnMap && trackedHeroOnMap.mapName !== mapName) trackedHeroOnMap = null;
         if (!mapName) return;
         const npcs = getNpcsOnMap();
         const heroNpc = npcs.find(function (n) { return isHeroOrTitan(n.wt); });
-        trackHeroKill(heroNpc, mapName);
         if (!heroNpc) return;
         if (lastHerosNotifiedMapName === mapName) return;
         lastHerosNotifiedMapName = mapName;
@@ -600,6 +608,12 @@
             isTitan: isTitan || nameLooksLikeTitan(name),
         };
         selectedHeroCallLevel = lastHeroAlertData.isTitan ? 0 : nearestCallLevel(heroNpc.lvl);
+        var open = openCalls[heroCallKey(name, mapName)];
+        if (open && !open.killedAt) {
+            if (isMyNick(open.callerNick)) adoptOwnCall(open);
+            log('Wołanie na', name, 'już trwa — nie otwieram okna znalezienia');
+            return;
+        }
         clearActiveCall();
         var nameTrim = (name || '').trim();
         var eveKey = EVE_HERO_NICK_TO_KEY[nameTrim];
@@ -620,39 +634,281 @@
         log('Heros/Tytan na mapie:', name, '(wt:', heroNpc.wt + ')');
     }
 
-    function heroNpcDisplayName(heroNpc) {
-        var isTitan = heroNpc.wt >= TITAN_WT_MIN;
-        return (heroNpc.nick && String(heroNpc.nick).trim()) || (isTitan ? 'Tytan' : 'Heros');
+    function heroCallKey(nick, mapName) {
+        return String(nick || '').trim().toLowerCase() + '\n' + String(mapName || '').trim().toLowerCase();
     }
 
-    /** Heros zniknął z listy NPC przez kilka ticków, a gracz dalej stoi na tej samej mapie = zbity. */
-    function trackHeroKill(heroNpc, mapName) {
-        if (heroNpc) {
-            var key = heroNpc.id != null ? heroNpc.id : heroNpcDisplayName(heroNpc);
-            if (!trackedHeroOnMap || trackedHeroOnMap.id !== key) {
-                trackedHeroOnMap = { id: key, nick: heroNpcDisplayName(heroNpc), mapName: mapName, missingTicks: 0 };
-            } else {
-                trackedHeroOnMap.missingTicks = 0;
-            }
+    function isMyNick(nick) {
+        var mine = String(getCurrentHeroName() || '').trim().toLowerCase();
+        var other = String(nick || '').trim().toLowerCase();
+        return !!mine && mine !== 'ty' && mine !== 'unknown' && mine === other;
+    }
+
+    /** Po odświeżeniu strony wołający z powrotem dostaje małą listę chętnych, bez dużego okna. */
+    function adoptOwnCall(n) {
+        if (!n || !n.id) return;
+        if (myActiveCall && myActiveCall.id === n.id) {
+            renderCallHelpers(n.helpers || []);
             return;
         }
-        if (!trackedHeroOnMap) return;
-        trackedHeroOnMap.missingTicks++;
-        if (trackedHeroOnMap.missingTicks < HERO_KILL_MISSING_TICKS) return;
-        var killed = trackedHeroOnMap;
-        trackedHeroOnMap = null;
-        onHeroKilled(killed.nick, killed.mapName);
+        if (myActiveCall) return;
+        myActiveCallId = n.id;
+        myActiveCall = {
+            id: n.id,
+            nick: n.nick,
+            mapName: n.mapName,
+            isTitan: n.kind === 'titan' || n.level === 0,
+            createdAt: n.createdAt || Date.now(),
+        };
+        announcedHeroCallKeys[heroCallKey(n.nick, n.mapName)] = true;
+        renderCallHelpers(n.helpers || []);
+        if (heroAlertPanelEl) heroAlertPanelEl.style.display = 'none';
+        showCallMini();
     }
 
-    /** Każdy skrypt na mapie zgłasza zbicie; serwer wysyła na Discord tylko raz (i tylko gdy ktoś wołał). */
-    function onHeroKilled(nick, mapName) {
-        log('Heros/Tytan zniknął z mapy (zbity):', nick, mapName);
+    function noteCallState(n) {
+        if (!n || !n.nick || !n.mapName) return;
+        var key = heroCallKey(n.nick, n.mapName);
+        if (n.killedAt) {
+            if (openCalls[key] && openCalls[key].id === n.id) delete openCalls[key];
+            return;
+        }
+        var prev = openCalls[key];
+        if (!prev || Number(n.createdAt || 0) <= Number(prev.createdAt || 0)) openCalls[key] = n;
+    }
+
+    function parseHp(value) {
+        if (typeof value === 'number' && isFinite(value)) return value;
+        if (typeof value === 'string' && value.trim()) {
+            var n = parseFloat(value);
+            return isFinite(n) ? n : null;
+        }
+        return null;
+    }
+
+    function warriorIsDead(warrior) {
+        if (!warrior || typeof warrior !== 'object') return false;
+        var hpp = parseHp(warrior.hpp);
+        if (hpp !== null) return hpp <= 0;
+        var hp = warrior.hp;
+        if (!hp || typeof hp !== 'object') return false;
+        var nested = parseHp(hp.hpp);
+        if (nested !== null) return nested <= 0;
+        var cur = parseHp(hp.cur);
+        return cur !== null && cur <= 0;
+    }
+
+    function itemRarity(stat) {
+        if (!stat || typeof stat !== 'string') return '';
+        var parts = stat.split(';');
+        for (var i = 0; i < parts.length; i++) {
+            var kv = parts[i].split('=');
+            if (kv[0] === 'rarity') return String(kv[1] || '').trim().toLowerCase();
+        }
+        return '';
+    }
+
+    /** Loot z walki — ten sam filtr co lootlog (getLoot): klucz w loot.states, loc l/k, rarity w stat. */
+    function collectFightLegendaries(event) {
+        if (!battleWatch.active && !battleWatch.reportTimer) return;
+        var loot = event && event.loot;
+        var items = event && event.item;
+        if (!loot || loot.source !== 'fight' || !items || typeof items !== 'object') return;
+        var states = loot.states || {};
+        Object.keys(items).forEach(function (key) {
+            if (!Object.prototype.hasOwnProperty.call(states, key)) return;
+            var item = items[key];
+            if (!item || (item.loc !== 'l' && item.loc !== 'k')) return;
+            if (itemRarity(item.stat) !== 'legendary') return;
+            var name = item.name ? String(item.name).trim() : '';
+            if (name && battleWatch.legendaries.indexOf(name) < 0) battleWatch.legendaries.push(name);
+        });
+    }
+
+    function mergeBattleWarriors(patch) {
+        if (!patch || typeof patch !== 'object') return;
+        Object.keys(patch).forEach(function (key) {
+            var prev = battleWatch.warriors[key] || {};
+            var next = patch[key] || {};
+            var merged = {};
+            Object.keys(prev).forEach(function (k) { merged[k] = prev[k]; });
+            Object.keys(next).forEach(function (k) { merged[k] = next[k]; });
+            if (next.hp && typeof next.hp === 'object') {
+                var hpp = parseHp(next.hp.hpp);
+                if (hpp === null) {
+                    var cur = parseHp(next.hp.cur);
+                    if (cur !== null && cur <= 0) hpp = 0;
+                }
+                if (hpp !== null) merged.hpp = hpp;
+            }
+            battleWatch.warriors[key] = merged;
+        });
+    }
+
+    function flushBattleReport() {
+        if (battleWatch.reportTimer) {
+            clearTimeout(battleWatch.reportTimer);
+            battleWatch.reportTimer = null;
+        }
+        var warriors = battleWatch.warriors;
+        var legendary = battleWatch.legendaries.slice();
+        var mapName = battleWatch.mapName;
+        battleWatch.warriors = {};
+        battleWatch.legendaries = [];
+        battleWatch.active = false;
+        reportHeroKillFromBattle(warriors, legendary, mapName);
+    }
+
+    function handleFightPacket(event) {
+        var f = event.f;
+        if (!f || typeof f !== 'object') return;
+        var starts = f.init === '1' || f.init === 1 || f.init === true;
+        if (starts) {
+            if (battleWatch.reportTimer) flushBattleReport();
+            battleWatch.active = true;
+            battleWatch.warriors = {};
+            battleWatch.legendaries = [];
+            battleWatch.mapName = getCurrentMapName() || '';
+        }
+        if (f.w && typeof f.w === 'object') {
+            if (!battleWatch.active && !battleWatch.reportTimer) {
+                battleWatch.active = true;
+                battleWatch.mapName = battleWatch.mapName || getCurrentMapName() || '';
+            }
+            mergeBattleWarriors(f.w);
+        }
+        var ends = f.endBattle === 1 || f.endBattle === '1' || f.endBattle === true;
+        if (ends && !battleWatch.reportTimer) {
+            battleWatch.mapName = battleWatch.mapName || getCurrentMapName() || '';
+            battleWatch.reportTimer = setTimeout(function () {
+                battleWatch.reportTimer = null;
+                flushBattleReport();
+            }, 1200);
+        }
+        collectFightLegendaries(event);
+        if (ends) battleWatch.active = false;
+    }
+
+    function onGamePacket(payload) {
+        var event = payload;
+        if (typeof payload === 'string') {
+            try { event = JSON.parse(payload); } catch (e) { return; }
+        }
+        if (!event || typeof event !== 'object') return;
+        if (event.f) handleFightPacket(event);
+        else collectFightLegendaries(event);
+    }
+
+    function getPageWindow() {
+        try {
+            if (typeof unsafeWindow !== 'undefined' && unsafeWindow) return unsafeWindow;
+        } catch (e) { /* ignore */ }
+        return window;
+    }
+
+    function installBattleHook() {
+        if (battleWatch.hooked) return true;
+        var page = getPageWindow();
+        var eng = getEngine();
+        if (!eng || !eng.communication) {
+            try { eng = page.Engine || page.engine || null; } catch (e) { eng = null; }
+        }
+        var comm = eng && eng.communication;
+        var container = null;
+        var property = '';
+        if (comm && typeof comm.parseJSON === 'function') {
+            container = comm;
+            property = 'parseJSON';
+        } else if (comm && typeof comm.successData === 'function') {
+            container = comm;
+            property = 'successData';
+        } else if (typeof page.successData === 'function') {
+            container = page;
+            property = 'successData';
+        }
+        if (!container) return false;
+        if (container[property].__mapTimerBattle) {
+            battleWatch.hooked = true;
+            return true;
+        }
+        var original = container[property];
+        var wrapped = function () {
+            var result;
+            try {
+                result = original.apply(this, arguments);
+            } catch (err) {
+                try { onGamePacket(arguments[0]); } catch (e2) { /* ignore */ }
+                throw err;
+            }
+            try { onGamePacket(arguments[0]); } catch (e3) { /* ignore */ }
+            return result;
+        };
+        wrapped.__mapTimerBattle = true;
+        container[property] = wrapped;
+        battleWatch.hooked = container[property] === wrapped;
+        if (battleWatch.hooked) log('Podpięto odczyt okna walki:', property);
+        return battleWatch.hooked;
+    }
+
+    function isNpcWarrior(key, warrior) {
+        if (String(key).charAt(0) === '-') return true;
+        var wt = Number(warrior && warrior.wt);
+        return isFinite(wt) && wt >= HEROS_WT_MIN;
+    }
+
+    function battleParticipants(warriors) {
+        var names = [];
+        Object.keys(warriors || {}).forEach(function (key) {
+            var warrior = warriors[key];
+            if (isNpcWarrior(key, warrior)) return;
+            var name = warrior && (warrior.name || warrior.nick) ? String(warrior.name || warrior.nick).trim() : '';
+            if (name && names.indexOf(name) < 0) names.push(name);
+        });
+        return names;
+    }
+
+    function deadHeroFromBattle(warriors) {
+        var dead = null;
+        Object.keys(warriors || {}).forEach(function (key) {
+            var warrior = warriors[key];
+            if (!isNpcWarrior(key, warrior) || !warriorIsDead(warrior)) return;
+            var wt = Number(warrior.wt);
+            if (!isHeroOrTitan(wt)) return;
+            var name = warrior.name || warrior.nick;
+            name = name ? String(name).trim() : '';
+            if (!name) return;
+            if (!dead || wt > dead.wt) dead = { wt: wt, name: name };
+        });
+        return dead;
+    }
+
+    function reportHeroKillFromBattle(warriors, legendary, mapName) {
+        var dead = deadHeroFromBattle(warriors);
+        if (!dead) return;
+        mapName = mapName || getCurrentMapName() || '';
+        if (!mapName) return;
+        var reportKey = heroCallKey(dead.name, mapName);
+        var now = Date.now();
+        if (recentKillReports[reportKey] && now - recentKillReports[reportKey] < 20000) return;
+        recentKillReports[reportKey] = now;
+        onHeroKilled(dead.name, mapName, battleParticipants(warriors), legendary || []);
+    }
+
+    /** Zgłasza zbicie z logu walki. Serwer wysyła na Discord tylko raz (i tylko gdy ktoś wołał). */
+    function onHeroKilled(nick, mapName, participants, legendary) {
+        log('Heros/Tytan zbity (okno walki):', nick, mapName, participants, legendary);
         closeHeroWindowsFor(nick, mapName);
-        if (!CONFIG.API_KEY || !nick) return;
+        if (!CONFIG.API_KEY || !nick || !mapName) return;
         fetch(apiTimerUrl('/api/timer/hero-call-killed'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-API-Key': CONFIG.API_KEY },
-            body: JSON.stringify({ nick: nick, mapName: mapName, reporterNick: getCurrentHeroName() }),
+            body: JSON.stringify({
+                nick: nick,
+                mapName: mapName,
+                reporterNick: getCurrentHeroName(),
+                participants: participants || [],
+                legendary: legendary || [],
+            }),
         }).catch(function () {});
     }
 
@@ -671,12 +927,13 @@
         myActiveCallId = null;
         myActiveCall = null;
         lastCallHelpers = [];
-        hideCallMini();
+        callMiniDismissed = false;
+        if (callMiniEl) callMiniEl.style.display = 'none';
     }
 
-    /** Małe okienko z listą chętnych — pokazywane po zamknięciu dużego panelu wołania. */
+    /** Małe okienko z listą chętnych — obok, po wołaniu. X tylko je chowa. */
     function showCallMini() {
-        if (!myActiveCall) return;
+        if (!myActiveCall || callMiniDismissed) return;
         injectCallStyles();
         if (!callMiniEl) {
             callMiniEl = document.createElement('div');
@@ -695,6 +952,7 @@
     }
 
     function hideCallMini() {
+        callMiniDismissed = true;
         if (callMiniEl) callMiniEl.style.display = 'none';
     }
 
@@ -761,7 +1019,7 @@
             '.map-timer-hero-level-popup .mt-pop-help{display:block;width:100%;padding:10px 12px;background:#27ae60;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:800;margin-bottom:8px;}' +
             '.map-timer-hero-level-popup .mt-pop-help:disabled{opacity:.7;cursor:default;}' +
             '.map-timer-hero-level-popup .mt-pop-x{position:absolute;top:8px;right:10px;background:none;border:none;color:#8892b0;cursor:pointer;font-size:22px;line-height:1;}' +
-            '#map-timer-call-mini{position:fixed;right:16px;bottom:16px;z-index:100009;width:220px;max-height:260px;overflow-y:auto;padding:10px 12px;border-radius:12px;font-family:Arial,sans-serif;font-size:12px;color:#d5deea;box-shadow:0 8px 24px rgba(0,0,0,.5);}' +
+            '#map-timer-call-mini{position:fixed;top:50%;right:16px;transform:translateY(-50%);z-index:100009;width:220px;max-height:260px;overflow-y:auto;padding:10px 12px;border-radius:12px;font-family:Arial,sans-serif;font-size:12px;color:#d5deea;box-shadow:0 8px 24px rgba(0,0,0,.5);}' +
             '#map-timer-call-mini.is-hero{background:#1a1a2e;border:2px solid #e67e22;}' +
             '#map-timer-call-mini.is-titan{background:#141428;border:2px solid #9b59b6;}' +
             '#map-timer-call-mini .mt-mini-title{font-weight:800;color:#fff;margin:0 18px 6px 0;}' +
@@ -884,7 +1142,7 @@
         if (wasVisible && myActiveCall) showCallMini();
     }
 
-    var lastSeenHeroNotificationTs = Math.max(0, Date.now() - 9 * 60 * 1000);
+    var lastSeenHeroNotificationTs = Math.max(0, Date.now() - HERO_CALL_RETENTION_MS);
     var lastFetchedHeroNotifTs = 0;
     var shownHeroNotificationIds = {};
     var SHOWN_CALL_IDS_TTL_MS = 30 * 60 * 1000;
@@ -1021,7 +1279,17 @@
                 }),
             }).then(function (r) {
                 return r.json().then(function (json) {
+                    if (r.ok && json && json.alreadyActive) {
+                        restoreBtns();
+                        markHeroLevelNotificationShown(json.id);
+                        announcedHeroCallKeys[heroCallKey(lastHeroAlertData.nick, lastHeroAlertData.mapName)] = true;
+                        if (json.notification) noteCallState(json.notification);
+                        if (heroAlertPanelEl) heroAlertPanelEl.style.display = 'none';
+                        showToast('Ktoś już woła na tego herosa');
+                        return;
+                    }
                     if (r.ok && json && json.id) {
+                        callMiniDismissed = false;
                         myActiveCallId = json.id;
                         myActiveCall = {
                             id: json.id,
@@ -1030,9 +1298,12 @@
                             isTitan: isTitan,
                             createdAt: (json.notification && json.notification.createdAt) || Date.now(),
                         };
-                        if (!heroAlertPanelEl || heroAlertPanelEl.style.display === 'none') showCallMini();
+                        announcedHeroCallKeys[heroCallKey(lastHeroAlertData.nick, lastHeroAlertData.mapName)] = true;
+                        if (json.notification) noteCallState(json.notification);
                         markHeroLevelNotificationShown(json.id);
                         renderCallHelpers((json.notification && json.notification.helpers) || []);
+                        hideHeroAlertPanel();
+                        showCallMini();
                     } else if (!r.ok) {
                         showToast('Wołanie w grze: ' + (json && json.error ? json.error : r.status), 'error');
                     }
@@ -1123,12 +1394,21 @@
         setTimeout(function () { if (pop.parentNode) pop.parentNode.removeChild(pop); }, 45000);
     }
 
+    function hideFoundPanelIfCalledBySomeoneElse(n) {
+        if (!n || n.killedAt || !lastHeroAlertData) return;
+        if (heroCallKey(n.nick, n.mapName) !== heroCallKey(lastHeroAlertData.nick, lastHeroAlertData.mapName)) return;
+        if (isMyNick(n.callerNick) || (myActiveCall && myActiveCall.id === n.id)) return;
+        if (heroAlertPanelEl && heroAlertPanelEl.style.display !== 'none') heroAlertPanelEl.style.display = 'none';
+    }
+
     function processIncomingCalls(list) {
         var myNick = String(getCurrentHeroName() || '').trim().toLowerCase();
         var myLvl = getCurrentHeroLevel();
         list.forEach(function (n) {
             var ts = n.createdAt != null ? Number(n.createdAt) : 0;
             if (ts > lastSeenHeroNotificationTs) lastSeenHeroNotificationTs = ts;
+            noteCallState(n);
+            if (!n.killedAt && !isMyNick(n.callerNick)) hideFoundPanelIfCalledBySomeoneElse(n);
             if (myActiveCallId && n.id === myActiveCallId) {
                 if (n.killedAt) {
                     closeHeroWindowsFor(n.nick, n.mapName);
@@ -1142,15 +1422,24 @@
                 return;
             }
             var kind = n.kind === 'titan' ? 'titan' : 'hero';
+            var callKey = heroCallKey(n.nick, n.mapName);
             var caller = String(n.callerNick || '').trim().toLowerCase();
             if (caller && caller === myNick) {
                 markHeroLevelNotificationShown(n.id);
+                announcedHeroCallKeys[callKey] = true;
+                if (!myActiveCall) adoptOwnCall(n);
+                return;
+            }
+            if (announcedHeroCallKeys[callKey] || (myActiveCall && heroCallKey(myActiveCall.nick, myActiveCall.mapName) === callKey)) {
+                markHeroLevelNotificationShown(n.id);
+                announcedHeroCallKeys[callKey] = true;
                 return;
             }
             if (kind === 'hero' && n.level && !isPlayerInCallRange(n.level, myLvl)) {
                 return;
             }
             markHeroLevelNotificationShown(n.id);
+            announcedHeroCallKeys[callKey] = true;
             showHeroLevelPopup({
                 id: n.id,
                 level: n.level,
@@ -1171,8 +1460,16 @@
     function fetchAndShowHeroLevelNotificationsAsync() {
         if (!CONFIG.BACKEND_URL || !CONFIG.API_KEY) return;
         if (myActiveCall && Date.now() - myActiveCall.createdAt > HERO_CALL_RETENTION_MS) clearActiveCall();
+        Object.keys(openCalls).forEach(function (key) {
+            var created = Number(openCalls[key] && openCalls[key].createdAt || 0);
+            if (!created || Date.now() - created > HERO_CALL_RETENTION_MS) delete openCalls[key];
+        });
         var since = lastSeenHeroNotificationTs;
-        if (myActiveCall) since = Math.max(0, myActiveCall.createdAt - 1000);
+        if (myActiveCall) since = Math.min(since, Math.max(0, myActiveCall.createdAt - 1000));
+        Object.keys(openCalls).forEach(function (key) {
+            var created = Number(openCalls[key].createdAt || 0);
+            if (created) since = Math.min(since, Math.max(0, created - 1000));
+        });
         var url = apiTimerUrl('/api/timer/hero-level-notifications?since=' + since);
         fetch(url, { cache: 'no-store', headers: { 'X-API-Key': CONFIG.API_KEY } }).then(function (r) { return r.ok ? r.json() : null; }).then(function (json) {
             if (!json || !json.notifications) return;
@@ -2682,8 +2979,14 @@
                     createKolejkiBox();
                     flushPending();
                 }
+                installBattleHook();
                 pollHeroLevelNotificationsOnce();
             }
+        }, 500);
+        var battleHookTries = 0;
+        var battleHookTimer = setInterval(function () {
+            battleHookTries++;
+            if (installBattleHook() || battleHookTries > 120) clearInterval(battleHookTimer);
         }, 500);
     }
 

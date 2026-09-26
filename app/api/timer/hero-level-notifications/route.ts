@@ -115,6 +115,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'nick and mapName are required' }, { status: 400 });
     }
 
+    const existing = await prisma.heroLevelNotification.findFirst({
+      where: {
+        nick: { equals: nick, mode: 'insensitive' },
+        mapName: { equals: mapName, mode: 'insensitive' },
+        killedAt: null,
+        createdAt: { gte: new Date(Date.now() - HERO_CALL_RETENTION_MS) },
+      },
+      orderBy: { createdAt: 'asc' },
+      include: includeHelpers,
+    });
+    if (existing) {
+      return NextResponse.json({
+        ok: true,
+        id: existing.id,
+        alreadyActive: true,
+        notification: mapNotification(existing),
+      });
+    }
+
     const created = await prisma.heroLevelNotification.create({
       data: {
         level: kind === 'titan' ? 0 : level,

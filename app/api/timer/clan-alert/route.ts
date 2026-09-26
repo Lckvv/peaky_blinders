@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
       const { lo, hi } = heroCallLevelRange(level);
       content += ` · przedział ${level} (${lo}–${hi})`;
     }
-    if (withSummon) content += '\n⚡ Zaproponowano Przywołanie na herosa';
+    if (withSummon) content += '\n **⚡ Zaproponowano Przywołanie na herosa**';
 
     const sent = await sendClanDiscordMessage({
       kind,
