@@ -12,7 +12,6 @@ export default function AuthShell({ children }: { children: ReactNode }) {
         <span />
         <span />
         <span />
-        <span />
       </div>
       <div className="gos-auth__layout">
         <section className="gos-auth__brand">
