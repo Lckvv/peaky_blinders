@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { isEveKey } from '@/lib/eve-event-ended';
 
 function formatTime(totalSeconds: number): string {
   const d = Math.floor(totalSeconds / 86400);
@@ -98,11 +99,9 @@ export async function getRankingForMonster(monsterName: string): Promise<{
   };
 }
 
-const EVE_KEYS = [41, 81];
-
-/** Ranking łowcy herosa (eveKey 41, 81). Tylko odczyt po stronie serwera. */
+/** Ranking łowcy herosa EVE. Tylko odczyt po stronie serwera. */
 export async function getEveHunterLeaderboard(eveKey: number): Promise<HunterEntry[]> {
-  if (!Number.isInteger(eveKey) || !EVE_KEYS.includes(eveKey)) return [];
+  if (!Number.isInteger(eveKey) || !isEveKey(eveKey)) return [];
 
   const kills = await prisma.eveHunterKill.findMany({
     where: { eveKey },

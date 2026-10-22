@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Margonem Map Timer
 // @namespace    http://tampermonkey.net/
-// @version      2.18
-// @description  Śledzenie czasu na mapach tytanów (Guardians of Souls). Event Easter wyłączony — tylko statystyki na stronie.
+// @version      2.19
+// @description  Śledzenie czasu na mapach tytanów (Guardians of Souls) + event Halloween 2026 (timery respawnu i obecności na mapach).
 // @author       Lucek
 // @match        https://*.margonem.com/*
 // @grant        GM_xmlhttpRequest
@@ -18,8 +18,28 @@
     // Uruchamiaj tylko w oknie głównym — w iframe skrypt by się dublował i wysyłał tę samą sesję 2× (pagehide w obu kontekstach).
     if (window !== window.top) return;
 
-    /** Event Easter 2026 (41, 81) zakończony — brak zliczania czasu i panelu herosa. Statystyki tylko na stronie. */
-    const EVE_EVENT_ENDED = true;
+    /**
+     * Herosy eventowe (EVE) — lustrzane do lib/eve-event-ended.ts. ended: true = brak zliczania czasu i panelu (statystyki tylko na stronie).
+     * respawnMin/MaxMin: okno respawnu od zabicia (minuty).
+     */
+    const EVE_HEROES = [
+        { key: 41, monster: 'Grim Blackcluck', label: 'Grim Blackcluck', ended: true, respawnMinMin: 15, respawnMaxMin: 15 },
+        { key: 81, monster: 'Hotblood Capon', label: 'Hotblood Capon', ended: true, respawnMinMin: 15, respawnMaxMin: 15 },
+        { key: 132, monster: 'Doppelganger', label: '132 - Doppelganger', ended: false, respawnMinMin: 50, respawnMaxMin: 150 },
+        { key: 190, monster: 'Drude', label: '190 - Drude', ended: false, respawnMinMin: 50, respawnMaxMin: 150 },
+        { key: 243, monster: 'Nosferatu', label: '243 - Nosferatu', ended: false, respawnMinMin: 75, respawnMaxMin: 225 },
+    ];
+    const EVE_ACTIVE_HEROES = EVE_HEROES.filter(function (h) { return !h.ended; });
+    const EVE_ACTIVE_KEYS = EVE_ACTIVE_HEROES.map(function (h) { return h.key; });
+    function getEveHero(key) {
+        return EVE_HEROES.filter(function (h) { return h.key === key; })[0] || null;
+    }
+    function isActiveEveKey(key) {
+        return EVE_ACTIVE_KEYS.indexOf(key) >= 0;
+    }
+    function isEndedEveMonster(monster) {
+        return EVE_HEROES.some(function (h) { return h.ended && h.monster === monster; });
+    }
 
     // Wstrzykiwane przez /api/script/serve.user.js przy instalacji ze strony (nadpisuje stary klucz w Tampermonkey).
     var INSTALL_API_KEY = '';
@@ -54,7 +74,7 @@
         // 🌐 Adres backendu (Railway) — możesz zmienić w ustawieniach ⏱
         BACKEND_URL: resolveBackendUrl(),
 
-        // 🗺️ Mapy tytanów (event Easter wyłączony — bez zliczania czasu na mapach 41/81).
+        // 🗺️ Mapy tytanów. Mapy herosów trwającego eventu dopisywane niżej z EVE_MAPS.
         TARGETS: [
             { map: 'Shimmering Cavern', monster: 'Orla' },
             { map: "Caerbannog's Grotto - 2nd Chamber", monster: 'Kic' },
@@ -95,8 +115,9 @@
     const HERO_AFK_CAP_SEC = 180;
     // Musi być zgodne z lib/session-limits.ts (TITAN_AFK_CAP_SEC).
     const TITAN_AFK_CAP_SEC = 15 * 60;
-    const HERO_AFK_MONSTERS = ['Grim Blackcluck', 'Hotblood Capon'];
-    var EVE_HERO_NICK_TO_KEY = { 'Grim Blackcluck': 41, 'Hotblood Capon': 81 };
+    const HERO_AFK_MONSTERS = EVE_HEROES.map(function (h) { return h.monster; });
+    var EVE_HERO_NICK_TO_KEY = {};
+    EVE_HEROES.forEach(function (h) { EVE_HERO_NICK_TO_KEY[h.monster] = h.key; });
     let sessionAfkCapped = false;
     let reservationsCache = { monster: null, data: null, ts: 0 };
     let phaseLeaderboardCache = { monster: null, data: null, ts: 0 };
@@ -116,56 +137,46 @@
     const HERO_CALL_LEVEL_RANGE = 13;
     const HERO_CALL_LEVEL_RANGE_UP = { 300: 200 };
     let lastHerosNotifiedMapName = null;
-    // Heros eventowy (41, 81): wejście/wyjście wysyłane przez session (map_enter / leave).
+    // Heros eventowy: wejście/wyjście wysyłane przez session (map_enter / leave).
     // Punkty łowcy są przypisane do KONTA (userId z API key), nie do postaci — wiele postaci = jedno konto.
-    // Heros eventowy: listy map per EVE
+    // Heros eventowy: listy map per EVE (kolejność = kolejność w oknie)
     const EVE_MAPS = {
-        41: [
-            'Fort Eder',
-            'Goblin Forest',
-            'Mulberry Passage',
-            'Marshy Valley',
-            'Marshlands',
-            'Brigand Vale',
-            'Stony Hideout',
-            'Desecrated Graveyard',
-            'Defiled Tomb - 1st Level',
-            'Defiled Tomb - 2nd Level',
-            'Defiled Tomb - 3nd Level',
-            'Defiled Tomb - 3rd Level',
-            'Defiled Tomb - 4nd Level',
-            'Defiled Tomb - 4th Level',
-            'Defiled Tomb - 5nd Level',
-            'Defiled Tomb - 5th Level',
+        132: [
+            'Rem Island',
+            'Yellow Ore Mine - 1st Level - 2nd Chamber',
+            'Yellow Ore Mine - 1st Level - 1st Chamber',
+            'Yellow Ore Mine - 2nd Level - 1st Chamber',
+            'Lighthouse Coast',
+            'Corsair Den - 1st Chamber',
+            'Corsair Den - 2nd Chamber',
+            'Corsair Den - 3rd Chamber',
+            'Corsair Den - 4th Chamber',
+            'Corsair Den - 5th Chamber',
+            'Corsair Den - 6th Chamber',
+            'Hidden Grotto of Sea Devils - Corridor',
+            'Hidden Sea Devil Grotto - Arsenal',
+            'Hidden Sea Devil Grotto',
+            'Magradit Island',
+            'Politraka Volcano - 2nd Level - 1st Chamber',
+            'Politraka Volcano - 1st Level - 1st Chamber',
+            'Politraka Volcano - 1st Level - 2nd Chamber',
+            'Politraka Volcano - 2nd Level - 2nd Chamber',
+            'Politraka Volcano - 1st Level - 3rd Chamber',
         ],
-        81: [
-            'Andarum Ilami',
-            'Rocks of Cold Songs',
-            'Ice Crevasse - 1st Level - 1st Chamber',
-            'Ice Crevasse - 2nd Level - 1st Chamber',
-            'Ice Crevasse - 2nd Level',
-            'Icespire Chamber',
-            'Firn Cave - 2nd Level',
-            'Firn Cave - 1st Level',
-            'Hermitage of the Black Sun - 1st Level - North',
-            'Hermitage of the Black Sun - 2nd Level',
-            'Hermitage of the Black Sun - 3rd Level',
-            'Hermitage of the Black Sun - 4th Level - 1st Chamber',
-            'Hermitage of the Black Sun - 4th Level - 2nd Chamber',
-            'Hermitage of the Black Sun - 3rd Level - South',
-            'Andarum Temple - Warehouse 2nd Level',
-            'Andarum Temple - Armory',
-            'Andarum Temple - Warehouse 1st Level',
-        ],
+        190: [],
+        243: [],
     };
+    EVE_ACTIVE_HEROES.forEach(function (h) {
+        (EVE_MAPS[h.key] || []).forEach(function (m) {
+            if (!CONFIG.TARGETS.some(function (t) { return t.map === m; })) CONFIG.TARGETS.push({ map: m, monster: h.monster });
+        });
+    });
     let eveWindowOpen = false;
     let eveWindowEl = null;
     var eveMapListPanelsByKey = {}; // eveKey -> { panel, listEl, listHeight }
     let selectedEveKey = null;
     var eveMapReservationsCache = {}; // eveKey -> { data: [{mapName,nick}], ts }
     var eveMapLastLeftCache = {};    // eveKey -> { lastLeft: { mapName: ms }, ts } — z API, żeby czasy przetrwały odświeżenie
-    var eveMapLastLeftAt = {};       // eveKey -> { mapKey: timestamp } — lokalna nadpiska (np. właśnie wykryte wyjście)
-    var evePrevPresenceByMap = {};   // eveKey -> { mapKey: [nicks] } — poprzedni stan obecności (do wykrycia wyjścia)
     const EVE_RESERVATIONS_CACHE_TTL_MS = 8 * 1000; // krótki cache, żeby pozycje (obecność) odświeżały się na bieżąco
     const EVE_LAST_LEFT_CACHE_TTL_MS = 5 * 1000;
     let eveMapPopupEl = null;
@@ -615,13 +626,8 @@
             return;
         }
         clearActiveCall();
-        var nameTrim = (name || '').trim();
-        var eveKey = EVE_HERO_NICK_TO_KEY[nameTrim];
-        if (eveKey == null && nameTrim) {
-            var match = Object.keys(EVE_HERO_NICK_TO_KEY).filter(function (n) { return n.toLowerCase() === nameTrim.toLowerCase(); })[0];
-            if (match) eveKey = EVE_HERO_NICK_TO_KEY[match];
-        }
-        if (eveKey != null && CONFIG.API_KEY && !EVE_EVENT_ENDED) {
+        var eveKey = eveKeyForNick(name);
+        if (eveKey != null && CONFIG.API_KEY && isActiveEveKey(eveKey)) {
             fetch(CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-hunter-found', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-API-Key': CONFIG.API_KEY },
@@ -632,6 +638,13 @@
         }
         showHeroAlertPanel();
         log('Heros/Tytan na mapie:', name, '(wt:', heroNpc.wt + ')');
+    }
+
+    function eveKeyForNick(name) {
+        var nameTrim = String(name || '').trim().toLowerCase();
+        if (!nameTrim) return null;
+        var match = Object.keys(EVE_HERO_NICK_TO_KEY).filter(function (n) { return n.toLowerCase() === nameTrim; })[0];
+        return match ? EVE_HERO_NICK_TO_KEY[match] : null;
     }
 
     function heroCallKey(nick, mapName) {
@@ -909,6 +922,9 @@
                 participants: participants || [],
                 legendary: legendary || [],
             }),
+        }).then(function () {
+            var eveKey = eveKeyForNick(nick);
+            if (eveKey != null && isActiveEveKey(eveKey)) updateEveMapListForPanel(eveKey);
         }).catch(function () {});
     }
 
@@ -1544,7 +1560,7 @@
             log(`Czas ${seconds}s < ${CONFIG.MIN_TIME_TO_SEND}s, pomijam (${reason})`);
             return Promise.resolve();
         }
-        if (EVE_EVENT_ENDED && HERO_AFK_MONSTERS.indexOf(monster) !== -1) {
+        if (isEndedEveMonster(monster)) {
             log('Event zakończony — pomijam wysyłkę sesji dla herosa eventowego');
             return Promise.resolve();
         }
@@ -1581,7 +1597,6 @@
                 var d = typeof data === 'string' ? JSON.parse(data) : data;
                 log('✅ Zapisano! Total:', d.totalTimeFormatted, '(', d.totalSessions, 'sesji)');
                 showToast('✅ Zapisano ' + formatTime(seconds) + ' — łącznie: ' + d.totalTimeFormatted);
-                if (reason !== 'map_enter' && HERO_AFK_MONSTERS.indexOf(monster) !== -1) eveRespawnCache = null;
             } catch (e) { log('✅ Zapisano'); }
         }
         function onFail(msg) {
@@ -1671,7 +1686,7 @@
             const pending = JSON.parse(localStorage.getItem('maptimer_pending') || '[]');
             const toSend = pending.filter(function (p) {
                 if (p.reason === 'map_enter') return false;
-                if (EVE_EVENT_ENDED && HERO_AFK_MONSTERS.indexOf(p.monster) !== -1) return false;
+                if (isEndedEveMonster(p.monster)) return false;
                 return true;
             });
             if (toSend.length === 0) {
@@ -1757,13 +1772,17 @@
         var nowTick = now;
         const target = mapName ? findTarget(mapName) : null;
         var currentMapForEve = mapName || '';
-        if (currentMapForEve !== lastEveFetchMapName) {
-            lastEveFetchMapName = currentMapForEve;
-            [41, 81].forEach(function (k) {
-                var rec = eveMapListPanelsByKey[k];
-                if (rec && rec.panel && rec.panel.style.display !== 'none') fetchEveDashboardAsync(k, applyEveDashboardToPanel);
-            });
-        }
+        var eveMapChanged = currentMapForEve !== lastEveFetchMapName;
+        lastEveFetchMapName = currentMapForEve;
+        EVE_ACTIVE_KEYS.forEach(function (k) {
+            var rec = eveMapListPanelsByKey[k];
+            if (!rec || !rec.panel || rec.panel.style.display === 'none') return;
+            var interval = isOnEveMapOf(k, currentMapForEve) ? EVE_PRESENCE_AND_GET_INTERVAL_MS : EVE_PANEL_POLL_INTERVAL_MS;
+            if (eveMapChanged || !lastEveDashboardGetTs[k] || (now - lastEveDashboardGetTs[k]) >= interval) {
+                lastEveDashboardGetTs[k] = now;
+                fetchEveDashboardAsync(k, applyEveDashboardToPanel);
+            }
+        });
 
         if (mapName && !target && mapName !== lastLoggedMapName) {
             log('⚠️ Wykryta mapa nie jest w TARGETS:', JSON.stringify(mapName), '— dodaj ją do listy w skrypcie');
@@ -1800,18 +1819,6 @@
         }
         checkHerosOnMapAndNotify();
         sendEveMapPresenceIfNeeded();
-        if (target && HERO_AFK_MONSTERS.indexOf(target.monster) >= 0) {
-            if ((nowTick - lastEveDashboardGetTs) >= EVE_PRESENCE_AND_GET_INTERVAL_MS) {
-                lastEveDashboardGetTs = nowTick;
-                var eveKeyForMap = null;
-                for (var ek in EVE_HERO_NAMES) { if (EVE_HERO_NAMES[ek] === target.monster) { eveKeyForMap = parseInt(ek, 10); break; } }
-                if (eveKeyForMap != null) fetchEveDashboardAsync(eveKeyForMap, applyEveDashboardToPanel);
-            }
-            if ((nowTick - lastEveRespawnSyncTs) >= EVE_RESPAWN_SYNC_INTERVAL_MS) {
-                lastEveRespawnSyncTs = nowTick;
-                eveRespawnCache = null;
-            }
-        }
         if (nowTick - lastFetchedHeroNotifTs >= 2000) {
             lastFetchedHeroNotifTs = nowTick;
             fetchAndShowHeroLevelNotificationsAsync();
@@ -1892,20 +1899,10 @@
         } catch (e) { /* ignore */ }
         return out;
     }
-    /** Zapisuje w API że mapa została właśnie opuszczona (wspólne dla wszystkich, przetrwa odświeżenie). */
-    function setEveMapLastLeft(eveKey, mapName) {
-        if (EVE_EVENT_ENDED) return false;
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-last-left', false);
-        xhr.setRequestHeader('Content-Type', 'application/json');
-        try {
-            xhr.send(JSON.stringify({ eveKey: eveKey, mapName: mapName }));
-            if (xhr.status === 200) {
-                eveMapLastLeftCache[eveKey] = null;
-                return true;
-            }
-        } catch (e) { /* ignore */ }
-        return false;
+    function isOnEveMapOf(eveKey, mapName) {
+        if (!mapName) return false;
+        var cur = String(mapName).trim().toLowerCase();
+        return (EVE_MAPS[eveKey] || []).some(function (m) { return String(m).trim().toLowerCase() === cur; });
     }
     var lastEvePresenceSent = {}; // eveKey -> timestamp
     var lastEveMapPresence = {};  // eveKey -> mapName (ostatnia mapa, na której zgłosiliśmy obecność)
@@ -1915,7 +1912,7 @@
     }
     /** Wysyła obecność na mapie do API (bez throttlingu). Używane przy otwarciu panelu, żeby backend na pewno miał naszą pozycję. */
     function sendEvePresenceNow(eveKey, mapName, nick) {
-        if (EVE_EVENT_ENDED || !CONFIG.API_KEY || !mapName || !nick) return;
+        if (!isActiveEveKey(eveKey) || !CONFIG.API_KEY || !mapName || !nick) return;
         fetch(CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-presence', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-API-Key': CONFIG.API_KEY },
@@ -1923,13 +1920,12 @@
         }).then(function (r) { if (r.ok) { eveMapReservationsCache[eveKey] = null; lastEvePresenceSent[eveKey] = Date.now(); lastEveMapPresence[eveKey] = mapName; } }).catch(function () {});
     }
     function sendEveMapPresenceIfNeeded() {
-        if (EVE_EVENT_ENDED || !CONFIG.API_KEY) return;
+        if (!CONFIG.API_KEY) return;
         var currentMap = getCurrentMapName();
         var nick = getCurrentHeroName();
         var now = Date.now();
-        [41, 81].forEach(function (eveKey) {
-            var maps = EVE_MAPS[eveKey] || [];
-            var isOnEveMap = currentMap && maps.some(function (m) { return String(m).trim().toLowerCase() === currentMap.trim().toLowerCase(); });
+        EVE_ACTIVE_KEYS.forEach(function (eveKey) {
+            var isOnEveMap = isOnEveMapOf(eveKey, currentMap);
             var lastMap = lastEveMapPresence[eveKey];
             if (isOnEveMap) {
                 if (lastMap && lastMap.toLowerCase() !== currentMap.trim().toLowerCase()) {
@@ -1955,7 +1951,7 @@
 
     /** POST: zarezerwuj mapę EVE. Po sukcesie czyści cache dla eveKey. */
     function reserveEveMap(eveKey, mapName, nick) {
-        if (EVE_EVENT_ENDED) return false;
+        if (!isActiveEveKey(eveKey)) return false;
         var xhr = new XMLHttpRequest();
         xhr.open('POST', CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-reservations', false);
         xhr.setRequestHeader('Content-Type', 'application/json');
@@ -1974,7 +1970,7 @@
 
     /** DELETE: usuń rezerwację mapy EVE. */
     function deleteEveMapReservation(eveKey, mapName) {
-        if (EVE_EVENT_ENDED) return false;
+        if (!isActiveEveKey(eveKey)) return false;
         var xhr = new XMLHttpRequest();
         xhr.open('DELETE', CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-reservations?eveKey=' + encodeURIComponent(eveKey) + '&mapName=' + encodeURIComponent(mapName), false);
         xhr.setRequestHeader('X-API-Key', CONFIG.API_KEY || '');
@@ -2166,7 +2162,7 @@
         styleEl.textContent = '.map-timer-kolejki-btn{' + btnStyle + '}.map-timer-kolejki-btn:hover{background:#16213e;}.map-timer-kolejki-menu{' + menuStyle + '}.map-timer-kolejki-icon-wrap{' + iconWrapStyle + '}.map-timer-kolejki-icon-wrap:hover .map-timer-tooltip{opacity:1;visibility:visible;}.map-timer-kolejki-icon-btn{' + iconBtnStyle + '}.map-timer-kolejki-icon-btn:hover{background:#2a2a4a;}.map-timer-kolejki-icon-link{text-decoration:none;color:#eee;}.map-timer-kolejki-icon-link:hover{color:#eee;}.map-timer-tooltip{' + tooltipStyle + '}.map-timer-kolejki-close{' + closeBtnStyle + '}.map-timer-kolejki-close:hover{color:#fff;background:rgba(255,255,255,0.1);}.map-timer-kolejki-panel{' + panelStyle + '}.map-timer-kolejki-title-row{' + titleRowStyle + '}.map-timer-kolejki-title{' + titleStyle + '}.map-timer-kolejki-list-content{' + listStyle + '}.map-timer-kolejki-row{padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06);}.map-timer-kolejki-meta{color:#888;font-size:10px;}.map-timer-kolejki-item-wrap{display:inline-block;vertical-align:middle;margin-left:4px;}.map-timer-kolejki-item-gif{width:20px;height:20px;object-fit:contain;cursor:pointer;}.map-timer-kolejki-png-popup{position:fixed;z-index:100001;background:#1a1a2e;padding:6px;border:1px solid #2a2a4a;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5);pointer-events:none;}.map-timer-kolejki-png-popup img{display:block;width:auto;height:auto;max-width:90vw;max-height:70vh;object-fit:contain;}';
         document.head.appendChild(styleEl);
         document.body.appendChild(kolejkiWrap);
-        if (EVE_EVENT_ENDED) {
+        if (EVE_ACTIVE_KEYS.length === 0) {
             var herosBtn = kolejkiWrap.querySelector('.map-timer-kolejki-icon-btn[data-action="heros"]');
             if (herosBtn && herosBtn.parentElement) herosBtn.parentElement.style.display = 'none';
         }
@@ -2282,7 +2278,7 @@
                 createEveWindow();
                 savedEveKeys.forEach(function (k) {
                     var key = parseInt(k, 10);
-                    if (EVE_MAPS[key]) showEveMapListPanel(key);
+                    if (isActiveEveKey(key)) showEveMapListPanel(key);
                 });
                 if (eveWindowEl) eveWindowEl.style.display = 'none';
             }
@@ -2388,20 +2384,16 @@
     }
 
     // ================================================================
-    //  UI — Heros eventowy (EVE): okno z 3 opcjami i listą map
+    //  UI — Heros eventowy (EVE): okno wyboru herosa + osobne okno z timerami i listą map
     // ================================================================
-    var EVE_OPTIONS = [
-        { key: 41, label: 'EVE 41 - Grim Blackcluck' },
-        { key: 81, label: 'EVE 81 - Hotblood Capon' },
-    ];
-    var EVE_HERO_NAMES = { 41: 'Grim Blackcluck', 81: 'Hotblood Capon' };
-    var eveRespawnCache = null;
-    var eveDashboardCache = {};  // eveKey -> { reservations, presence, lastLeft, respawnTimer } — do lokalnego odliczania
+    var EVE_OPTIONS = EVE_ACTIVE_HEROES.map(function (h) { return { key: h.key, label: h.label }; });
+    var eveDashboardCache = {};  // eveKey -> odpowiedź eve-dashboard — do lokalnego odliczania co 1 s
+    var eveServerOffsetMs = 0;   // serverNow - Date.now(), żeby timery były takie same u wszystkich
     var lastEveFetchMapName = null; // fetch przy każdym przejściu przez mapę
-    var lastEveRespawnSyncTs = 0;   // gdy stoimy na mapie EVE: co 60s pobieramy globalne czasy (GET) i odświeżamy odliczanie
-    const EVE_RESPAWN_SYNC_INTERVAL_MS = 60 * 1000; // 60 s — optymalnie: nie co sekundę, gra płynna
-    var lastEveDashboardGetTs = 0;  // co 6 s GET eve-dashboard gdy na mapie EVE (obecność + timery dla wszystkich)
-    const EVE_PRESENCE_AND_GET_INTERVAL_MS = 6 * 1000; // 6 s — POST presence + GET dashboard
+    var lastEveDashboardGetTs = {};  // eveKey -> ts ostatniego GET eve-dashboard
+    const EVE_PRESENCE_AND_GET_INTERVAL_MS = 6 * 1000; // 6 s — gdy stoimy na mapie herosa
+    const EVE_PANEL_POLL_INTERVAL_MS = 10 * 1000;      // 10 s — okno otwarte, ale jesteśmy gdzie indziej
+    var EVE_COLLAPSED_KEY = 'map_timer_eve_collapsed';
 
     function createEveWindow() {
         if (eveWindowEl) return eveWindowEl;
@@ -2471,11 +2463,20 @@
             if (typeof GM_getValue !== 'function') return [];
             var raw = GM_getValue('eve_list_keys', '[]');
             var arr = JSON.parse(raw || '[]');
-            return Array.isArray(arr) ? arr.filter(function (k) { return [41, 81].indexOf(parseInt(k, 10)) >= 0; }) : [];
+            return Array.isArray(arr) ? arr.map(function (k) { return parseInt(k, 10); }).filter(isActiveEveKey) : [];
         } catch (e) { return []; }
     }
     function saveOpenEveKeys(openKeys) {
         try { if (typeof GM_setValue === 'function') GM_setValue('eve_list_keys', JSON.stringify(openKeys)); } catch (e) { /* ignore */ }
+    }
+    function getCollapsedEveKeys() {
+        try {
+            var arr = JSON.parse(GM_getValue(EVE_COLLAPSED_KEY, '[]') || '[]');
+            return Array.isArray(arr) ? arr.map(function (k) { return parseInt(k, 10); }) : [];
+        } catch (e) { return []; }
+    }
+    function saveCollapsedEveKeys(keys) {
+        try { GM_setValue(EVE_COLLAPSED_KEY, JSON.stringify(keys)); } catch (e) { /* ignore */ }
     }
     var EVE_WINDOW_POS_KEY = 'map_timer_eve_window_pos';
     var EVE_PANEL_POS_KEY = 'map_timer_eve_panel_pos';
@@ -2545,7 +2546,7 @@
     function showEveMapListPanel(eveKey) {
         var rec = eveMapListPanelsByKey[eveKey];
         if (rec && rec.panel) {
-            rec.panel.style.display = 'block';
+            rec.panel.style.display = 'flex';
             var openKeys = getOpenEveKeys();
             if (openKeys.indexOf(eveKey) < 0) { openKeys.push(eveKey); saveOpenEveKeys(openKeys); }
             var currentMap = getCurrentMapName();
@@ -2578,13 +2579,26 @@
             panel.style.top = offTop + 'px';
         }
         var listHeight = 280;
+        var hero = getEveHero(eveKey);
+        var headerBtnStyle = 'position:absolute;top:8px;background:none;border:none;color:#8892b0;cursor:pointer;font-size:16px;padding:0 4px;line-height:20px;';
         panel.innerHTML =
-            '<div class="map-timer-eve-list-panel-title" style="background:#16213e;padding:10px 36px 10px 12px;font-weight:bold;font-size:14px;border-bottom:1px solid #2a2a4a;color:#fff;cursor:move;user-select:none;">Mapy</div>' +
-            '<div class="map-timer-eve-list-title" style="font-size:12px;color:#8892b0;padding:8px 12px 0;"></div>' +
-            '<div class="map-timer-eve-list" style="padding:8px 12px 12px;overflow-y:auto;overflow-x:hidden;flex:1;min-height:120px;max-height:400px;"></div>' +
-            '<div class="map-timer-eve-list-resize" style="height:6px;background:#2a2a4a;cursor:ns-resize;flex-shrink:0;border-radius:0 0 12px 12px;"></div>' +
-            '<div class="map-timer-eve-list-resize-w" style="position:absolute;top:40px;right:0;width:8px;bottom:0;cursor:ew-resize;"></div>' +
-            '<button type="button" class="map-timer-eve-list-close" style="position:absolute;top:8px;right:8px;background:none;border:none;color:#8892b0;cursor:pointer;font-size:18px;padding:0 4px;">✕</button>';
+            '<div class="map-timer-eve-list-panel-title" style="background:#16213e;padding:10px 60px 10px 12px;font-weight:bold;font-size:14px;border-bottom:1px solid #2a2a4a;color:#fff;cursor:move;user-select:none;border-radius:12px 12px 0 0;">' + escapeHtml(hero ? hero.label : String(eveKey)) + '</div>' +
+            '<div class="map-timer-eve-respawn" style="padding:8px 12px;border-bottom:1px solid #2a2a4a;font-size:12px;">' +
+                '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
+                    '<span class="map-timer-eve-respawn-text" style="font-weight:bold;color:#8892b0;">Ładowanie…</span>' +
+                    '<button type="button" class="map-timer-eve-kill" title="Zgłoś ręcznie, że heros został właśnie zabity (gdy nie wykryło się z walki)" style="flex-shrink:0;background:#2a2a4a;border:1px solid #3a3a5a;border-radius:6px;color:#eee;cursor:pointer;font-size:11px;padding:2px 6px;">☠ Zabity</button>' +
+                '</div>' +
+                '<div style="height:5px;background:#0f0f23;border-radius:3px;overflow:hidden;margin-top:6px;"><div class="map-timer-eve-respawn-bar" style="height:100%;width:0;background:#8892b0;"></div></div>' +
+                '<div class="map-timer-eve-respawn-meta" style="font-size:10px;color:#8892b0;margin-top:4px;"></div>' +
+            '</div>' +
+            '<div class="map-timer-eve-body" style="display:flex;flex-direction:column;flex:1;">' +
+                '<div class="map-timer-eve-list-title" style="font-size:11px;color:#8892b0;padding:6px 12px 0;"></div>' +
+                '<div class="map-timer-eve-list" style="padding:6px 12px 12px;overflow-y:auto;overflow-x:hidden;flex:1;min-height:120px;max-height:600px;"></div>' +
+                '<div class="map-timer-eve-list-resize" style="height:6px;background:#2a2a4a;cursor:ns-resize;flex-shrink:0;border-radius:0 0 12px 12px;"></div>' +
+                '<div class="map-timer-eve-list-resize-w" style="position:absolute;top:40px;right:0;width:8px;bottom:0;cursor:ew-resize;"></div>' +
+            '</div>' +
+            '<button type="button" class="map-timer-eve-list-collapse" title="Zwiń / rozwiń listę map" style="' + headerBtnStyle + 'right:32px;">▾</button>' +
+            '<button type="button" class="map-timer-eve-list-close" title="Zamknij (otworzysz ponownie z menu 📋 → ⭐)" style="' + headerBtnStyle + 'right:8px;font-size:18px;">✕</button>';
         document.body.appendChild(panel);
 
         var listEl = panel.querySelector('.map-timer-eve-list');
@@ -2656,7 +2670,7 @@
         document.addEventListener('mousemove', function (e) {
             if (!resizeDrag.active) return;
             var dy = e.clientY - resizeDrag.startY;
-            var h = Math.max(120, Math.min(400, resizeDrag.startHeight + dy));
+            var h = Math.max(120, Math.min(600, resizeDrag.startHeight + dy));
             listEl.style.height = h + 'px';
         });
         document.addEventListener('mouseup', function (e) {
@@ -2670,7 +2684,26 @@
             saveOpenEveKeys(openKeys);
         });
 
-        panel.querySelector('.map-timer-eve-list-title').textContent = 'Mapy (EVE ' + eveKey + ')';
+        var bodyEl = panel.querySelector('.map-timer-eve-body');
+        var collapseBtn = panel.querySelector('.map-timer-eve-list-collapse');
+        function applyCollapsed(collapsed) {
+            bodyEl.style.display = collapsed ? 'none' : 'flex';
+            collapseBtn.textContent = collapsed ? '▸' : '▾';
+        }
+        applyCollapsed(getCollapsedEveKeys().indexOf(eveKey) >= 0);
+        collapseBtn.addEventListener('click', function () {
+            var keys = getCollapsedEveKeys();
+            var collapsed = keys.indexOf(eveKey) < 0;
+            keys = keys.filter(function (k) { return k !== eveKey; });
+            if (collapsed) keys.push(eveKey);
+            saveCollapsedEveKeys(keys);
+            applyCollapsed(collapsed);
+        });
+        panel.querySelector('.map-timer-eve-kill').addEventListener('click', function () {
+            reportEveKillManually(eveKey);
+        });
+
+        panel.querySelector('.map-timer-eve-list-title').textContent = 'Mapy · PPM = rezerwacja';
         eveMapListPanelsByKey[eveKey] = { panel: panel, listEl: listEl, listHeight: listHeight };
         var openKeys = getOpenEveKeys();
         if (openKeys.indexOf(eveKey) < 0) { openKeys.push(eveKey); saveOpenEveKeys(openKeys); }
@@ -2774,137 +2807,151 @@
         }, 0);
     }
 
-    function formatTimeSince(sec) {
-        if (sec < 0) return '—';
-        var m = Math.floor(sec / 60);
-        var s = Math.floor(sec % 60);
-        return m + ':' + (s < 10 ? '0' : '') + s;
+    /** ms → "M:SS" albo "H:MM:SS". */
+    function formatDurationMs(ms) {
+        var total = Math.max(0, Math.floor(ms / 1000));
+        var h = Math.floor(total / 3600);
+        var m = Math.floor((total % 3600) / 60);
+        var s = total % 60;
+        function pad(n) { return (n < 10 ? '0' : '') + n; }
+        return h > 0 ? (h + ':' + pad(m) + ':' + pad(s)) : (m + ':' + pad(s));
     }
-    function colorByTimeSinceLeft(sec) {
-        if (sec < 0) return '#8B0000';
-        if (sec <= 30) return '#FA8072';
-        if (sec <= 60) return '#CD5C5C';
-        if (sec <= 120) return '#FF0000';
-        return '#8B0000';
+    /** Kolor mapy wg czasu od ostatniej obecności — im dłużej nikt nie sprawdzał, tym „goręcej”. */
+    function colorBySinceVisit(ms) {
+        if (ms == null) return '#e74c3c';
+        var min = ms / 60000;
+        if (min < 5) return '#8892b0';
+        if (min < 15) return '#f1c40f';
+        if (min < 30) return '#e67e22';
+        return '#e74c3c';
+    }
+    function eveServerNow() {
+        return Date.now() + eveServerOffsetMs;
     }
     /** Jedno żądanie zamiast 3 — mniej lagu. Async: callback(data). */
     function fetchEveDashboardAsync(eveKey, callback) {
         if (!CONFIG.BACKEND_URL || typeof callback !== 'function') return;
         var url = CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-dashboard?eveKey=' + eveKey;
-        fetch(url).then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
+        fetch(url, { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
             if (data) callback(eveKey, data);
         }).catch(function () {});
     }
-    /** Rysuje listę map i tytuł z danych (data + now). Odliczanie lokalne — now się zmienia co sekundę. */
+    /** Status respawnu: przed min (czerwony), okno min–max (żółty), po max (zielony). */
+    function renderEveRespawn(eveKey, data, now) {
+        var rec = eveMapListPanelsByKey[eveKey];
+        if (!rec || !rec.panel) return;
+        var textEl = rec.panel.querySelector('.map-timer-eve-respawn-text');
+        var barEl = rec.panel.querySelector('.map-timer-eve-respawn-bar');
+        var metaEl = rec.panel.querySelector('.map-timer-eve-respawn-meta');
+        if (!textEl || !barEl || !metaEl) return;
+        var r = data.respawn;
+        var color = '#8892b0';
+        var text = 'Brak zapisanego zabicia';
+        var progress = 0;
+        if (r) {
+            progress = Math.min(1, (now - r.killedAt) / Math.max(1, r.maxAt - r.killedAt));
+            if (now < r.minAt) {
+                color = '#e74c3c';
+                text = 'Resp najwcześniej za ' + formatDurationMs(r.minAt - now);
+            } else if (now < r.maxAt) {
+                color = '#f1c40f';
+                text = 'Może już stać · max za ' + formatDurationMs(r.maxAt - now);
+            } else {
+                color = '#2ecc71';
+                text = 'Po max (' + formatDurationMs(now - r.maxAt) + ') — powinien stać';
+            }
+            metaEl.textContent = 'Zabity ' + formatDurationMs(now - r.killedAt) + ' temu · ' + (r.mapName || '?') + ' · ' + (r.killedBy || '?');
+        } else {
+            metaEl.textContent = 'Okno respawnu: ' + data.respawnMinMin + '–' + data.respawnMaxMin + ' min od zabicia';
+        }
+        textEl.textContent = text;
+        textEl.style.color = color;
+        barEl.style.width = Math.round(progress * 100) + '%';
+        barEl.style.background = color;
+    }
+    /** Rysuje listę map z danych (data + now). Odliczanie lokalne — now się zmienia co sekundę. */
     function renderEveListAndTitle(eveKey, data, now) {
         var rec = eveMapListPanelsByKey[eveKey];
         if (!rec || !rec.panel || !rec.listEl) return;
+        renderEveRespawn(eveKey, data, now);
         var listEl = rec.listEl;
         var maps = EVE_MAPS[eveKey] || [];
         var myNick = getCurrentHeroName();
-        var reservations = data.reservations || [];
-        var presence = data.presence || [];
-        var apiLastLeft = data.lastLeft || {};
+        var currentMap = (getCurrentMapName() || '').trim().toLowerCase();
         var reservedByMap = {};
-        reservations.forEach(function (r) { reservedByMap[String(r.mapName).trim()] = r.nick || ''; });
+        (data.reservations || []).forEach(function (r) { reservedByMap[String(r.mapName).trim()] = r.nick || ''; });
         var presenceByMap = {};
-        presence.forEach(function (p) {
+        (data.presence || []).forEach(function (p) {
             var key = String(p.mapName).trim();
             if (!presenceByMap[key]) presenceByMap[key] = [];
             presenceByMap[key].push(p.nick || '');
         });
+        var apiLastLeft = data.lastLeft || {};
         listEl.innerHTML = '';
         if (maps.length === 0) {
             listEl.innerHTML = '<div style="color:#8892b0;font-size:12px;padding:8px 0;">Brak map (lista do uzupełnienia w skrypcie).</div>';
-            applyEvePanelTitleFromData(eveKey, data.respawnTimer);
             return;
         }
         maps.forEach(function (mapName) {
             var mapKey = String(mapName).trim();
             var onMapNicks = presenceByMap[mapKey] || [];
-            var hasSomeoneOnMap = onMapNicks.length > 0;
             var reservedNick = reservedByMap[mapKey];
             var isReserved = !!reservedNick;
-            var displayRight = '—';
-            var rowColor = '#8B0000';
-            if (hasSomeoneOnMap) {
-                rowColor = '#228B22';
+            var isMine = mapKey.toLowerCase() === currentMap;
+            var rowColor;
+            var displayRight;
+            if (onMapNicks.length > 0) {
+                rowColor = '#2ecc71';
                 displayRight = onMapNicks.map(function (n) { return (n && myNick && String(n).trim().toLowerCase() === String(myNick).trim().toLowerCase()) ? 'Ty' : n; }).join(', ');
             } else {
-                var lastLeft = (eveMapLastLeftAt[eveKey] && eveMapLastLeftAt[eveKey][mapKey]) || apiLastLeft[mapKey];
-                var secSince = (lastLeft && typeof lastLeft === 'number') ? (now - lastLeft) / 1000 : -1;
-                rowColor = colorByTimeSinceLeft(secSince);
-                displayRight = (secSince >= 0) ? formatTimeSince(secSince) : (isReserved ? reservedNick : '—');
+                var lastSeen = apiLastLeft[mapKey];
+                var since = typeof lastSeen === 'number' ? Math.max(0, now - lastSeen) : null;
+                rowColor = colorBySinceVisit(since);
+                displayRight = since != null ? formatDurationMs(since) : (isReserved ? reservedNick : '—');
             }
-            var mapDisplay = (isReserved ? '* ' : '') + mapName;
             var row = document.createElement('div');
-            row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.06);font-size:12px;cursor:pointer;';
-            row.innerHTML = '<span style="color:' + rowColor + ';">' + escapeHtml(mapDisplay) + '</span><span style="color:' + rowColor + ';">' + escapeHtml(displayRight) + '</span>';
-            if (isReserved) row.title = 'Zarezerwował: ' + escapeHtml(reservedNick);
+            row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 8px;border-bottom:1px solid rgba(255,255,255,0.06);font-size:12px;cursor:pointer;border-radius:4px;' +
+                (onMapNicks.length > 0 ? 'background:rgba(46,204,113,0.14);' : '') +
+                (isMine ? 'box-shadow:inset 3px 0 0 #3498db;' : '');
+            row.innerHTML = '<span style="color:' + rowColor + ';">' + escapeHtml((isReserved ? '* ' : '') + mapName) + '</span>' +
+                '<span style="color:' + rowColor + ';font-family:Consolas,monospace;white-space:nowrap;">' + escapeHtml(displayRight) + '</span>';
+            row.title = (isReserved ? 'Zarezerwował: ' + reservedNick + '\n' : '') + (onMapNicks.length ? 'Teraz na mapie' : 'Czas od ostatniej obecności kogoś ze skryptem');
             row.addEventListener('click', function (ev) { if (ev.button === 0) toggleEveMapPopup(mapName); });
             row.addEventListener('contextmenu', function (ev) { showEveReserveContextMenu(ev, eveKey, mapName, isReserved); });
             listEl.appendChild(row);
         });
-        applyEvePanelTitleFromData(eveKey, data.respawnTimer);
     }
     /** Odświeża wyświetlanie z cache — tylko przelicza czasy (odliczanie lokalne co 1 s). */
     function refreshEvePanelDisplayFromCache(eveKey) {
         var data = eveDashboardCache[eveKey];
         if (!data) return;
-        renderEveListAndTitle(eveKey, data, Date.now());
+        renderEveListAndTitle(eveKey, data, eveServerNow());
     }
-    /** Aplikuje odpowiedź dashboardu: wykrywa wyjścia (POST), zapisuje do cache, rysuje. Fetch tylko przy wejściu na mapę / odświeżeniu. */
+    /** Aplikuje odpowiedź dashboardu: zapisuje do cache i rysuje. „Ostatnio na mapie” liczy serwer z heartbeatów obecności. */
     function applyEveDashboardToPanel(eveKey, data) {
-        var rec = eveMapListPanelsByKey[eveKey];
-        if (!rec || !rec.panel || !rec.listEl) return;
-        var listEl = rec.listEl;
-        var maps = EVE_MAPS[eveKey] || [];
-        var currentMap = getCurrentMapName() || '';
-        var myNick = getCurrentHeroName();
-        var reservations = data.reservations || [];
-        var presence = data.presence || [];
-        var apiLastLeft = data.lastLeft || {};
-        var presenceByMap = {};
-        presence.forEach(function (p) {
-            var key = String(p.mapName).trim();
-            if (!presenceByMap[key]) presenceByMap[key] = [];
-            presenceByMap[key].push(p.nick || '');
-        });
-        if (!eveMapLastLeftAt[eveKey]) eveMapLastLeftAt[eveKey] = {};
-        if (!evePrevPresenceByMap[eveKey]) evePrevPresenceByMap[eveKey] = {};
-        var prev = evePrevPresenceByMap[eveKey];
-        var now = Date.now();
-        maps.forEach(function (mapName) {
-            var mapKey = String(mapName).trim();
-            var onMapNicks = presenceByMap[mapKey] || [];
-            var hadSomeone = (prev[mapKey] && prev[mapKey].length > 0);
-            if (hadSomeone && onMapNicks.length === 0) {
-                eveMapLastLeftAt[eveKey][mapKey] = now;
-                if (!EVE_EVENT_ENDED) {
-                    fetch(CONFIG.BACKEND_URL.replace(/\/$/, '') + '/api/timer/eve-map-last-left', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eveKey: eveKey, mapName: mapKey }) }).catch(function () {});
-                }
-            }
-            prev[mapKey] = onMapNicks.slice();
-        });
-        if (data.respawnTimer != null) {
-            if (!eveRespawnCache) eveRespawnCache = { timers: {}, ts: 0 };
-            if (!eveRespawnCache.timers) eveRespawnCache.timers = {};
-            eveRespawnCache.timers[eveKey] = data.respawnTimer;
-            eveRespawnCache.ts = now;
-        }
-        eveDashboardCache[eveKey] = { reservations: data.reservations || [], presence: data.presence || [], lastLeft: data.lastLeft || {}, respawnTimer: data.respawnTimer };
-        renderEveListAndTitle(eveKey, eveDashboardCache[eveKey], now);
-    }
-    function applyEvePanelTitleFromData(eveKey, _respawnTimerMs) {
-        var rec = eveMapListPanelsByKey[eveKey];
-        if (!rec || !rec.panel) return;
-        var titleEl = rec.panel.querySelector('.map-timer-eve-list-panel-title');
-        if (!titleEl) return;
-        titleEl.textContent = 'Mapy';
-        titleEl.style.color = '#fff';
+        if (typeof data.serverNow === 'number') eveServerOffsetMs = data.serverNow - Date.now();
+        eveDashboardCache[eveKey] = data;
+        renderEveListAndTitle(eveKey, data, eveServerNow());
     }
     function updateEveMapListForPanel(eveKey) {
-        fetchEveDashboardAsync(eveKey, function (k, data) { applyEveDashboardToPanel(k, data); });
+        lastEveDashboardGetTs[eveKey] = Date.now();
+        fetchEveDashboardAsync(eveKey, applyEveDashboardToPanel);
+    }
+    function reportEveKillManually(eveKey) {
+        var hero = getEveHero(eveKey);
+        if (!CONFIG.API_KEY) { showToast('Ustaw API Key w ustawieniach', 'error'); return; }
+        if (!window.confirm('Zgłosić, że ' + (hero ? hero.monster : eveKey) + ' został zabity TERAZ? Ustawi to timer respawnu dla wszystkich.')) return;
+        var currentMap = getCurrentMapName() || '';
+        fetch(apiTimerUrl('/api/timer/eve-respawn'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-API-Key': CONFIG.API_KEY },
+            body: JSON.stringify({ eveKey: eveKey, mapName: isOnEveMapOf(eveKey, currentMap) ? currentMap : '', nick: getCurrentHeroName() || '' }),
+        }).then(function (r) {
+            if (r.ok) showToast('☠ Zapisano zabicie — timer respawnu ustawiony');
+            else if (r.status === 409) showToast('Zabicie już zapisane w ciągu ostatnich 10 min', 'warn');
+            else showToast('Błąd zapisu zabicia (' + r.status + ')', 'error');
+            updateEveMapListForPanel(eveKey);
+        }).catch(function () { showToast('Błąd sieci', 'error'); });
     }
     function openEveWindow() {
         createEveWindow();
@@ -2913,9 +2960,9 @@
         selectedEveKey = null;
     }
 
-    // Odliczanie sekund lokalnie co 1 s — zero requestów, tylko przeliczanie „X min temu” i „Respawn: MM:SS” z cache
+    // Odliczanie sekund lokalnie co 1 s — zero requestów, tylko przeliczanie czasów z cache
     setInterval(function () {
-        [41, 81].forEach(function (k) {
+        EVE_ACTIVE_KEYS.forEach(function (k) {
             var rec = eveMapListPanelsByKey[k];
             if (rec && rec.panel && rec.panel.style.display !== 'none') refreshEvePanelDisplayFromCache(k);
         });

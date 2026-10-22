@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authFromApiKey, validateApiKey } from '@/lib/auth';
 import { getMonsterNameFromMap } from '@/lib/mapToMonster';
-import { EVE_EVENT_ENDED, isEveHeroMonster } from '@/lib/eve-event-ended';
+import { isEndedEveHeroMonster, isEveHeroMonster } from '@/lib/eve-event-ended';
 import {
   ABSOLUTE_MAX_SESSION_SEC,
   TITAN_AFK_CAP_SEC,
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (EVE_EVENT_ENDED && isEveHeroMonster(monster)) {
+    if (isEndedEveHeroMonster(monster)) {
       return NextResponse.json(
         { error: 'Event zakończony. Naliczanie czasu wyłączone.', event_ended: true },
         { status: 410 }
@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Herosy eventowe (Easter 2026): bez faz, phaseId = null. Tytani: wymagana aktywna faza.
+    // Herosy eventowe (EVE): bez faz, phaseId = null. Tytani: wymagana aktywna faza.
     const isHeroMonster = isEveHeroMonster(monster);
 
     let phaseId: string | null = null;

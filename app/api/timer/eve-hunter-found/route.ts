@@ -1,23 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authFromApiKey } from '@/lib/auth';
-import { EVE_EVENT_ENDED, isEveKey } from '@/lib/eve-event-ended';
-
-// Min 15 min między punktami dla tego samego herosa — liczy się tylko pierwszy znalazca w oknie
-const EVE_HUNTER_COOLDOWN_MIN_MS = 15 * 60 * 1000;
+import { EVE_ACTIVE_KEY_ERROR, getEveHero, isActiveEveKey, isEveKey } from '@/lib/eve-event-ended';
 
 /**
  * POST /api/timer/eve-hunter-found — zgłoś "znalazłem herosa" (właśnie go widzę na mapie).
- * Skrypt wywołuje to w momencie wykrycia herosa (lista NPC, nick = Grim Blackcluck / Hotblood Capon).
- * Pierwszy gracz w oknie 15 min dostaje +1 pkt; po przyznaniu ustawiamy killedAt (EveRespawnTimer), żeby przez 15 min nikt inny nie dostał punktu za tego samego herosa.
+ * Skrypt wywołuje to w momencie wykrycia herosa (lista NPC, nick herosa eventowego).
+ * Punkt dostaje pierwszy znalazca danego spawnu. Kolejny punkt jest możliwy dopiero gdy:
+ * - po ostatnim punkcie zapisano zabicie herosa (EveHeroKill), albo
+ * - minął minimalny czas respawnu (zabicie mogło nie zostać wykryte).
+ * EveRespawnTimer.killedAt przechowuje czas ostatnio przyznanego punktu.
  */
 export async function POST(request: NextRequest) {
-  if (EVE_EVENT_ENDED) {
-    return NextResponse.json(
-      { error: 'Event zakończony.', event_ended: true },
-      { status: 410 }
-    );
-  }
   try {
     const user = await authFromApiKey(request);
     if (!user) {
@@ -27,51 +21,40 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const eveKey = body?.eveKey != null ? parseInt(String(body.eveKey), 10) : NaN;
 
-    if (!Number.isInteger(eveKey) || !isEveKey(eveKey)) {
-      return NextResponse.json(
-        { error: 'eveKey must be 41 or 81' },
-        { status: 400 }
-      );
+    if (!Number.isInteger(eveKey) || !isActiveEveKey(eveKey)) {
+      if (Number.isInteger(eveKey) && isEveKey(eveKey)) {
+        return NextResponse.json({ error: 'Event zakończony.', event_ended: true }, { status: 410 });
+      }
+      return NextResponse.json({ error: EVE_ACTIVE_KEY_ERROR }, { status: 400 });
     }
+    const cooldownMs = getEveHero(eveKey)!.respawnMinMin * 60_000;
 
-    const existing = await prisma.eveRespawnTimer.findUnique({
-      where: { eveKey },
-    });
     const now = Date.now();
-    const minSinceLastClaim = existing ? (now - existing.killedAt.getTime()) / 60000 : Infinity;
-    const canAwardPoint = minSinceLastClaim >= 15;
-
-    if (!canAwardPoint) {
-      const waitMin = existing
-        ? Math.ceil(15 - minSinceLastClaim)
-        : 0;
-      return NextResponse.json(
-        { error: 'Punkt już przyznany za tego herosa. Min. 15 min do kolejnego.', waitMinutes: Math.max(0, waitMin) },
-        { status: 429 }
-      );
-    }
-
-    await prisma.$transaction(async (tx) => {
-      await tx.$executeRawUnsafe(
-        'SELECT pg_advisory_xact_lock($1)',
-        eveKey + 1e9
-      );
-      const row = await tx.eveRespawnTimer.findUnique({
-        where: { eveKey },
-      });
-      const passed =
-        !row || now - row.killedAt.getTime() >= EVE_HUNTER_COOLDOWN_MIN_MS;
-      if (!passed) return;
+    const awarded = await prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock($1)', eveKey + 1e9);
+      const [lastClaim, lastKill] = await Promise.all([
+        tx.eveRespawnTimer.findUnique({ where: { eveKey } }),
+        tx.eveHeroKill.findFirst({ where: { eveKey }, orderBy: { killedAt: 'desc' } }),
+      ]);
+      const canAward =
+        !lastClaim ||
+        (lastKill != null && lastKill.killedAt > lastClaim.killedAt) ||
+        now - lastClaim.killedAt.getTime() >= cooldownMs;
+      if (!canAward) return false;
       await tx.eveHunterKill.create({
         data: { eveKey, userId: user.id },
       });
       await tx.eveRespawnTimer.upsert({
         where: { eveKey },
-        create: { eveKey },
+        create: { eveKey, killedAt: new Date(now) },
         update: { killedAt: new Date(now) },
       });
+      return true;
     });
 
+    if (!awarded) {
+      return NextResponse.json({ error: 'Punkt za ten spawn już przyznany.' }, { status: 429 });
+    }
     return NextResponse.json({ ok: true, points: 1 });
   } catch (e) {
     console.error('[POST /api/timer/eve-hunter-found]', e);

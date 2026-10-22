@@ -24,6 +24,7 @@ export default function Navbar({ isMobile, isOpen, onClose }: NavbarProps = {}) 
   const [year2026Open, setYear2026Open] = useState(() => pathname.startsWith('/2026'));
   const [urodziny20Open, setUrodziny20Open] = useState(() => pathname.startsWith('/2026/20urodziny'));
   const [easterOpen, setEasterOpen] = useState(() => pathname.startsWith('/2026/easter'));
+  const [halloweenOpen, setHalloweenOpen] = useState(() => pathname.startsWith('/2026/halloween'));
   const [logsOpen, setLogsOpen] = useState(() => pathname.startsWith('/admin/logs'));
 
   const isHome = pathname === '/';
@@ -116,6 +117,22 @@ export default function Navbar({ isMobile, isOpen, onClose }: NavbarProps = {}) 
               </button>
               {year2026Open && (
                 <>
+                  <button
+                    type="button"
+                    className={cx('gos-nav__item', 'gos-nav__item--sub2', halloweenOpen && 'is-open', pathname.startsWith('/2026/halloween') && 'is-active')}
+                    onClick={() => setHalloweenOpen((o) => !o)}
+                  >
+                    <span>Halloween</span>
+                    <span className={cx('gos-nav__chevron', halloweenOpen && 'is-open')}>▼</span>
+                  </button>
+                  {halloweenOpen && (
+                    <>
+                      <Link href="/2026/halloween" className={cx('gos-nav__item', 'gos-nav__item--sub3', pathname === '/2026/halloween' && 'is-active')} onClick={onClose}>Strona główna</Link>
+                      <Link href="/2026/halloween/doppelganger" className={cx('gos-nav__item', 'gos-nav__item--sub3', pathname === '/2026/halloween/doppelganger' && 'is-active')} onClick={onClose}>132 - Doppelganger</Link>
+                      <Link href="/2026/halloween/drude" className={cx('gos-nav__item', 'gos-nav__item--sub3', pathname === '/2026/halloween/drude' && 'is-active')} onClick={onClose}>190 - Drude</Link>
+                      <Link href="/2026/halloween/nosferatu" className={cx('gos-nav__item', 'gos-nav__item--sub3', pathname === '/2026/halloween/nosferatu' && 'is-active')} onClick={onClose}>243 - Nosferatu</Link>
+                    </>
+                  )}
                   <button
                     type="button"
                     className={cx('gos-nav__item', 'gos-nav__item--sub2', urodziny20Open && 'is-open', pathname.startsWith('/2026/20urodziny') && 'is-active')}

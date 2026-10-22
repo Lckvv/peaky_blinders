@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { isEveKey } from '@/lib/eve-event-ended';
+import { EVE_KEY_ERROR, isEveKey } from '@/lib/eve-event-ended';
 
 export type EveHunterEntry = {
   rank: number;
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 
     if (!Number.isInteger(eveKey) || !isEveKey(eveKey)) {
       return NextResponse.json(
-        { error: 'eveKey must be 41 or 81' },
+        { error: EVE_KEY_ERROR },
         { status: 400 }
       );
     }

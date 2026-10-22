@@ -64,6 +64,31 @@ export const MAP_NAME_TO_MONSTER: Record<string, string> = {
   'Andarum Temple - Warehouse 2nd Level': 'Hotblood Capon',
   'Andarum Temple - Armory': 'Hotblood Capon',
   'Andarum Temple - Warehouse 1st Level': 'Hotblood Capon',
+
+  // Halloween 2026 — heros 132: Doppelganger
+  'Rem Island': 'Doppelganger',
+  'Yellow Ore Mine - 1st Level - 2nd Chamber': 'Doppelganger',
+  'Yellow Ore Mine - 1st Level - 1st Chamber': 'Doppelganger',
+  'Yellow Ore Mine - 2nd Level - 1st Chamber': 'Doppelganger',
+  'Lighthouse Coast': 'Doppelganger',
+  'Corsair Den - 1st Chamber': 'Doppelganger',
+  'Corsair Den - 2nd Chamber': 'Doppelganger',
+  'Corsair Den - 3rd Chamber': 'Doppelganger',
+  'Corsair Den - 4th Chamber': 'Doppelganger',
+  'Corsair Den - 5th Chamber': 'Doppelganger',
+  'Corsair Den - 6th Chamber': 'Doppelganger',
+  'Hidden Grotto of Sea Devils - Corridor': 'Doppelganger',
+  'Hidden Sea Devil Grotto - Arsenal': 'Doppelganger',
+  'Hidden Sea Devil Grotto': 'Doppelganger',
+  'Magradit Island': 'Doppelganger',
+  'Politraka Volcano - 2nd Level - 1st Chamber': 'Doppelganger',
+  'Politraka Volcano - 1st Level - 1st Chamber': 'Doppelganger',
+  'Politraka Volcano - 1st Level - 2nd Chamber': 'Doppelganger',
+  'Politraka Volcano - 2nd Level - 2nd Chamber': 'Doppelganger',
+  'Politraka Volcano - 1st Level - 3rd Chamber': 'Doppelganger',
+
+  // Halloween 2026 — heros 190: Drude (mapy do uzupełnienia)
+  // Halloween 2026 — heros 243: Nosferatu (mapy do uzupełnienia)
 };
 
 /**

@@ -146,6 +146,7 @@ model EveMapReservation {
 }
 
 // Obecność na mapach EVE — kto aktualnie jest na której mapie (lastSeen odświeżane przez skrypt)
+// Każdy heartbeat/wyjście aktualizuje też EveMapLastLeft (= ostatnio ktoś był na mapie).
 model EveMapPresence {
   id        String   @id @default(cuid())
   eveKey    Int
@@ -176,6 +177,18 @@ model EveRespawnTimer {
   killedAt  DateTime @default(now())
 
   @@index([eveKey])
+}
+
+// Zabicia herosów EVE wykryte ze skryptu (log walki) — ostatni wpis per eveKey wyznacza okno respawnu min/max
+model EveHeroKill {
+  id           String   @id @default(cuid())
+  eveKey       Int
+  mapName      String
+  reporterNick String
+  userId       String?
+  killedAt     DateTime @default(now())
+
+  @@index([eveKey, killedAt])
 }
 
 // Ranking Łowcy herosa: 1 punkt dla pierwszego który zgłosi zabójstwo (w oknie respawnu)

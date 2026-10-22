@@ -4,6 +4,7 @@ import { authFromApiKey } from '@/lib/auth';
 import { sanitizeDiscordText, sendClanDiscordMessage } from '@/lib/discord';
 import { HERO_CALL_RETENTION_MS } from '@/lib/hero-calls';
 import { rateLimit } from '@/lib/rate-limit';
+import { recordEveHeroKill } from '@/lib/eve-kills';
 
 function unique(values: string[]): string[] {
   return Array.from(new Set(values.filter(Boolean)));
@@ -55,6 +56,10 @@ export async function POST(request: NextRequest) {
     if (!nick || !mapName) {
       return NextResponse.json({ error: 'nick and mapName are required' }, { status: 400 });
     }
+
+    await recordEveHeroKill({ monster: nick, mapName, reporterNick, userId: user.id }).catch((e) =>
+      console.error('[hero-call-killed] recordEveHeroKill', e)
+    );
 
     const calls = await prisma.heroLevelNotification.findMany({
       where: {
