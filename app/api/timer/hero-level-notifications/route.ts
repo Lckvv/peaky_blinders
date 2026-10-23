@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { authFromApiKey } from '@/lib/auth';
 import { HERO_CALL_LEVELS } from '@/lib/discord';
 import { HERO_CALL_RETENTION_MS } from '@/lib/hero-calls';
-import { getEveHeroByMonster } from '@/lib/eve-event-ended';
+import { isActiveEveHeroMonster } from '@/lib/eve-event-ended';
 
 const NOTIFICATION_MAX_AGE_MS = 10 * 60 * 1000; // 10 min
 
@@ -95,9 +95,10 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const kind = body?.kind === 'titan' ? 'titan' : 'hero';
-    const level = body?.level != null ? parseInt(String(body.level), 10) : kind === 'titan' ? 0 : NaN;
     const nick = typeof body?.nick === 'string' ? body.nick.trim() : '';
+    const isEve = isActiveEveHeroMonster(nick);
+    const kind = body?.kind === 'titan' && !isEve ? 'titan' : 'hero';
+    const level = body?.level != null ? parseInt(String(body.level), 10) : kind === 'titan' ? 0 : NaN;
     const mapName = typeof body?.mapName === 'string' ? body.mapName.trim() : '';
     const x = body?.x != null ? parseInt(String(body.x), 10) : undefined;
     const y = body?.y != null ? parseInt(String(body.y), 10) : undefined;
@@ -106,7 +107,6 @@ export async function POST(request: NextRequest) {
     const callerNick = typeof body?.callerNick === 'string' ? body.callerNick.trim().slice(0, 80) : '';
     const withSummon = !!body?.withSummon && kind === 'hero';
 
-    const isEve = kind === 'hero' && getEveHeroByMonster(nick)?.ended === false;
     if (kind === 'hero' && !isEve && (!Number.isInteger(level) || !HERO_CALL_LEVELS.includes(level))) {
       return NextResponse.json(
         { error: `level must be one of: ${HERO_CALL_LEVELS.join(', ')}` },

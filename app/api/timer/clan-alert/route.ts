@@ -10,7 +10,7 @@ import {
   sendClanDiscordMessage,
 } from '@/lib/discord';
 import { rateLimit } from '@/lib/rate-limit';
-import { getEveHeroByMonster } from '@/lib/eve-event-ended';
+import { isActiveEveHeroMonster } from '@/lib/eve-event-ended';
 
 /**
  * POST /api/timer/clan-alert — wyślij wołanie na Discord (webhook tylko na serwerze).
@@ -28,9 +28,10 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const kind = body?.kind === 'titan' ? 'titan' : 'hero';
-    const withSummon = !!body?.withSummon && kind === 'hero';
     const nick = sanitizeDiscordText(typeof body?.nick === 'string' ? body.nick : '', 80);
+    const isEve = isActiveEveHeroMonster(nick);
+    const kind = body?.kind === 'titan' && !isEve ? 'titan' : 'hero';
+    const withSummon = !!body?.withSummon && kind === 'hero';
     const mapName = sanitizeDiscordText(typeof body?.mapName === 'string' ? body.mapName : '', 120);
     const callerNick = sanitizeDiscordText(typeof body?.callerNick === 'string' ? body.callerNick : '', 80);
     const level = body?.level != null ? parseInt(String(body.level), 10) : kind === 'titan' ? 0 : NaN;
@@ -42,7 +43,6 @@ export async function POST(request: NextRequest) {
     if (!nick || !mapName) {
       return NextResponse.json({ error: 'nick and mapName are required' }, { status: 400 });
     }
-    const isEve = kind === 'hero' && getEveHeroByMonster(nick)?.ended === false;
     if (kind === 'hero' && !isEve && (!Number.isInteger(level) || !HERO_CALL_LEVELS.includes(level))) {
       return NextResponse.json({ error: `level must be one of: ${HERO_CALL_LEVELS.join(', ')}` }, { status: 400 });
     }

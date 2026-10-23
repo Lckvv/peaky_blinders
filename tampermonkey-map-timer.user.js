@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Margonem Map Timer
 // @namespace    http://tampermonkey.net/
-// @version      2.20
+// @version      2.21
 // @description  Śledzenie czasu na mapach tytanów (Guardians of Souls) + event Halloween 2026 (timery respawnu i obecności na mapach).
 // @author       Lucek
 // @match        https://*.margonem.com/*
@@ -25,9 +25,9 @@
     const EVE_HEROES = [
         { key: 41, monster: 'Grim Blackcluck', label: 'Grim Blackcluck', ended: true, respawnMinMin: 15, respawnMaxMin: 15 },
         { key: 81, monster: 'Hotblood Capon', label: 'Hotblood Capon', ended: true, respawnMinMin: 15, respawnMaxMin: 15 },
-        { key: 132, monster: 'Doppelganger', label: '132 - Doppelganger', ended: false, respawnMinMin: 50, respawnMaxMin: 150 },
-        { key: 190, monster: 'Drude', label: '190 - Drude', ended: false, respawnMinMin: 50, respawnMaxMin: 150 },
-        { key: 243, monster: 'Nosferatu', label: '243 - Nosferatu', ended: false, respawnMinMin: 75, respawnMaxMin: 225 },
+        { key: 132, monster: 'Doppelganger', label: '132 - Doppelganger', ended: false, respawnMinMin: 35, respawnMaxMin: 105 },
+        { key: 190, monster: 'Drude', label: '190 - Drude', ended: false, respawnMinMin: 43, respawnMaxMin: 131 },
+        { key: 243, monster: 'Nosferatu', label: '243 - Nosferatu', ended: false, respawnMinMin: 52, respawnMaxMin: 158 },
     ];
     const EVE_ACTIVE_HEROES = EVE_HEROES.filter(function (h) { return !h.ended; });
     const EVE_ACTIVE_KEYS = EVE_ACTIVE_HEROES.map(function (h) { return h.key; });
@@ -642,8 +642,11 @@
         if (!heroNpc) return;
         if (lastHerosNotifiedMapName === mapName) return;
         lastHerosNotifiedMapName = mapName;
-        const isTitan = heroNpc.wt >= TITAN_WT_MIN;
-        const name = (heroNpc.nick && String(heroNpc.nick).trim()) || (isTitan ? 'Tytan' : 'Heros');
+        const rawName = heroNpc.nick && String(heroNpc.nick).trim();
+        var alertEveKey = eveKeyForNick(rawName);
+        const isEveNick = alertEveKey != null && isActiveEveKey(alertEveKey);
+        const isTitan = !isEveNick && heroNpc.wt >= TITAN_WT_MIN;
+        const name = rawName || (isTitan ? 'Tytan' : 'Heros');
         lastHeroAlertData = {
             nick: name,
             lvl: heroNpc.lvl,
@@ -653,10 +656,9 @@
             tpl: heroNpc.tpl,
             icon: heroNpc.icon,
             wt: heroNpc.wt,
-            isTitan: isTitan || nameLooksLikeTitan(name),
+            isTitan: isTitan || (!isEveNick && nameLooksLikeTitan(name)),
+            isEve: isEveNick,
         };
-        var alertEveKey = eveKeyForNick(name);
-        lastHeroAlertData.isEve = !lastHeroAlertData.isTitan && alertEveKey != null && isActiveEveKey(alertEveKey);
         selectedHeroCallLevel = (lastHeroAlertData.isTitan || lastHeroAlertData.isEve) ? 0 : nearestCallLevel(heroNpc.lvl);
         var open = openCalls[heroCallKey(name, mapName)];
         if (open && !open.killedAt) {
@@ -679,10 +681,14 @@
         log('Heros/Tytan na mapie:', name, '(wt:', heroNpc.wt + ')');
     }
 
+    function normalizeMonsterName(name) {
+        return String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+    }
+
     function eveKeyForNick(name) {
-        var nameTrim = String(name || '').trim().toLowerCase();
+        var nameTrim = normalizeMonsterName(name);
         if (!nameTrim) return null;
-        var match = Object.keys(EVE_HERO_NICK_TO_KEY).filter(function (n) { return n.toLowerCase() === nameTrim; })[0];
+        var match = Object.keys(EVE_HERO_NICK_TO_KEY).filter(function (n) { return normalizeMonsterName(n) === nameTrim; })[0];
         return match ? EVE_HERO_NICK_TO_KEY[match] : null;
     }
 
@@ -1248,8 +1254,8 @@
     function sendClanCall(opts) {
         if (!lastHeroAlertData) return;
         opts = opts || {};
-        var isTitan = !!lastHeroAlertData.isTitan || nameLooksLikeTitan(lastHeroAlertData.nick);
-        var isEve = !isTitan && !!lastHeroAlertData.isEve;
+        var isEve = !!lastHeroAlertData.isEve;
+        var isTitan = !isEve && (!!lastHeroAlertData.isTitan || nameLooksLikeTitan(lastHeroAlertData.nick));
         var callLevel = (isTitan || isEve) ? 0 : selectedHeroCallLevel;
         var withSummon = !isTitan && !!opts.withSummon;
         if (!isTitan && !isEve && HERO_CALL_LEVELS.indexOf(selectedHeroCallLevel) < 0) {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authFromApiKey } from '@/lib/auth';
 import { type DiscordChannel, sanitizeDiscordText, sendClanDiscordMessage } from '@/lib/discord';
-import { getEveHeroByMonster } from '@/lib/eve-event-ended';
+import { isActiveEveHeroMonster } from '@/lib/eve-event-ended';
 import { HERO_CALL_RETENTION_MS } from '@/lib/hero-calls';
 import { rateLimit } from '@/lib/rate-limit';
 import { recordEveHeroKill } from '@/lib/eve-kills';
@@ -23,7 +23,7 @@ function legendaryLine(legendary: string[]): string {
 }
 
 function discordChannelFor(kind: 'hero' | 'titan', nick: string): DiscordChannel {
-  return kind === 'hero' && getEveHeroByMonster(nick)?.ended === false ? 'eve' : kind;
+  return isActiveEveHeroMonster(nick) ? 'eve' : kind;
 }
 
 function cleanName(value: unknown, max: number): string {

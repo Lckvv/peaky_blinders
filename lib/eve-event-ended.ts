@@ -16,9 +16,9 @@ export type EveHero = {
 export const EVE_HEROES: readonly EveHero[] = [
   { key: 41, monster: 'Grim Blackcluck', event: 'easter2026', ended: true, respawnMinMin: 15, respawnMaxMin: 15 },
   { key: 81, monster: 'Hotblood Capon', event: 'easter2026', ended: true, respawnMinMin: 15, respawnMaxMin: 15 },
-  { key: 132, monster: 'Doppelganger', event: 'halloween2026', ended: false, respawnMinMin: 50, respawnMaxMin: 150 },
-  { key: 190, monster: 'Drude', event: 'halloween2026', ended: false, respawnMinMin: 50, respawnMaxMin: 150 },
-  { key: 243, monster: 'Nosferatu', event: 'halloween2026', ended: false, respawnMinMin: 75, respawnMaxMin: 225 },
+  { key: 132, monster: 'Doppelganger', event: 'halloween2026', ended: false, respawnMinMin: 35, respawnMaxMin: 105 },
+  { key: 190, monster: 'Drude', event: 'halloween2026', ended: false, respawnMinMin: 43, respawnMaxMin: 131 },
+  { key: 243, monster: 'Nosferatu', event: 'halloween2026', ended: false, respawnMinMin: 52, respawnMaxMin: 158 },
 ];
 
 export const EVE_KEYS = EVE_HEROES.map((h) => h.key);
@@ -28,9 +28,23 @@ export function getEveHero(key: number): EveHero | undefined {
   return EVE_HEROES.find((h) => h.key === key);
 }
 
+function normalizeMonsterName(name: string): string {
+  return String(name || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
 export function getEveHeroByMonster(monster: string): EveHero | undefined {
-  const m = monster.trim().toLowerCase();
-  return EVE_HEROES.find((h) => h.monster.toLowerCase() === m);
+  const m = normalizeMonsterName(monster);
+  return EVE_HEROES.find((h) => normalizeMonsterName(h.monster) === m);
+}
+
+/** Trwający heros eventowy — rozpoznawany po nazwie, niezależnie od tego, czy skrypt uznał go za herosa czy tytana. */
+export function isActiveEveHeroMonster(monster: string): boolean {
+  return getEveHeroByMonster(monster)?.ended === false;
 }
 
 export function isEveHeroMonster(monster: string): boolean {
