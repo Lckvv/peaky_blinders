@@ -1,8 +1,6 @@
 import EventHeroRanking from '@/app/components/EventHeroRanking';
 import EveLiveTimers from '@/app/components/EveLiveTimers';
 import { getRankingForMonster, getEveHunterLeaderboard } from '@/lib/leaderboard-server';
-import { MAP_NAME_TO_MONSTER } from '@/lib/mapToMonster';
-
 export const dynamic = 'force-dynamic';
 
 const SLUG_TO_HERO: Record<string, { name: string; eveKey: number }> = {
@@ -33,7 +31,6 @@ export default async function HalloweenHeroPage({ params }: PageProps) {
     );
   }
 
-  const maps = Object.keys(MAP_NAME_TO_MONSTER).filter((m) => MAP_NAME_TO_MONSTER[m] === hero.name);
   const [data, hunterLeaderboard] = await Promise.all([
     getRankingForMonster(hero.name),
     getEveHunterLeaderboard(hero.eveKey),
@@ -47,7 +44,7 @@ export default async function HalloweenHeroPage({ params }: PageProps) {
         </h1>
       </div>
 
-      <EveLiveTimers eveKey={hero.eveKey} maps={maps} />
+      <EveLiveTimers eveKey={hero.eveKey} />
 
       <EventHeroRanking
         monsterName={hero.name}
