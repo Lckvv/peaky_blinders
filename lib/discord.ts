@@ -150,6 +150,8 @@ export const EVE_HERO_MENTION = `<@&${EVE_HERO_DISCORD_ROLE_ID}>`;
 
 export type DiscordChannel = 'hero' | 'titan' | 'eve';
 
+const DISCORD_WEBHOOK_URL = /^https:\/\/(?:(?:ptb|canary)\.)?discord(?:app)?\.com\/api\/webhooks\//;
+
 function webhookFor(kind: DiscordChannel): string {
   const fromEnv =
     kind === 'titan'
@@ -169,7 +171,8 @@ export async function sendClanDiscordMessage(opts: {
   imageUrl?: string | null;
 }): Promise<{ ok: boolean; status: number; error?: string }> {
   const webhook = webhookFor(opts.kind);
-  if (!webhook || !webhook.startsWith('https://discord.com/api/webhooks/')) {
+  if (!webhook || !DISCORD_WEBHOOK_URL.test(webhook)) {
+    console.error(`[discord] webhook for "${opts.kind}" is missing or invalid (${webhook ? 'bad URL' : 'empty env'})`);
     return { ok: false, status: 503, error: 'Discord webhook is not configured' };
   }
 
@@ -190,5 +193,9 @@ export async function sendClanDiscordMessage(opts: {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    console.error(`[discord] webhook for "${opts.kind}" returned ${res.status}: ${detail.slice(0, 300)}`);
+  }
   return { ok: res.ok, status: res.status };
 }
