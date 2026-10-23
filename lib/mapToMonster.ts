@@ -87,8 +87,44 @@ export const MAP_NAME_TO_MONSTER: Record<string, string> = {
   'Politraka Volcano - 2nd Level - 2nd Chamber': 'Doppelganger',
   'Politraka Volcano - 1st Level - 3rd Chamber': 'Doppelganger',
 
-  // Halloween 2026 — heros 190: Drude (mapy do uzupełnienia)
-  // Halloween 2026 — heros 243: Nosferatu (mapy do uzupełnienia)
+  // Halloween 2026 — heros 190: Drude
+  'Ogre Cavern - 3rd Level': 'Drude',
+  'Ogre Cavern - 2nd Level': 'Drude',
+  'Ogre Cavern - 1st Level': 'Drude',
+  'Suicide Pass': 'Drude',
+  'Valmirs Hamlet': 'Drude',
+  'Blizzard Forest': 'Drude',
+  'Flowery Pass': 'Drude',
+  'Thick Woods': 'Drude',
+  'Three Words Escarpment': 'Drude',
+  'Forlorn Path': 'Drude',
+  'Crypts of the Sleepless - 1st Level - 1st Chamber': 'Drude',
+  'Crypts of the Sleepless - 2nd Level - 1st Chamber': 'Drude',
+  'Crypts of the Sleepless - 3rd Level': 'Drude',
+  'Crypts of the Sleepless - 2nd Level - 2nd Chamber': 'Drude',
+  'Crypts of the Sleepless - 1st Level - 2nd Chamber': 'Drude',
+
+  // Halloween 2026 — heros 243: Nosferatu
+  'Forested Steppe': 'Nosferatu',
+  'Broken Branch Hump': 'Nosferatu',
+  'Rotting Moss Gorge - 1st Level': 'Nosferatu',
+  'Rotting Moss Gorge - 2nd Level': 'Nosferatu',
+  'Mossy Meadow': 'Nosferatu',
+  'Overgrown Fissures - 2nd Level': 'Nosferatu',
+  'Overgrown Fissures - 3rd Level': 'Nosferatu',
+  'Tangled Thicket': 'Nosferatu',
+  'Xiuh Atl Rift': 'Nosferatu',
+  'Oztotl Tzacua - 5th Level': 'Nosferatu',
+  'Oztotl Tzacua - 3rd Level - 2nd Chamber': 'Nosferatu',
+  'Oztotl Tzacua - 4th Level - 1st Chamber': 'Nosferatu',
+  'Oztotl Tzacua - 3rd Level - 1st Chamber': 'Nosferatu',
+  'Vale of Clouds': 'Nosferatu',
+  'Golden Mountain - 1st Level - 1st Chamber': 'Nosferatu',
+  'Golden Mountain - 1st Level - 2nd Chamber': 'Nosferatu',
+  'Golden Mountain - 1st Level - 3rd Chamber': 'Nosferatu',
+  'Golden Mountain - 1st Level - 4th Chamber': 'Nosferatu',
+  'Golden Mountain - 2nd Level - 1st Chamber': 'Nosferatu',
+  'Golden Mountain - 2nd Level - 2nd Chamber': 'Nosferatu',
 };
 
 /**

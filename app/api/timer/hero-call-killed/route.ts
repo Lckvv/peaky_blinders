@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authFromApiKey } from '@/lib/auth';
-import { sanitizeDiscordText, sendClanDiscordMessage } from '@/lib/discord';
+import { type DiscordChannel, sanitizeDiscordText, sendClanDiscordMessage } from '@/lib/discord';
+import { getEveHeroByMonster } from '@/lib/eve-event-ended';
 import { HERO_CALL_RETENTION_MS } from '@/lib/hero-calls';
 import { rateLimit } from '@/lib/rate-limit';
 import { recordEveHeroKill } from '@/lib/eve-kills';
@@ -19,6 +20,10 @@ function lootKey(nick: string, mapName: string): string {
 function legendaryLine(legendary: string[]): string {
   if (legendary.length === 1) return `Legendarny przedmiot: ${legendary[0]}`;
   return `Legendarne przedmioty: ${legendary.join(', ')}`;
+}
+
+function discordChannelFor(kind: 'hero' | 'titan', nick: string): DiscordChannel {
+  return kind === 'hero' && getEveHeroByMonster(nick)?.ended === false ? 'eve' : kind;
 }
 
 function cleanName(value: unknown, max: number): string {
@@ -98,7 +103,7 @@ export async function POST(request: NextRequest) {
       recentLegendarySent.set(lootKey(nick, mapName), Date.now());
     }
 
-    const sent = await sendClanDiscordMessage({ kind, content: content.slice(0, 1900) });
+    const sent = await sendClanDiscordMessage({ kind: discordChannelFor(kind, nick), content: content.slice(0, 1900) });
     return NextResponse.json({ ok: true, reported: true, discord: sent.ok });
   } catch (e) {
     console.error('[POST /api/timer/hero-call-killed]', e);
@@ -125,6 +130,6 @@ async function sendLegendaryFollowUp(nick: string, mapName: string, legendary: s
   if (!recent) return NextResponse.json({ ok: true, reported: false });
   recentLegendarySent.set(key, Date.now());
   const kind = recent.kind === 'titan' ? 'titan' : 'hero';
-  const sent = await sendClanDiscordMessage({ kind, content: legendaryLine(legendary).slice(0, 1900) });
+  const sent = await sendClanDiscordMessage({ kind: discordChannelFor(kind, nick), content: legendaryLine(legendary).slice(0, 1900) });
   return NextResponse.json({ ok: true, reported: true, discord: sent.ok, lootFollowUp: true });
 }

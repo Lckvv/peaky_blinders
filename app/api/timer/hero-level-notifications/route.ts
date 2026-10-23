@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { authFromApiKey } from '@/lib/auth';
 import { HERO_CALL_LEVELS } from '@/lib/discord';
 import { HERO_CALL_RETENTION_MS } from '@/lib/hero-calls';
+import { getEveHeroByMonster } from '@/lib/eve-event-ended';
 
 const NOTIFICATION_MAX_AGE_MS = 10 * 60 * 1000; // 10 min
 
@@ -105,7 +106,8 @@ export async function POST(request: NextRequest) {
     const callerNick = typeof body?.callerNick === 'string' ? body.callerNick.trim().slice(0, 80) : '';
     const withSummon = !!body?.withSummon && kind === 'hero';
 
-    if (kind === 'hero' && (!Number.isInteger(level) || !HERO_CALL_LEVELS.includes(level))) {
+    const isEve = kind === 'hero' && getEveHeroByMonster(nick)?.ended === false;
+    if (kind === 'hero' && !isEve && (!Number.isInteger(level) || !HERO_CALL_LEVELS.includes(level))) {
       return NextResponse.json(
         { error: `level must be one of: ${HERO_CALL_LEVELS.join(', ')}` },
         { status: 400 }
@@ -136,7 +138,7 @@ export async function POST(request: NextRequest) {
 
     const created = await prisma.heroLevelNotification.create({
       data: {
-        level: kind === 'titan' ? 0 : level,
+        level: kind === 'titan' || isEve ? 0 : level,
         nick,
         mapName,
         x: x ?? null,

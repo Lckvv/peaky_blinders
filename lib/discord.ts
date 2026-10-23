@@ -145,8 +145,18 @@ export function isAllowedDiscordImageUrl(url: string): boolean {
   }
 }
 
-function webhookFor(kind: 'hero' | 'titan'): string {
-  const fromEnv = kind === 'titan' ? process.env.DISCORD_WEBHOOK_TITAN : process.env.DISCORD_WEBHOOK_HEROS;
+export const EVE_HERO_DISCORD_ROLE_ID = '1271535245036093541';
+export const EVE_HERO_MENTION = `<@&${EVE_HERO_DISCORD_ROLE_ID}>`;
+
+export type DiscordChannel = 'hero' | 'titan' | 'eve';
+
+function webhookFor(kind: DiscordChannel): string {
+  const fromEnv =
+    kind === 'titan'
+      ? process.env.DISCORD_WEBHOOK_TITAN
+      : kind === 'eve'
+        ? process.env.DISCORD_WEBHOOK_HEROS_EVENTOWY
+        : process.env.DISCORD_WEBHOOK_HEROS;
   return String(fromEnv || '')
     .trim()
     .replace(/^['"]+|['"]+$/g, '')
@@ -154,7 +164,7 @@ function webhookFor(kind: 'hero' | 'titan'): string {
 }
 
 export async function sendClanDiscordMessage(opts: {
-  kind: 'hero' | 'titan';
+  kind: DiscordChannel;
   content: string;
   imageUrl?: string | null;
 }): Promise<{ ok: boolean; status: number; error?: string }> {

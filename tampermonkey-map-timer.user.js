@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Margonem Map Timer
 // @namespace    http://tampermonkey.net/
-// @version      2.19
+// @version      2.20
 // @description  Śledzenie czasu na mapach tytanów (Guardians of Souls) + event Halloween 2026 (timery respawnu i obecności na mapach).
 // @author       Lucek
 // @match        https://*.margonem.com/*
@@ -163,8 +163,45 @@
             'Politraka Volcano - 2nd Level - 2nd Chamber',
             'Politraka Volcano - 1st Level - 3rd Chamber',
         ],
-        190: [],
-        243: [],
+        190: [
+            'Ogre Cavern - 3rd Level',
+            'Ogre Cavern - 2nd Level',
+            'Ogre Cavern - 1st Level',
+            'Suicide Pass',
+            'Valmirs Hamlet',
+            'Blizzard Forest',
+            'Flowery Pass',
+            'Thick Woods',
+            'Three Words Escarpment',
+            'Forlorn Path',
+            'Crypts of the Sleepless - 1st Level - 1st Chamber',
+            'Crypts of the Sleepless - 2nd Level - 1st Chamber',
+            'Crypts of the Sleepless - 3rd Level',
+            'Crypts of the Sleepless - 2nd Level - 2nd Chamber',
+            'Crypts of the Sleepless - 1st Level - 2nd Chamber',
+        ],
+        243: [
+            'Forested Steppe',
+            'Broken Branch Hump',
+            'Rotting Moss Gorge - 1st Level',
+            'Rotting Moss Gorge - 2nd Level',
+            'Mossy Meadow',
+            'Overgrown Fissures - 2nd Level',
+            'Overgrown Fissures - 3rd Level',
+            'Tangled Thicket',
+            'Xiuh Atl Rift',
+            'Oztotl Tzacua - 5th Level',
+            'Oztotl Tzacua - 3rd Level - 2nd Chamber',
+            'Oztotl Tzacua - 4th Level - 1st Chamber',
+            'Oztotl Tzacua - 3rd Level - 1st Chamber',
+            'Vale of Clouds',
+            'Golden Mountain - 1st Level - 1st Chamber',
+            'Golden Mountain - 1st Level - 2nd Chamber',
+            'Golden Mountain - 1st Level - 3rd Chamber',
+            'Golden Mountain - 1st Level - 4th Chamber',
+            'Golden Mountain - 2nd Level - 1st Chamber',
+            'Golden Mountain - 2nd Level - 2nd Chamber',
+        ],
     };
     EVE_ACTIVE_HEROES.forEach(function (h) {
         (EVE_MAPS[h.key] || []).forEach(function (m) {
@@ -618,7 +655,9 @@
             wt: heroNpc.wt,
             isTitan: isTitan || nameLooksLikeTitan(name),
         };
-        selectedHeroCallLevel = lastHeroAlertData.isTitan ? 0 : nearestCallLevel(heroNpc.lvl);
+        var alertEveKey = eveKeyForNick(name);
+        lastHeroAlertData.isEve = !lastHeroAlertData.isTitan && alertEveKey != null && isActiveEveKey(alertEveKey);
+        selectedHeroCallLevel = (lastHeroAlertData.isTitan || lastHeroAlertData.isEve) ? 0 : nearestCallLevel(heroNpc.lvl);
         var open = openCalls[heroCallKey(name, mapName)];
         if (open && !open.killedAt) {
             if (isMyNick(open.callerNick)) adoptOwnCall(open);
@@ -670,7 +709,7 @@
             id: n.id,
             nick: n.nick,
             mapName: n.mapName,
-            isTitan: n.kind === 'titan' || n.level === 0,
+            isTitan: n.kind === 'titan',
             createdAt: n.createdAt || Date.now(),
         };
         announcedHeroCallKeys[heroCallKey(n.nick, n.mapName)] = true;
@@ -1095,6 +1134,7 @@
         if (!lastHeroAlertData) return;
         injectCallStyles();
         var isTitan = !!lastHeroAlertData.isTitan;
+        var isEve = !!lastHeroAlertData.isEve;
         if (!heroAlertPanelEl) {
             heroAlertPanelEl = document.createElement('div');
             heroAlertPanelEl.id = 'map-timer-hero-alert';
@@ -1103,7 +1143,7 @@
         heroAlertPanelEl.className = isTitan ? 'is-titan' : 'is-hero';
         var lvlStr = lastHeroAlertData.lvl != null ? lastHeroAlertData.lvl + 'm' : '?';
         var posStr = (lastHeroAlertData.x != null && lastHeroAlertData.y != null) ? (lastHeroAlertData.x + ',' + lastHeroAlertData.y) : '?';
-        var rangeNote = isTitan ? '' : ('Przedział ±' + HERO_CALL_LEVEL_RANGE + ' lvl od wybranej wartości (300: ' + heroCallLevelRange(300).lo + '–' + heroCallLevelRange(300).hi + ').');
+        var rangeNote = isTitan ? '' : isEve ? 'Heros eventowy — wołanie do wszystkich' : ('Przedział ±' + HERO_CALL_LEVEL_RANGE + ' lvl od wybranej wartości (300: ' + heroCallLevelRange(300).lo + '–' + heroCallLevelRange(300).hi + ').');
         var actionsHtml = isTitan
             ? '<button type="button" class="mt-call-notify" data-summon="0">Powiadom klan o tytanie</button>'
             : '<button type="button" class="mt-call-notify" data-summon="0">Powiadom klan o herosie</button>' +
@@ -1117,14 +1157,14 @@
                     '<div class="mt-call-meta"></div>' +
                 '</div>' +
             '</div>' +
-            (isTitan ? '' : '<div class="mt-call-label">Wołaj przedział (Twoja postać: ' + (getCurrentHeroLevel() != null ? getCurrentHeroLevel() : '?') + ' lvl)</div><div class="mt-call-levels"></div>') +
+            ((isTitan || isEve) ? '' : '<div class="mt-call-label">Wołaj przedział (Twoja postać: ' + (getCurrentHeroLevel() != null ? getCurrentHeroLevel() : '?') + ' lvl)</div><div class="mt-call-levels"></div>') +
             '<div class="mt-call-helpers">Przyjdą pomóc: nikt jeszcze</div>' +
             '<div class="mt-call-actions">' + actionsHtml +
             '<button type="button" class="mt-call-close">Zamknij</button></div>';
         heroAlertPanelEl.querySelector('.mt-call-name').textContent = lastHeroAlertData.nick || '';
         heroAlertPanelEl.querySelector('.mt-call-meta').textContent = lvlStr + ' · ' + lastHeroAlertData.mapName + ' (' + posStr + ')' + (rangeNote ? ' · ' + rangeNote : '');
         fillNpcArt(heroAlertPanelEl.querySelector('.mt-call-art'), lastHeroAlertData, isTitan ? '⚔️' : '🦸');
-        if (!isTitan) {
+        if (!isTitan && !isEve) {
             var lvlWrap = heroAlertPanelEl.querySelector('.mt-call-levels');
             HERO_CALL_LEVELS.forEach(function (level) {
                 var btn = document.createElement('button');
@@ -1209,8 +1249,10 @@
         if (!lastHeroAlertData) return;
         opts = opts || {};
         var isTitan = !!lastHeroAlertData.isTitan || nameLooksLikeTitan(lastHeroAlertData.nick);
+        var isEve = !isTitan && !!lastHeroAlertData.isEve;
+        var callLevel = (isTitan || isEve) ? 0 : selectedHeroCallLevel;
         var withSummon = !isTitan && !!opts.withSummon;
-        if (!isTitan && HERO_CALL_LEVELS.indexOf(selectedHeroCallLevel) < 0) {
+        if (!isTitan && !isEve && HERO_CALL_LEVELS.indexOf(selectedHeroCallLevel) < 0) {
             showToast('Wybierz przedział levelu', 'error');
             return;
         }
@@ -1223,7 +1265,7 @@
         }
         var callerNick = getCurrentHeroName();
         var imageUrl = getAlertImageForApi();
-        var channelLabel = isTitan ? 'tytani' : 'herosi';
+        var channelLabel = isTitan ? 'tytani' : isEve ? 'herosi eventowi' : 'herosi';
 
         function restoreBtns() {
             heroAlertSending = false;
@@ -1253,7 +1295,7 @@
                     x: lastHeroAlertData.x != null ? lastHeroAlertData.x : null,
                     y: lastHeroAlertData.y != null ? lastHeroAlertData.y : null,
                     callerNick: callerNick,
-                    level: isTitan ? 0 : selectedHeroCallLevel,
+                    level: callLevel,
                     heroImageUrl: imageUrl || undefined
                 }),
             }).then(function (r) {
@@ -1282,7 +1324,7 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-API-Key': CONFIG.API_KEY },
                 body: JSON.stringify({
-                    level: isTitan ? 0 : selectedHeroCallLevel,
+                    level: callLevel,
                     nick: lastHeroAlertData.nick,
                     mapName: lastHeroAlertData.mapName,
                     x: lastHeroAlertData.x,
@@ -1368,7 +1410,7 @@
 
     function showHeroLevelPopup(data) {
         injectCallStyles();
-        var isTitan = data.kind === 'titan' || data.level === 0;
+        var isTitan = data.kind === 'titan';
         var lvlStr = (data.lvl != null) ? data.lvl + 'm' : '?';
         var posStr = (data.x != null && data.y != null) ? (data.x + ',' + data.y) : '?';
         var pop = document.createElement('div');

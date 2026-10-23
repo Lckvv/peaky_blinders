@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authFromApiKey } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import {
+  EVE_HERO_MENTION,
   HERO_CALL_LEVELS,
   getMonsterMention,
   heroCallLevelRange,
@@ -9,6 +10,7 @@ import {
   sendClanDiscordMessage,
 } from '@/lib/discord';
 import { rateLimit } from '@/lib/rate-limit';
+import { getEveHeroByMonster } from '@/lib/eve-event-ended';
 
 /**
  * POST /api/timer/clan-alert — wyślij wołanie na Discord (webhook tylko na serwerze).
@@ -40,24 +42,25 @@ export async function POST(request: NextRequest) {
     if (!nick || !mapName) {
       return NextResponse.json({ error: 'nick and mapName are required' }, { status: 400 });
     }
-    if (kind === 'hero' && (!Number.isInteger(level) || !HERO_CALL_LEVELS.includes(level))) {
+    const isEve = kind === 'hero' && getEveHeroByMonster(nick)?.ended === false;
+    if (kind === 'hero' && !isEve && (!Number.isInteger(level) || !HERO_CALL_LEVELS.includes(level))) {
       return NextResponse.json({ error: `level must be one of: ${HERO_CALL_LEVELS.join(', ')}` }, { status: 400 });
     }
 
-    const mention = getMonsterMention(kind, nick);
+    const mention = isEve ? EVE_HERO_MENTION : getMonsterMention(kind, nick);
     const lvlStr = Number.isInteger(lvl) ? `${lvl}m` : '?';
     const posStr = Number.isInteger(x) && Number.isInteger(y) ? `${x},${y}` : '?';
-    const kindLabel = kind === 'titan' ? 'Tytan!' : 'Heros!';
+    const kindLabel = kind === 'titan' ? 'Tytan!' : isEve ? 'Heros eventowy!' : 'Heros!';
     let content = `${mention} ${kindLabel} ${nick} (${lvlStr}), ${mapName} (${posStr})`;
     content += `\nWoła: ${callerNick || '?'}`;
-    if (kind === 'hero') {
+    if (kind === 'hero' && !isEve) {
       const { lo, hi } = heroCallLevelRange(level);
       content += ` · przedział ${level} (${lo}–${hi})`;
     }
     if (withSummon) content += '\n **⚡ Zaproponowano Przywołanie na herosa**';
 
     const sent = await sendClanDiscordMessage({
-      kind,
+      kind: isEve ? 'eve' : kind,
       content,
       imageUrl: heroImageUrl || null,
     });
@@ -80,7 +83,7 @@ export async function POST(request: NextRequest) {
       },
     }).catch(() => {});
 
-    return NextResponse.json({ ok: true, channel: kind === 'titan' ? 'tytani' : 'herosi' });
+    return NextResponse.json({ ok: true, channel: kind === 'titan' ? 'tytani' : isEve ? 'herosi eventowi' : 'herosi' });
   } catch (e) {
     console.error('[POST /api/timer/clan-alert]', e);
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
