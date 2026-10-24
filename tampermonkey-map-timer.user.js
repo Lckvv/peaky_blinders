@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Margonem Map Timer
 // @namespace    http://tampermonkey.net/
-// @version      2.21
+// @version      2.22
 // @description  Śledzenie czasu na mapach tytanów (Guardians of Souls) + event Halloween 2026 (timery respawnu i obecności na mapach).
 // @author       Lucek
 // @match        https://*.margonem.com/*
@@ -1311,7 +1311,9 @@
                 } else if (r.status === 429) {
                     showToast('❌ Za dużo wołań — poczekaj chwilę', 'error');
                 } else {
-                    showToast('❌ Błąd Discord: ' + r.status, 'error');
+                    r.json().catch(function () { return null; }).then(function (json) {
+                        showToast('❌ Błąd Discord ' + r.status + (json && json.error ? ': ' + json.error : ''), 'error');
+                    });
                 }
             }).catch(function (e) {
                 restoreBtns();

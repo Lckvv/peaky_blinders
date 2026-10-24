@@ -150,17 +150,20 @@ export const EVE_HERO_MENTION = `<@&${EVE_HERO_DISCORD_ROLE_ID}>`;
 
 export type DiscordChannel = 'hero' | 'titan' | 'eve';
 
-const DISCORD_WEBHOOK_URL = /^https:\/\/(?:(?:ptb|canary)\.)?discord(?:app)?\.com\/api\/webhooks\//;
+const DISCORD_WEBHOOK_URL = /^https:\/\/(?:(?:ptb|canary)\.)?discord(?:app)?\.com\/api\/(?:v\d+\/)?webhooks\//;
+
+const WEBHOOK_ENV: Record<DiscordChannel, string> = {
+  hero: 'DISCORD_WEBHOOK_HEROS',
+  titan: 'DISCORD_WEBHOOK_TITAN',
+  eve: 'DISCORD_WEBHOOK_HEROS_EVENTOWY',
+};
 
 function webhookFor(kind: DiscordChannel): string {
-  const fromEnv =
-    kind === 'titan'
-      ? process.env.DISCORD_WEBHOOK_TITAN
-      : kind === 'eve'
-        ? process.env.DISCORD_WEBHOOK_HEROS_EVENTOWY
-        : process.env.DISCORD_WEBHOOK_HEROS;
-  return String(fromEnv || '')
+  const envName = WEBHOOK_ENV[kind];
+  return String(process.env[envName] || '')
     .trim()
+    .replace(/^['"]+|['"]+$/g, '')
+    .replace(new RegExp(`^${envName}\\s*=\\s*`), '')
     .replace(/^['"]+|['"]+$/g, '')
     .trim();
 }
@@ -172,8 +175,12 @@ export async function sendClanDiscordMessage(opts: {
 }): Promise<{ ok: boolean; status: number; error?: string }> {
   const webhook = webhookFor(opts.kind);
   if (!webhook || !DISCORD_WEBHOOK_URL.test(webhook)) {
-    console.error(`[discord] webhook for "${opts.kind}" is missing or invalid (${webhook ? 'bad URL' : 'empty env'})`);
-    return { ok: false, status: 503, error: 'Discord webhook is not configured' };
+    const envName = WEBHOOK_ENV[opts.kind];
+    const reason = webhook
+      ? `${envName} nie wygląda na webhook Discorda (zaczyna się od "${webhook.slice(0, 30)}")`
+      : `brak zmiennej ${envName} na serwerze`;
+    console.error(`[discord] ${reason}`);
+    return { ok: false, status: 503, error: reason };
   }
 
   const payload: {
